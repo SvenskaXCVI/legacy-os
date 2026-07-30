@@ -1,13 +1,14 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { approvals, auditEvents } from "../../../db/schema";
-import { makeId } from "../_lib";
+import { makeId, requireOwner } from "../_lib";
 
 const DEFAULT_WORKSPACE_ID = "legacy-lines";
 const decisions = new Set(["approved", "revision", "rejected"]);
 
 export async function POST(request: Request) {
   try {
+    await requireOwner(request);
     const payload = (await request.json()) as {
       approvalId?: string;
       decision?: string;

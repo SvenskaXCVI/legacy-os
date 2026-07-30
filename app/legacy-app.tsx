@@ -212,7 +212,11 @@ type PortalData = {
     body: string;
     createdAt: string;
   }>;
-  access: { expiresAt: string; hint: string };
+  access: {
+    expiresAt: string | null;
+    hint: string;
+    method?: "invitation" | "account";
+  };
 };
 
 type Briefing = {
@@ -226,6 +230,77 @@ type Briefing = {
   }>;
   confidence: number;
   generatedAt: string;
+};
+
+type IntelligenceData = {
+  policy: {
+    meaningfulPattern: {
+      minimumSupport: number;
+      minimumProjects: number;
+      minimumClients: number;
+      minimumEffectBps: number;
+      minimumConfidenceBps: number;
+    };
+    autoAction: { minimumConfidenceBps: number; scope: string };
+  };
+  patterns: Array<{
+    id: string;
+    name: string;
+    description: string;
+    whyItMatters: string;
+    status: string;
+    supportCount: number;
+    distinctProjects: number;
+    distinctClients: number;
+    effectBps: number;
+    confidenceBps: number;
+    version: number;
+  }>;
+  recommendations: Array<{
+    id: string;
+    title: string;
+    rationale: string;
+    confidenceBps: number;
+    autonomyLevel: string;
+    approvalRequired: boolean;
+    status: string;
+  }>;
+  outcomes: Array<{
+    id: string;
+    metricName: string;
+    baselineValue: number | null;
+    targetValue: number | null;
+    resultValue: number | null;
+    status: string;
+  }>;
+  learningCycles: Array<{
+    id: string;
+    status: string;
+    summary: string | null;
+    createdAt: string;
+  }>;
+  consents: Array<{ id: string; status: string }>;
+  socialConnections: Array<{ id: string; status: string; platform: string }>;
+};
+
+type SocialAccessData = {
+  grants: Array<{
+    id: string;
+    consentType: string;
+    scopesJson: string;
+    purpose: string;
+    status: string;
+    grantedAt: string;
+    revokedAt: string | null;
+  }>;
+  connections: Array<{
+    id: string;
+    platform: string;
+    handle: string | null;
+    accountType: string | null;
+    status: string;
+    lastSyncedAt: string | null;
+  }>;
 };
 
 const navGroups: Array<{
@@ -364,7 +439,15 @@ function formatBytes(bytes: number) {
 }
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, init);
+  const headers = new Headers(init?.headers);
+  const token =
+    typeof window === "undefined"
+      ? null
+      : window.localStorage.getItem("legacy_access_token");
+  if (token && !headers.has("authorization")) {
+    headers.set("authorization", `Bearer ${token}`);
+  }
+  const response = await fetch(path, { ...init, headers });
   const data = (await response.json()) as T & { error?: string };
   if (!response.ok) throw new Error(data.error || "Something went wrong");
   return data;
@@ -891,7 +974,7 @@ function Dashboard({
             <li><Check size={14} /> Writes every run to the ledger</li>
             <li><Check size={14} /> Never acts past approval boundaries</li>
           </ul>
-          <button className="gold-button wide" onClick={onGenerate} disabled={generating}>
+          <button className="gold-button daily-brief-button" onClick={onGenerate} disabled={generating}>
             <WandSparkles size={16} />
             {generating ? "Preparing briefing..." : "Prepare daily brief"}
           </button>
@@ -933,21 +1016,66 @@ function PanelTitle({
 function ProjectsView({
   data,
   onCreate,
+  refresh,
+  notify,
 }: {
   data: WorkspaceData;
   onCreate: () => void;
+  refresh: () => void;
+  notify: (message: string, error?: boolean) => void;
 }) {
+  const [filter, setFilter] = useState<"all" | "active" | "complete">("all");
   const [selected, setSelected] = useState<string | null>(
     data.projects[0]?.id ?? null,
   );
-  const project = data.projects.find((item) => item.id === selected);
+  const filteredProjects = data.projects.filter((item) => {
+    if (filter === "active") return item.status === "active";
+    if (filter === "complete") return item.lifecyclePhase === "complete";
+    return true;
+  });
+  const project =
+    filteredProjects.find((item) => item.id === selected) ??
+    filteredProjects[0];
+
+  async function advanceProject() {
+    if (!project) return;
+    const index = phases.indexOf(project.lifecyclePhase);
+    const nextPhase = phases[Math.min(phases.length - 1, index + 1)];
+    try {
+      await api("/api/projects", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          id: project.id,
+          lifecyclePhase: nextPhase,
+          nextAction:
+            nextPhase === "complete"
+              ? null
+              : `Complete ${nextPhase} phase`,
+        }),
+      });
+      notify(
+        nextPhase === "complete"
+          ? "Project completed. Legacy OS captured the outcome and ran a learning cycle."
+          : `Project advanced to ${nextPhase}.`,
+      );
+      refresh();
+    } catch (advanceError) {
+      notify(
+        advanceError instanceof Error
+          ? advanceError.message
+          : "Unable to advance project",
+        true,
+      );
+    }
+  }
   return (
     <section className="page-stack">
       <div className="section-toolbar">
         <div className="filter-tabs">
-          <button className="active">All projects <span>{data.projects.length}</span></button>
-          <button>Active <span>{data.projects.filter((item) => item.status === "active").length}</span></button>
-          <button>Complete <span>{data.projects.filter((item) => item.lifecyclePhase === "complete").length}</span></button>
+          <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All projects <span>{data.projects.length}</span></button>
+          <button className={filter === "active" ? "active" : ""} onClick={() => setFilter("active")}>Active <span>{data.projects.filter((item) => item.status === "active").length}</span></button>
+          <button className={filter === "complete" ? "active" : ""} onClick={() => setFilter("complete")}>Complete <span>{data.projects.filter((item) => item.lifecyclePhase === "complete").length}</span></button>
         </div>
         <button className="gold-button" onClick={onCreate}>
           <Plus size={16} /> New project
@@ -963,10 +1091,20 @@ function ProjectsView({
             onAction={onCreate}
           />
         </section>
+      ) : filteredProjects.length === 0 ? (
+        <section className="os-panel tall-empty">
+          <EmptyState
+            icon={Search}
+            title={`No ${filter} projects`}
+            body="This filter has no matching projects. Choose another filter or create a new project."
+            action="Show all projects"
+            onAction={() => setFilter("all")}
+          />
+        </section>
       ) : (
         <div className="split-workspace">
           <div className="record-list">
-            {data.projects.map((item) => (
+            {filteredProjects.map((item) => (
               <button
                 className={cn("record-card", selected === item.id && "active")}
                 key={item.id}
@@ -1005,6 +1143,25 @@ function ProjectsView({
                 <p className="eyebrow">PROJECT BRIEF</p>
                 <p>{project.summary || "No project brief has been added yet."}</p>
               </article>
+              <div className="project-detail-actions">
+                <span>
+                  {project.lifecyclePhase === "complete"
+                    ? "Learning captured from this completed project."
+                    : "Advancing records a workflow observation automatically."}
+                </span>
+                {project.lifecyclePhase !== "complete" && (
+                  <button className="gold-button" onClick={advanceProject}>
+                    Advance to{" "}
+                    {phases[
+                      Math.min(
+                        phases.length - 1,
+                        phases.indexOf(project.lifecyclePhase) + 1,
+                      )
+                    ]}
+                    <ArrowRight size={15} />
+                  </button>
+                )}
+              </div>
             </section>
           )}
         </div>
@@ -1378,6 +1535,50 @@ function ChiefView({
   onGenerate: () => void;
   data: WorkspaceData;
 }) {
+  const [intelligence, setIntelligence] = useState<IntelligenceData | null>(
+    null,
+  );
+  const [learning, setLearning] = useState(false);
+  const [intelligenceError, setIntelligenceError] = useState("");
+
+  const loadIntelligence = useCallback(async () => {
+    try {
+      setIntelligence(await api<IntelligenceData>("/api/intelligence"));
+      setIntelligenceError("");
+    } catch (loadError) {
+      setIntelligenceError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Unable to load intelligence",
+      );
+    }
+  }, []);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => void loadIntelligence(), 0);
+    return () => window.clearTimeout(handle);
+  }, [loadIntelligence]);
+
+  async function learnNow() {
+    setLearning(true);
+    try {
+      await api("/api/intelligence", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ triggerType: "owner_requested" }),
+      });
+      await loadIntelligence();
+    } catch (learnError) {
+      setIntelligenceError(
+        learnError instanceof Error
+          ? learnError.message
+          : "Unable to run learning cycle",
+      );
+    } finally {
+      setLearning(false);
+    }
+  }
+
   return (
     <section className="chief-workspace">
       <div className="chief-hero-card">
@@ -1424,6 +1625,70 @@ function ChiefView({
           </div>
         </section>
       </div>
+      <section className="os-panel intelligence-system">
+        <PanelTitle
+          eyebrow="CONTINUOUS INTELLIGENCE"
+          title="Patterns, evidence, action, outcomes"
+        />
+        <div className="intelligence-policy-strip">
+          <span><strong>3+</strong> completed projects</span>
+          <span><strong>2+</strong> distinct clients</span>
+          <span><strong>10%+</strong> observed effect</span>
+          <span><strong>65%+</strong> pattern confidence</span>
+          <span><strong>78%+</strong> internal auto-action</span>
+        </div>
+        {intelligenceError && (
+          <p className="access-error">{intelligenceError}</p>
+        )}
+        {intelligence?.patterns.length ? (
+          <div className="pattern-grid">
+            {intelligence.patterns.slice(0, 6).map((pattern) => (
+              <article key={pattern.id}>
+                <header>
+                  <span className={cn("status-badge", pattern.status)}>
+                    {pattern.status}
+                  </span>
+                  <strong>{Math.round(pattern.confidenceBps / 100)}%</strong>
+                </header>
+                <h3>{pattern.name}</h3>
+                <p>{pattern.description}</p>
+                <small>{pattern.whyItMatters}</small>
+                <footer>
+                  {pattern.distinctProjects} projects · {pattern.distinctClients} clients · v{pattern.version}
+                </footer>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={Link2}
+            title="No meaningful cross-project pattern yet"
+            body="Legacy OS continuously captures real workflow signals. A pattern is promoted only after it crosses the project, client, effect, and confidence thresholds above."
+          />
+        )}
+        <div className="learning-footer">
+          <div>
+            <strong>{intelligence?.recommendations.length ?? 0}</strong>
+            <span>evidence-backed recommendations</span>
+          </div>
+          <div>
+            <strong>{intelligence?.outcomes.length ?? 0}</strong>
+            <span>measured outcome windows</span>
+          </div>
+          <div>
+            <strong>{intelligence?.learningCycles.length ?? 0}</strong>
+            <span>learning cycles recorded</span>
+          </div>
+          <button
+            className="outline-button"
+            onClick={learnNow}
+            disabled={learning}
+          >
+            <BrainCircuit size={15} />
+            {learning ? "Evaluating evidence…" : "Run learning cycle"}
+          </button>
+        </div>
+      </section>
     </section>
   );
 }
@@ -1551,14 +1816,27 @@ function ModuleView({
       labels: ["Deposits", "Invoices", "Payments", "Reports"],
     },
   }[type];
+  const [activeTab, setActiveTab] = useState(config.labels[0]);
   const Icon = config.icon;
   return (
     <section className="module-surface">
       <div className="module-tabs">
-        {config.labels.map((label, index) => <button className={index === 0 ? "active" : ""} key={label}>{label}</button>)}
+        {config.labels.map((label) => (
+          <button
+            className={activeTab === label ? "active" : ""}
+            key={label}
+            onClick={() => setActiveTab(label)}
+          >
+            {label}
+          </button>
+        ))}
       </div>
       <section className="os-panel tall-empty">
-        <EmptyState icon={Icon} title={config.title} body={config.body} />
+        <EmptyState
+          icon={Icon}
+          title={`${activeTab}: ${config.title}`}
+          body={`${config.body} The ${activeTab.toLowerCase()} filter is active.`}
+        />
         <div className="module-integrity"><ShieldCheck size={16} /> Empty by design · {data.projects.length} live projects available as future sources</div>
       </section>
     </section>
@@ -1847,12 +2125,16 @@ function InviteModal({
 function PortalAccess({
   initialToken,
   onExit,
+  authenticated = false,
 }: {
   initialToken: string;
   onExit: () => void;
+  authenticated?: boolean;
 }) {
   const [token, setToken] = useState(initialToken);
-  const [submitted, setSubmitted] = useState(initialToken);
+  const [submitted, setSubmitted] = useState(
+    authenticated ? "__authenticated__" : initialToken,
+  );
   if (submitted) {
     return <ClientPortal token={submitted} onExit={onExit} onInvalid={() => setSubmitted("")} />;
   }
@@ -1893,9 +2175,12 @@ function ClientPortal({
   const [data, setData] = useState<PortalData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [tab, setTab] = useState<"overview" | "messages" | "approvals" | "files">("overview");
+  const [tab, setTab] = useState<
+    "overview" | "messages" | "approvals" | "files" | "privacy"
+  >("overview");
   const [projectId, setProjectId] = useState("");
   const [notice, setNotice] = useState("");
+  const [social, setSocial] = useState<SocialAccessData | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -1934,6 +2219,28 @@ function ClientPortal({
       active = false;
     };
   }, [token]);
+
+  const loadSocial = useCallback(async () => {
+    try {
+      setSocial(
+        await api<SocialAccessData>(
+          `/api/social/consent?token=${encodeURIComponent(token)}`,
+        ),
+      );
+    } catch (socialError) {
+      setNotice(
+        socialError instanceof Error
+          ? socialError.message
+          : "Unable to load social permissions",
+      );
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (tab !== "privacy") return;
+    const handle = window.setTimeout(() => void loadSocial(), 0);
+    return () => window.clearTimeout(handle);
+  }, [loadSocial, tab]);
   const project = data?.projects.find((item) => item.id === projectId) || data?.projects[0];
   const messages = data?.messages.filter((item) => !project || !item.projectId || item.projectId === project.id) || [];
   const approvals = data?.approvals.filter((item) => !project || item.projectId === project.id) || [];
@@ -1986,6 +2293,76 @@ function ClientPortal({
     }
   }
 
+  async function grantSocialConsent() {
+    try {
+      await api("/api/social/consent", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token,
+          action: "grant",
+          scopes: [
+            "profile",
+            "media_metadata",
+            "tattoo_post_detection",
+            "engagement_metrics",
+            "caption_summary",
+          ],
+        }),
+      });
+      setNotice("Instagram observation permission granted. You remain in control.");
+      await loadSocial();
+    } catch (socialError) {
+      setNotice(
+        socialError instanceof Error
+          ? socialError.message
+          : "Unable to grant permission",
+      );
+    }
+  }
+
+  async function revokeSocialConsent(grantId: string) {
+    try {
+      await api("/api/social/consent", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, action: "revoke", grantId }),
+      });
+      setNotice("Social permission revoked. Future synchronization is stopped.");
+      await loadSocial();
+    } catch (socialError) {
+      setNotice(
+        socialError instanceof Error
+          ? socialError.message
+          : "Unable to revoke permission",
+      );
+    }
+  }
+
+  async function connectInstagram() {
+    try {
+      const result = await api<{
+        authorizationUrl?: string;
+        message?: string;
+      }>("/api/social/instagram", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      if (result.authorizationUrl) {
+        window.location.assign(result.authorizationUrl);
+      } else {
+        setNotice(result.message || "Instagram connection is not configured.");
+      }
+    } catch (socialError) {
+      setNotice(
+        socialError instanceof Error
+          ? socialError.message
+          : "Unable to connect Instagram",
+      );
+    }
+  }
+
   if (loading) return <div className="portal-loading"><Brand /><Spinner label="Opening your secure project" /></div>;
   if (error || !data) {
     return (
@@ -2005,7 +2382,7 @@ function ClientPortal({
       <header className="client-header">
         <Brand />
         <nav>
-          {(["overview", "messages", "approvals", "files"] as const).map((item) => (
+          {(["overview", "messages", "approvals", "files", "privacy"] as const).map((item) => (
             <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>{item}</button>
           ))}
         </nav>
@@ -2118,16 +2495,90 @@ function ClientPortal({
                 <form className="client-card portal-upload" onSubmit={upload}><Upload size={28} /><h3>Share a reference</h3><p>Upload an image or document up to 25 MB.</p><input type="file" name="file" required /><button className="gold-button" type="submit"><Upload size={15} /> Upload file</button></form>
               </div>
             )}
+
+            {tab === "privacy" && (
+              <section className="client-card social-consent-card">
+                <PanelTitle
+                  eyebrow="YOUR DATA, YOUR CONTROL"
+                  title="Social observation permissions"
+                />
+                <div className="consent-explainer">
+                  <ShieldCheck size={24} />
+                  <div>
+                    <h3>Legacy OS only observes what you explicitly allow.</h3>
+                    <p>
+                      With your permission, a connected Instagram professional
+                      account can provide post metadata and engagement metrics
+                      when a post appears related to this tattoo. Legacy OS uses
+                      that evidence to measure project outcomes and improve
+                      future recommendations. It does not publish, message, or
+                      change your account.
+                    </p>
+                  </div>
+                </div>
+                <div className="consent-scope-grid">
+                  {[
+                    ["Profile", "Account identity needed to bind the correct professional account."],
+                    ["Media metadata", "Post type, timestamp, and permitted caption summary."],
+                    ["Tattoo matching", "A confidence score linking a post to this project."],
+                    ["Engagement metrics", "Permitted aggregate reach and interaction measurements."],
+                    ["Caption summary", "A short derived summary; raw captions are not retained by default."],
+                  ].map(([title, body]) => (
+                    <article key={title}>
+                      <CheckCircle2 size={15} />
+                      <div><strong>{title}</strong><p>{body}</p></div>
+                    </article>
+                  ))}
+                </div>
+                {social?.grants.some((grant) => grant.status === "granted") ? (
+                  <div className="consent-actions">
+                    <span><CheckCircle2 size={16} /> Permission granted</span>
+                    <button className="gold-button" onClick={connectInstagram}>
+                      <Link2 size={15} /> Connect Instagram
+                    </button>
+                    <button
+                      className="text-button"
+                      onClick={() => {
+                        const grant = social.grants.find(
+                          (item) => item.status === "granted",
+                        );
+                        if (grant) void revokeSocialConsent(grant.id);
+                      }}
+                    >
+                      Revoke permission
+                    </button>
+                  </div>
+                ) : (
+                  <div className="consent-actions">
+                    <button className="gold-button" onClick={grantSocialConsent}>
+                      <ShieldCheck size={15} /> Grant these permissions
+                    </button>
+                    <small>
+                      You can revoke access at any time. Revocation stops future
+                      synchronization and disconnects the account.
+                    </small>
+                  </div>
+                )}
+              </section>
+            )}
           </>
         )}
       </main>
-      <footer className="client-footer"><Brand compact /><span><ShieldCheck size={15} /> Private project access · Expires {formatDate(data.access.expiresAt)}</span></footer>
+      <footer className="client-footer"><Brand compact /><span><ShieldCheck size={15} /> {data.access.method === "account" ? "Verified account access" : `Private project access · Expires ${formatDate(data.access.expiresAt)}`}</span></footer>
     </div>
   );
 }
 
-export function LegacyApp({ firstName }: { firstName: string }) {
-  const [mode, setMode] = useState<"owner" | "portal">("owner");
+export function LegacyApp({
+  firstName,
+  initialMode = "owner",
+  authenticatedClient = false,
+}: {
+  firstName: string;
+  initialMode?: "owner" | "portal";
+  authenticatedClient?: boolean;
+}) {
+  const [mode, setMode] = useState<"owner" | "portal">(initialMode);
   const [portalToken, setPortalToken] = useState("");
   const [view, setView] = useState<OwnerView>("dashboard");
   const [data, setData] = useState<WorkspaceData | null>(null);
@@ -2200,6 +2651,7 @@ export function LegacyApp({ firstName }: { firstName: string }) {
     return (
       <PortalAccess
         initialToken={portalToken}
+        authenticated={authenticatedClient}
         onExit={() => {
           window.history.replaceState({}, "", window.location.pathname);
           setPortalToken("");
@@ -2237,7 +2689,7 @@ export function LegacyApp({ firstName }: { firstName: string }) {
         <OwnerHeader view={view} onMenu={() => setMenuOpen(true)} onNew={openNew} />
         <div className="owner-content">
           {view === "dashboard" && <Dashboard data={data} firstName={actualFirstName} briefing={briefing} generating={generating} onGenerate={generateBriefing} onClient={() => setModal("client")} onProject={() => setModal("project")} onAppointment={() => setModal("appointment")} onView={setView} />}
-          {view === "projects" && <ProjectsView data={data} onCreate={() => setModal("project")} />}
+          {view === "projects" && <ProjectsView data={data} onCreate={() => setModal("project")} refresh={load} notify={notify} />}
           {view === "clients" && <ClientsView data={data} onCreate={() => setModal("client")} onInvite={setInviteClient} />}
           {view === "calendar" && <CalendarView data={data} onCreate={() => setModal("appointment")} />}
           {view === "inbox" && <InboxView data={data} onSent={load} notify={notify} />}

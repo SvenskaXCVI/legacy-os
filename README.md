@@ -27,6 +27,11 @@ The workspace starts without demonstration clients, projects, appointments, mess
 - Upload and retrieve project media through R2.
 - Request and record client approvals.
 - Generate a deterministic daily briefing from live workspace state.
+- Capture workflow observations and learn from each completed project.
+- Discover cross-project patterns using explicit evidence thresholds.
+- Generate recommendations with confidence, risk, autonomy, and outcome plans.
+- Grant or revoke client-controlled Instagram observation permissions.
+- Create verified owner/client accounts with TOTP MFA when Supabase is configured.
 - Inspect AI runs and owner/client/system actions in the observability ledger.
 
 The deployed Sites project remains private. Client portal links are fully functional for authenticated viewers; opening portal access to external clients requires a deliberate hosting access-policy change.
@@ -34,7 +39,7 @@ The deployed Sites project remains private. Client portal links are fully functi
 ## Backend foundation
 
 - Cloudflare Worker application runtime
-- D1 relational schema with 14 implemented tables
+- D1 relational schema with 27 implemented tables
 - R2 media-storage binding reserved as `MEDIA`
 - Generated database migration
 - Health, telemetry, and approval endpoints
@@ -48,6 +53,8 @@ The deployed Sites project remains private. Client portal links are fully functi
 - [API contract](docs/API.md)
 - [Entity relationship diagram](docs/ERD.md)
 - [Operations runbook](docs/OPERATIONS_RUNBOOK.md)
+- [Intelligence and autonomy](docs/INTELLIGENCE_AND_AUTONOMY.md)
+- [Identity and access](docs/IDENTITY_AND_ACCESS.md)
 
 ## Local development
 
@@ -67,4 +74,4 @@ npm run test
 
 ## Important boundary
 
-This release provides the product, persistence, policy, and observability foundations. It does not silently connect email, calendar, social, payment, or AI-provider accounts. Each integration must be authorized and added behind the approval and audit contracts.
+This release provides the product, persistence, policy, identity adapter, consent, and observability foundations. It never silently connects email, calendar, social, payment, or AI-provider accounts. Each integration requires explicit provider configuration and remains behind the approval and audit contracts.

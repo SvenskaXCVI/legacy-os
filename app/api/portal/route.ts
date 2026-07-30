@@ -15,15 +15,15 @@ import {
 import {
   jsonError,
   makeId,
-  validatePortalToken,
+  resolveClientAccess,
   WORKSPACE_ID,
 } from "../_lib";
 
 export async function GET(request: Request) {
   try {
     const token = new URL(request.url).searchParams.get("token");
-    const invitation = await validatePortalToken(token);
-    if (!invitation) return jsonError("Portal access is invalid or expired", 401);
+    const access = await resolveClientAccess(request, token);
+    if (!access) return jsonError("Portal access is invalid or expired", 401);
     const db = getDb();
 
     const [workspace, client, projectRows, appointmentRows, messageRows] =
@@ -39,22 +39,22 @@ export async function GET(request: Request) {
         db
           .select()
           .from(clients)
-          .where(eq(clients.id, invitation.clientId))
+          .where(eq(clients.id, access.clientId))
           .get(),
         db
           .select()
           .from(projects)
-          .where(eq(projects.clientId, invitation.clientId))
+          .where(eq(projects.clientId, access.clientId))
           .orderBy(desc(projects.updatedAt)),
         db
           .select()
           .from(appointments)
-          .where(eq(appointments.clientId, invitation.clientId))
+          .where(eq(appointments.clientId, access.clientId))
           .orderBy(appointments.startsAt),
         db
           .select()
           .from(clientMessages)
-          .where(eq(clientMessages.clientId, invitation.clientId))
+          .where(eq(clientMessages.clientId, access.clientId))
           .orderBy(clientMessages.createdAt),
       ]);
 
@@ -84,10 +84,12 @@ export async function GET(request: Request) {
         ])
       : [[], [], []];
 
-    await db
-      .update(portalInvitations)
-      .set({ lastUsedAt: new Date().toISOString() })
-      .where(eq(portalInvitations.id, invitation.id));
+    if (access.invitation) {
+      await db
+        .update(portalInvitations)
+        .set({ lastUsedAt: new Date().toISOString() })
+        .where(eq(portalInvitations.id, access.invitation.id));
+    }
 
     return Response.json({
       workspace,
@@ -99,8 +101,9 @@ export async function GET(request: Request) {
       assets: assetRows,
       updates: updateRows,
       access: {
-        expiresAt: invitation.expiresAt,
-        hint: invitation.tokenHint,
+        expiresAt: access.invitation?.expiresAt ?? null,
+        hint: access.invitation?.tokenHint ?? "verified-account",
+        method: access.invitation ? "invitation" : "account",
       },
     });
   } catch (error) {
@@ -122,8 +125,8 @@ export async function POST(request: Request) {
       decision?: "approved" | "revision";
       reason?: string;
     };
-    const invitation = await validatePortalToken(payload.token ?? null);
-    if (!invitation) return jsonError("Portal access is invalid or expired", 401);
+    const access = await resolveClientAccess(request, payload.token ?? null);
+    if (!access) return jsonError("Portal access is invalid or expired", 401);
     const db = getDb();
     const now = new Date().toISOString();
 
@@ -136,7 +139,7 @@ export async function POST(request: Request) {
           .where(
             and(
               eq(projects.id, payload.projectId),
-              eq(projects.clientId, invitation.clientId),
+              eq(projects.clientId, access.clientId),
             ),
           )
           .get();
@@ -147,10 +150,10 @@ export async function POST(request: Request) {
         db.insert(clientMessages).values({
           id: messageId,
           workspaceId: WORKSPACE_ID,
-          clientId: invitation.clientId,
+          clientId: access.clientId,
           projectId: payload.projectId || null,
           senderType: "client",
-          senderId: invitation.clientId,
+          senderId: access.clientId,
           body: payload.body.trim(),
           status: "sent",
           createdAt: now,
@@ -159,7 +162,7 @@ export async function POST(request: Request) {
           id: makeId("audit"),
           workspaceId: WORKSPACE_ID,
           actorType: "client",
-          actorId: invitation.clientId,
+          actorId: access.clientId,
           action: "portal.message_sent",
           targetType: "project",
           targetId: payload.projectId || null,
@@ -189,7 +192,7 @@ export async function POST(request: Request) {
         .leftJoin(projects, eq(approvals.projectId, projects.id))
         .where(eq(approvals.id, payload.approvalId))
         .get();
-      if (!approval || approval.clientId !== invitation.clientId) {
+      if (!approval || approval.clientId !== access.clientId) {
         return jsonError("Approval not found", 404);
       }
       await db.batch([
@@ -197,7 +200,7 @@ export async function POST(request: Request) {
           .update(approvals)
           .set({
             status: payload.decision,
-            decisionBy: `client:${invitation.clientId}`,
+            decisionBy: `client:${access.clientId}`,
             decisionReason: payload.reason?.trim() || null,
             decidedAt: now,
             updatedAt: now,
@@ -207,7 +210,7 @@ export async function POST(request: Request) {
           id: makeId("audit"),
           workspaceId: WORKSPACE_ID,
           actorType: "client",
-          actorId: invitation.clientId,
+          actorId: access.clientId,
           action: `approval.${payload.decision}`,
           targetType: "approval",
           targetId: payload.approvalId,

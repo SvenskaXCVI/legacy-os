@@ -2,6 +2,17 @@ declare module "cloudflare:workers" {
   export const env: {
     DB: D1Database;
     MEDIA: R2Bucket;
+    SUPABASE_URL?: string;
+    SUPABASE_ANON_KEY?: string;
+    OWNER_EMAILS?: string;
+    AI_PROVIDER?: string;
+    AI_BASE_URL?: string;
+    AI_API_KEY?: string;
+    AI_MODEL?: string;
+    INSTAGRAM_CLIENT_ID?: string;
+    INSTAGRAM_CLIENT_SECRET?: string;
+    INSTAGRAM_REDIRECT_URI?: string;
+    SOCIAL_TOKEN_ENCRYPTION_KEY?: string;
   };
 }
 

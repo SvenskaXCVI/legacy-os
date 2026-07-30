@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
+import { AccessShell } from "./access-shell";
 import { getChatGPTUser } from "./chatgpt-auth";
-import { LegacyApp } from "./legacy-app";
 
 export const dynamic = "force-dynamic";
 
@@ -14,5 +14,5 @@ export default async function Home() {
   const user = await getChatGPTUser();
   const firstName = user?.fullName?.split(" ")[0] || "Owner";
 
-  return <LegacyApp firstName={firstName} />;
+  return <AccessShell ownerName={firstName} />;
 }

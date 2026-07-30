@@ -1,9 +1,10 @@
 import { getDb } from "../../../db";
 import { appointments, auditEvents } from "../../../db/schema";
-import { actorFrom, jsonError, makeId, WORKSPACE_ID } from "../_lib";
+import { actorFrom, jsonError, makeId, requireOwner, WORKSPACE_ID } from "../_lib";
 
 export async function POST(request: Request) {
   try {
+    await requireOwner(request);
     const payload = (await request.json()) as {
       clientId?: string;
       projectId?: string;

@@ -6,8 +6,9 @@ import {
   actorFrom,
   jsonError,
   makeId,
+  requireOwner,
+  resolveClientAccess,
   sha256,
-  validatePortalToken,
   WORKSPACE_ID,
 } from "../_lib";
 
@@ -29,7 +30,8 @@ export async function POST(request: Request) {
       return jsonError("Files must be 25 MB or smaller", 413);
     }
 
-    const invitation = token ? await validatePortalToken(token) : null;
+    const clientAccess = await resolveClientAccess(request, token || null);
+    if (!clientAccess) await requireOwner(request);
     const db = getDb();
     const project = await db
       .select({ id: projects.id, clientId: projects.clientId })
@@ -37,7 +39,7 @@ export async function POST(request: Request) {
       .where(eq(projects.id, projectId))
       .get();
     if (!project) return jsonError("Project not found", 404);
-    if (token && (!invitation || project.clientId !== invitation.clientId)) {
+    if (clientAccess && project.clientId !== clientAccess.clientId) {
       return jsonError("Portal access is invalid or expired", 401);
     }
 
@@ -45,8 +47,8 @@ export async function POST(request: Request) {
     const digest = await sha256(bytes);
     const assetId = makeId("asset");
     const storageKey = `${WORKSPACE_ID}/${projectId}/${assetId}/${file.name}`;
-    const actor = invitation
-      ? `client:${invitation.clientId}`
+    const actor = clientAccess
+      ? `client:${clientAccess.clientId}`
       : actorFrom(request);
     const now = new Date().toISOString();
 
@@ -66,7 +68,7 @@ export async function POST(request: Request) {
         mimeType: file.type || "application/octet-stream",
         byteSize: file.size,
         sha256: digest,
-        sourceType: invitation ? "client_upload" : "owner_upload",
+        sourceType: clientAccess ? "client_upload" : "owner_upload",
         extractionStatus: "stored",
         createdBy: actor,
         createdAt: now,
@@ -74,7 +76,7 @@ export async function POST(request: Request) {
       db.insert(auditEvents).values({
         id: makeId("audit"),
         workspaceId: WORKSPACE_ID,
-        actorType: invitation ? "client" : "user",
+        actorType: clientAccess ? "client" : "user",
         actorId: actor,
         action: "asset.uploaded",
         targetType: "asset",
@@ -115,11 +117,13 @@ export async function GET(request: Request) {
       .where(and(eq(assets.id, assetId), eq(assets.workspaceId, WORKSPACE_ID)))
       .get();
     if (!row) return jsonError("File not found", 404);
-    if (token) {
-      const invitation = await validatePortalToken(token);
-      if (!invitation || row.clientId !== invitation.clientId) {
+    const clientAccess = await resolveClientAccess(request, token);
+    if (clientAccess) {
+      if (row.clientId !== clientAccess.clientId) {
         return jsonError("Portal access is invalid or expired", 401);
       }
+    } else {
+      await requireOwner(request);
     }
     const object = (await env.MEDIA.get(row.storageKey)) as StoredObject | null;
     if (!object) return jsonError("File content not found", 404);

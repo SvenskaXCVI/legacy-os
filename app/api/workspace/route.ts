@@ -17,14 +17,17 @@ import {
   displayNameFrom,
   jsonError,
   makeId,
+  requireOwner,
   WORKSPACE_ID,
 } from "../_lib";
 
 export async function GET(request: Request) {
   try {
+    const access = await requireOwner(request);
     const db = getDb();
-    const email = actorFrom(request);
-    const displayName = displayNameFrom(request);
+    const email = access.user!.email || actorFrom(request);
+    const displayName =
+      access.user!.displayName || displayNameFrom(request);
 
     await db
       .insert(workspaces)
@@ -161,6 +164,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
+    await requireOwner(request);
     const payload = (await request.json()) as {
       name?: string;
       timezone?: string;

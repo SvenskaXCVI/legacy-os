@@ -9,12 +9,14 @@ import {
   actorFrom,
   jsonError,
   makeId,
+  requireOwner,
   sha256,
   WORKSPACE_ID,
 } from "../../_lib";
 
 export async function POST(request: Request) {
   try {
+    await requireOwner(request);
     const payload = (await request.json()) as { clientId?: string };
     if (!payload.clientId) return jsonError("clientId is required");
     const db = getDb();

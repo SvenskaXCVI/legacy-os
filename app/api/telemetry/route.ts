@@ -1,6 +1,7 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { aiRuns, auditEvents, usageEvents } from "../../../db/schema";
+import { requireOwner } from "../_lib";
 
 const DEFAULT_WORKSPACE_ID = "legacy-lines";
 
@@ -14,6 +15,7 @@ function safeJson(value: unknown) {
 
 export async function GET(request: Request) {
   try {
+    await requireOwner(request);
     const url = new URL(request.url);
     const hours = Math.min(
       Math.max(Number(url.searchParams.get("hours") ?? "24"), 1),
@@ -67,6 +69,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    await requireOwner(request);
     const payload = (await request.json()) as {
       kind?: string;
       action?: string;

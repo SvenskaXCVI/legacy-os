@@ -9,10 +9,11 @@ import {
   projects,
   usageEvents,
 } from "../../../db/schema";
-import { actorFrom, jsonError, makeId, WORKSPACE_ID } from "../_lib";
+import { actorFrom, jsonError, makeId, requireOwner, WORKSPACE_ID } from "../_lib";
 
 export async function POST(request: Request) {
   try {
+    await requireOwner(request);
     const db = getDb();
     const startedAt = new Date();
     const [projectRows, appointmentRows, approvalRows] = await Promise.all([

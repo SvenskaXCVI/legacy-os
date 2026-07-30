@@ -15,6 +15,13 @@
       "when": 1785398339958,
       "tag": "0001_free_runaways",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785401789991,
+      "tag": "0002_chubby_bruce_banner",
+      "breakpoints": true
     }
   ]
 }
