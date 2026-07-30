@@ -9,7 +9,7 @@ import {
   projects,
   usageEvents,
 } from "../../../db/schema";
-import { actorFrom, jsonError, makeId, requireOwner, WORKSPACE_ID } from "../_lib";
+import { actorFrom, makeId, requireOwner, routeError, WORKSPACE_ID } from "../_lib";
 import { syncSocialConnections } from "../../../lib/social-sync";
 
 export async function POST(request: Request) {
@@ -163,9 +163,6 @@ export async function POST(request: Request) {
       generatedAt: completedAt.toISOString(),
     });
   } catch (error) {
-    return jsonError(
-      error instanceof Error ? error.message : "Unable to generate briefing",
-      500,
-    );
+    return routeError(error, "Unable to generate briefing");
   }
 }

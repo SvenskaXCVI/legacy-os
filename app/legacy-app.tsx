@@ -19,6 +19,7 @@ import {
   Clock3,
   Copy,
   CreditCard,
+  Download,
   FileText,
   FolderKanban,
   Gauge,
@@ -28,6 +29,7 @@ import {
   LayoutDashboard,
   Library,
   Link2,
+  LogOut,
   LockKeyhole,
   Menu,
   MessageSquareText,
@@ -39,6 +41,7 @@ import {
   Sparkles,
   Upload,
   UserRound,
+  UserCog,
   UsersRound,
   WandSparkles,
   X,
@@ -438,6 +441,17 @@ function formatBytes(bytes: number) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+function projectTags(project: ProjectRecord) {
+  try {
+    const value = JSON.parse(project.styleTagsJson || "[]") as unknown;
+    return Array.isArray(value)
+      ? value.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
   const token =
@@ -448,9 +462,60 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set("authorization", `Bearer ${token}`);
   }
   const response = await fetch(path, { ...init, headers });
-  const data = (await response.json()) as T & { error?: string };
-  if (!response.ok) throw new Error(data.error || "Something went wrong");
+  const data = (await response.json()) as T & {
+    error?: string;
+    message?: string;
+  };
+  if (!response.ok) {
+    throw new Error(
+      data.error || data.message || `Request failed (${response.status})`,
+    );
+  }
   return data;
+}
+
+async function downloadAsset(asset: AssetRecord, portalToken?: string) {
+  const headers = new Headers();
+  const accessToken = window.localStorage.getItem("legacy_access_token");
+  if (accessToken) headers.set("authorization", `Bearer ${accessToken}`);
+  const token =
+    portalToken && portalToken !== "__authenticated__"
+      ? `&token=${encodeURIComponent(portalToken)}`
+      : "";
+  const response = await fetch(
+    `/api/files?id=${encodeURIComponent(asset.id)}${token}`,
+    { headers },
+  );
+  if (!response.ok) {
+    const result = (await response.json().catch(() => null)) as {
+      error?: string;
+    } | null;
+    throw new Error(result?.error || "Unable to open this file");
+  }
+  const objectUrl = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = asset.originalName;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
+}
+
+async function copyText(value: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const field = document.createElement("textarea");
+  field.value = value;
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.appendChild(field);
+  field.select();
+  document.execCommand("copy");
+  field.remove();
 }
 
 function Brand({ compact = false }: { compact?: boolean }) {
@@ -588,6 +653,7 @@ function OwnerSidebar({
   open,
   onClose,
   onPortal,
+  onSignOut,
 }: {
   view: OwnerView;
   onView: (view: OwnerView) => void;
@@ -596,7 +662,10 @@ function OwnerSidebar({
   open: boolean;
   onClose: () => void;
   onPortal: () => void;
+  onSignOut: () => void;
 }) {
+  const [profileOpen, setProfileOpen] = useState(false);
+
   return (
     <>
       <button
@@ -647,14 +716,34 @@ function OwnerSidebar({
             </span>
             <ArrowRight size={15} />
           </button>
-          <div className="owner-profile">
+          <button
+            className="owner-profile"
+            onClick={() => setProfileOpen((value) => !value)}
+            aria-expanded={profileOpen}
+          >
             <span>{(owner?.displayName || "O").slice(0, 1).toUpperCase()}</span>
             <div>
               <strong>{owner?.displayName || "Studio owner"}</strong>
               <small>{workspace?.name || "Legacy Studio"}</small>
             </div>
             <ChevronDown size={15} />
-          </div>
+          </button>
+          {profileOpen && (
+            <div className="profile-menu">
+              <button
+                onClick={() => {
+                  onView("settings");
+                  setProfileOpen(false);
+                  onClose();
+                }}
+              >
+                <UserCog size={15} /> Account settings
+              </button>
+              <button onClick={onSignOut}>
+                <LogOut size={15} /> Log out
+              </button>
+            </div>
+          )}
         </div>
       </aside>
     </>
@@ -665,14 +754,101 @@ function OwnerHeader({
   view,
   onMenu,
   onNew,
+  onView,
+  data,
 }: {
   view: OwnerView;
   onMenu: () => void;
   onNew: () => void;
+  onView: (view: OwnerView) => void;
+  data: WorkspaceData;
 }) {
   const detail = viewDetails[view];
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [renderedAt] = useState(() => Date.now());
+  const normalized = query.trim().toLowerCase();
+  const results = [
+    ...data.clients.map((client) => ({
+      id: client.id,
+      label: fullName(client),
+      detail: client.email || "Client record",
+      view: "clients" as OwnerView,
+      type: "Client",
+    })),
+    ...data.projects.map((project) => ({
+      id: project.id,
+      label: project.title,
+      detail: `${projectClient(project)} · ${project.lifecyclePhase}`,
+      view: "projects" as OwnerView,
+      type: "Project",
+    })),
+    ...data.assets.map((asset) => ({
+      id: asset.id,
+      label: asset.originalName,
+      detail: `${asset.sourceType.replaceAll("_", " ")} · ${formatBytes(asset.byteSize)}`,
+      view: "design" as OwnerView,
+      type: "File",
+    })),
+  ].filter(
+    (item) =>
+      !normalized ||
+      `${item.label} ${item.detail} ${item.type}`
+        .toLowerCase()
+        .includes(normalized),
+  );
+  const notifications = [
+    ...data.approvals
+      .filter((item) => item.status === "pending")
+      .map((item) => ({
+        id: item.id,
+        title: item.subject,
+        detail: "Approval is waiting",
+        view: "design" as OwnerView,
+      })),
+    ...data.messages
+      .filter(
+        (item) => item.senderType === "client" && !item.status.includes("read"),
+      )
+      .map((item) => ({
+        id: item.id,
+        title: "New client message",
+        detail: item.body,
+        view: "inbox" as OwnerView,
+      })),
+    ...data.appointments
+      .filter(
+        (item) =>
+          !["completed", "cancelled"].includes(item.status) &&
+          new Date(item.startsAt).getTime() >= renderedAt,
+      )
+      .slice(0, 4)
+      .map((item) => ({
+        id: item.id,
+        title: item.appointmentType,
+        detail: formatDate(item.startsAt, true),
+        view: "calendar" as OwnerView,
+      })),
+  ];
+
+  useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+      if (event.key === "Escape") {
+        setSearchOpen(false);
+        setNotificationsOpen(false);
+      }
+    }
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
   return (
-    <header className="owner-header">
+    <>
+      <header className="owner-header">
       <button className="mobile-menu" onClick={onMenu} aria-label="Open menu">
         <Menu size={20} />
       </button>
@@ -681,19 +857,127 @@ function OwnerHeader({
         <p>{detail.subtitle}</p>
       </div>
       <div className="header-tools">
-        <button className="search-control">
+        <button
+          className="search-control"
+          onClick={() => setSearchOpen(true)}
+        >
           <Search size={16} />
           <span>Search anything...</span>
           <kbd>⌘ K</kbd>
         </button>
-        <button className="icon-button" aria-label="Notifications">
-          <Bell size={18} />
-        </button>
+        <div className="notification-anchor">
+          <button
+            className="icon-button"
+            aria-label="Notifications"
+            aria-expanded={notificationsOpen}
+            onClick={() => setNotificationsOpen((value) => !value)}
+          >
+            <Bell size={18} />
+            {notifications.length > 0 && (
+              <i className="notification-count">
+                {Math.min(notifications.length, 9)}
+              </i>
+            )}
+          </button>
+          {notificationsOpen && (
+            <section className="notification-menu">
+              <header>
+                <div>
+                  <p>NOTIFICATIONS</p>
+                  <strong>{notifications.length} items need attention</strong>
+                </div>
+                <button
+                  className="icon-button"
+                  aria-label="Close notifications"
+                  onClick={() => setNotificationsOpen(false)}
+                >
+                  <X size={15} />
+                </button>
+              </header>
+              {notifications.length ? (
+                notifications.slice(0, 8).map((item) => (
+                  <button
+                    key={`${item.view}-${item.id}`}
+                    onClick={() => {
+                      onView(item.view);
+                      setNotificationsOpen(false);
+                    }}
+                  >
+                    <span />
+                    <div>
+                      <strong>{item.title}</strong>
+                      <small>{item.detail}</small>
+                    </div>
+                    <ArrowRight size={14} />
+                  </button>
+                ))
+              ) : (
+                <div className="notification-empty">
+                  <CheckCircle2 size={22} />
+                  <strong>You are caught up.</strong>
+                  <small>
+                    New approvals, messages, and appointments appear here.
+                  </small>
+                </div>
+              )}
+            </section>
+          )}
+        </div>
         <button className="gold-button" onClick={onNew}>
           <Plus size={17} /> New
         </button>
       </div>
-    </header>
+      </header>
+      {searchOpen && (
+        <Modal
+          eyebrow="GLOBAL SEARCH"
+          title="Find anything in Legacy OS"
+          onClose={() => {
+            setSearchOpen(false);
+            setQuery("");
+          }}
+        >
+          <div className="global-search">
+            <label>
+              <Search size={17} />
+              <input
+                autoFocus
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search clients, projects, or files..."
+              />
+            </label>
+            <div className="search-results">
+              {results.length ? (
+                results.slice(0, 20).map((item) => (
+                  <button
+                    key={`${item.type}-${item.id}`}
+                    onClick={() => {
+                      onView(item.view);
+                      setSearchOpen(false);
+                      setQuery("");
+                    }}
+                  >
+                    <span>{item.type}</span>
+                    <div>
+                      <strong>{item.label}</strong>
+                      <small>{item.detail}</small>
+                    </div>
+                    <ArrowRight size={14} />
+                  </button>
+                ))
+              ) : (
+                <EmptyState
+                  icon={Search}
+                  title="No matching records"
+                  body="Try a client name, project title, or file name."
+                />
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -1202,11 +1486,41 @@ function ClientsView({
   onCreate: () => void;
   onInvite: (client: ClientRecord) => void;
 }) {
+  const [filter, setFilter] = useState<"all" | "active" | "archived">("active");
+  const visibleClients = data.clients.filter((client) => {
+    if (filter === "all") return true;
+    if (filter === "archived") return client.status === "archived";
+    return client.status !== "archived";
+  });
+
   return (
     <section className="page-stack">
       <div className="section-toolbar">
         <div className="filter-tabs">
-          <button className="active">Active clients <span>{data.clients.length}</span></button>
+          <button
+            className={filter === "all" ? "active" : ""}
+            onClick={() => setFilter("all")}
+          >
+            All <span>{data.clients.length}</span>
+          </button>
+          <button
+            className={filter === "active" ? "active" : ""}
+            onClick={() => setFilter("active")}
+          >
+            Active{" "}
+            <span>
+              {data.clients.filter((client) => client.status !== "archived").length}
+            </span>
+          </button>
+          <button
+            className={filter === "archived" ? "active" : ""}
+            onClick={() => setFilter("archived")}
+          >
+            Archived{" "}
+            <span>
+              {data.clients.filter((client) => client.status === "archived").length}
+            </span>
+          </button>
         </div>
         <button className="gold-button" onClick={onCreate}>
           <Plus size={16} /> New client
@@ -1222,13 +1536,23 @@ function ClientsView({
             onAction={onCreate}
           />
         </section>
+      ) : visibleClients.length === 0 ? (
+        <section className="os-panel tall-empty">
+          <EmptyState
+            icon={UsersRound}
+            title={`No ${filter} clients`}
+            body="Choose another client filter or create a new client record."
+            action="Show all clients"
+            onAction={() => setFilter("all")}
+          />
+        </section>
       ) : (
         <section className="os-panel table-panel">
           <div className="data-table clients-table">
             <div className="table-row table-head">
               <span>Client</span><span>Contact</span><span>Projects</span><span>Status</span><span>Portal</span>
             </div>
-            {data.clients.map((client) => {
+            {visibleClients.map((client) => {
               const count = data.projects.filter(
                 (project) => project.clientId === client.id,
               ).length;
@@ -1330,7 +1654,8 @@ function InboxView({
   );
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await api("/api/messages", {
         method: "POST",
@@ -1340,7 +1665,7 @@ function InboxView({
           body: form.get("body"),
         }),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       notify("Message saved to the shared client conversation.");
       onSent();
     } catch (error) {
@@ -1404,17 +1729,24 @@ function DesignStudio({
   notify: (message: string, error?: boolean) => void;
 }) {
   const [projectId, setProjectId] = useState(data.projects[0]?.id || "");
+  const [tool, setTool] = useState<"select" | "analyze">("select");
+  const [selectedAssetId, setSelectedAssetId] = useState("");
+  const [analyzing, setAnalyzing] = useState(false);
   const project = data.projects.find((item) => item.id === projectId);
   const projectAssets = data.assets.filter((item) => item.projectId === projectId);
   const projectApprovals = data.approvals.filter((item) => item.projectId === projectId);
+  const selectedAsset = projectAssets.find(
+    (item) => item.id === selectedAssetId,
+  );
 
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     form.set("projectId", projectId);
     try {
       await api("/api/files", { method: "POST", body: form });
-      event.currentTarget.reset();
+      formElement.reset();
       notify("Design file stored and written to the audit trail.");
       refresh();
     } catch (error) {
@@ -1443,6 +1775,46 @@ function DesignStudio({
     }
   }
 
+  async function analyzeDesign() {
+    if (!project) return;
+    setTool("analyze");
+    setAnalyzing(true);
+    try {
+      const result = await api<{ summary?: string }>("/api/intelligence", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          triggerType: "design_review",
+          projectId: project.id,
+        }),
+      });
+      notify(
+        result.summary ||
+          "Design evidence evaluated. Results are available in AI Operations.",
+      );
+      refresh();
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "Unable to analyze design",
+        true,
+      );
+    } finally {
+      setAnalyzing(false);
+    }
+  }
+
+  async function openAsset(asset: AssetRecord) {
+    setSelectedAssetId(asset.id);
+    try {
+      await downloadAsset(asset);
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "Unable to open file",
+        true,
+      );
+    }
+  }
+
   if (!project) {
     return (
       <section className="os-panel tall-empty">
@@ -1456,13 +1828,31 @@ function DesignStudio({
       <div className="design-toolbar">
         <label>
           <span>PROJECT</span>
-          <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+          <select
+            value={projectId}
+            onChange={(event) => {
+              setProjectId(event.target.value);
+              setSelectedAssetId("");
+            }}
+          >
             {data.projects.map((item) => <option value={item.id} key={item.id}>{item.title}</option>)}
           </select>
         </label>
         <div>
-          <button className="outline-button"><Brush size={15} /> Select</button>
-          <button className="outline-button"><WandSparkles size={15} /> AI Enhance</button>
+          <button
+            className={cn("outline-button", tool === "select" && "active-tool")}
+            onClick={() => setTool("select")}
+          >
+            <Brush size={15} /> Select
+          </button>
+          <button
+            className={cn("outline-button", tool === "analyze" && "active-tool")}
+            onClick={analyzeDesign}
+            disabled={analyzing}
+          >
+            <WandSparkles size={15} />{" "}
+            {analyzing ? "Analyzing..." : "Analyze"}
+          </button>
           <button className="gold-button" onClick={requestApproval}><ShieldCheck size={15} /> Request approval</button>
         </div>
       </div>
@@ -1472,10 +1862,15 @@ function DesignStudio({
           {projectAssets.length ? (
             <div className="asset-list">
               {projectAssets.map((asset) => (
-                <a href={`/api/files?id=${asset.id}`} target="_blank" key={asset.id}>
+                <button
+                  className={selectedAssetId === asset.id ? "active" : ""}
+                  onClick={() => void openAsset(asset)}
+                  key={asset.id}
+                >
                   <span><FileText size={17} /></span>
                   <div><strong>{asset.originalName}</strong><small>{formatBytes(asset.byteSize)} · {asset.sourceType.replace("_", " ")}</small></div>
-                </a>
+                  <Download size={14} />
+                </button>
               ))}
             </div>
           ) : (
@@ -1493,8 +1888,12 @@ function DesignStudio({
           <header><span>CANVAS</span><small>{project.placement || "Placement not set"}</small></header>
           <div className="canvas-empty">
             <div className="canvas-emblem"><span>L</span></div>
-            <p>{project.title}</p>
-            <small>Select a project file to review it here. The stored original remains unchanged.</small>
+            <p>{selectedAsset?.originalName || project.title}</p>
+            <small>
+              {selectedAsset
+                ? "The selected original has been downloaded for review. Legacy OS preserves the stored source unchanged."
+                : "Select a project file to review it. The stored original remains unchanged."}
+            </small>
           </div>
           <footer>
             <span>PROJECT NOTE</span>
@@ -1541,6 +1940,7 @@ function ChiefView({
   const [learning, setLearning] = useState(false);
   const [syncingSocial, setSyncingSocial] = useState(false);
   const [intelligenceError, setIntelligenceError] = useState("");
+  const [intelligenceNotice, setIntelligenceNotice] = useState("");
 
   const loadIntelligence = useCallback(async () => {
     try {
@@ -1562,6 +1962,8 @@ function ChiefView({
 
   async function learnNow() {
     setLearning(true);
+    setIntelligenceError("");
+    setIntelligenceNotice("");
     try {
       await api("/api/intelligence", {
         method: "POST",
@@ -1569,6 +1971,9 @@ function ChiefView({
         body: JSON.stringify({ triggerType: "owner_requested" }),
       });
       await loadIntelligence();
+      setIntelligenceNotice(
+        "Learning cycle completed. New evidence, patterns, recommendations, and outcomes are reflected below.",
+      );
     } catch (learnError) {
       setIntelligenceError(
         learnError instanceof Error
@@ -1582,13 +1987,22 @@ function ChiefView({
 
   async function syncSocial() {
     setSyncingSocial(true);
+    setIntelligenceError("");
+    setIntelligenceNotice("");
     try {
-      await api("/api/social/sync", {
+      const result = await api<{
+        connectionsSynced: number;
+        mediaObserved: number;
+        projectMatches: number;
+      }>("/api/social/sync", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: "{}",
       });
       await loadIntelligence();
+      setIntelligenceNotice(
+        `Social sync completed: ${result.connectionsSynced} connection${result.connectionsSynced === 1 ? "" : "s"}, ${result.mediaObserved} media observation${result.mediaObserved === 1 ? "" : "s"}, and ${result.projectMatches} project match${result.projectMatches === 1 ? "" : "es"}.`,
+      );
     } catch (syncError) {
       setIntelligenceError(
         syncError instanceof Error
@@ -1660,6 +2074,9 @@ function ChiefView({
         </div>
         {intelligenceError && (
           <p className="access-error">{intelligenceError}</p>
+        )}
+        {intelligenceNotice && (
+          <p className="access-notice">{intelligenceNotice}</p>
         )}
         {intelligence?.patterns.length ? (
           <div className="pattern-grid">
@@ -1851,6 +2268,112 @@ function ModuleView({
   }[type];
   const [activeTab, setActiveTab] = useState(config.labels[0]);
   const Icon = config.icon;
+  const records = useMemo(() => {
+    if (type === "knowledge") {
+      if (activeTab === "Techniques") {
+        const tags = new Map<string, number>();
+        data.projects.forEach((project) =>
+          projectTags(project).forEach((tag) =>
+            tags.set(tag, (tags.get(tag) || 0) + 1),
+          ),
+        );
+        return [...tags.entries()].map(([tag, count]) => ({
+          id: tag,
+          title: tag,
+          detail: `${count} connected project${count === 1 ? "" : "s"}`,
+          meta: "Technique / style evidence",
+        }));
+      }
+      if (activeTab === "Lessons") {
+        return data.projects
+          .filter(
+            (project) =>
+              project.lifecyclePhase === "complete" && project.summary,
+          )
+          .map((project) => ({
+            id: project.id,
+            title: project.title,
+            detail: project.summary!,
+            meta: "Completed-project learning source",
+          }));
+      }
+      if (activeTab === "References") {
+        return data.assets.map((asset) => ({
+          id: asset.id,
+          title: asset.originalName,
+          detail: `${formatBytes(asset.byteSize)} · ${asset.sourceType.replaceAll("_", " ")}`,
+          meta: formatDate(asset.createdAt),
+        }));
+      }
+      return data.projects
+        .filter((project) => project.summary || project.nextAction)
+        .map((project) => ({
+          id: project.id,
+          title: project.title,
+          detail: project.summary || project.nextAction || "",
+          meta: `${projectClient(project)} · ${project.lifecyclePhase}`,
+        }));
+    }
+    if (type === "content") {
+      const imageAssets = data.assets.filter((asset) =>
+        asset.mimeType.startsWith("image/"),
+      );
+      if (activeTab === "Approve") {
+        return data.approvals
+          .filter((approval) => approval.category === "content")
+          .map((approval) => ({
+            id: approval.id,
+            title: approval.subject,
+            detail: approval.summary,
+            meta: approval.status,
+          }));
+      }
+      if (activeTab === "Schedule") {
+        return data.projects
+          .filter((project) => project.lifecyclePhase === "complete")
+          .map((project) => ({
+            id: project.id,
+            title: project.title,
+            detail: `${imageAssets.filter((asset) => asset.projectId === project.id).length} media source(s) ready for a publishing decision`,
+            meta: "Completed project",
+          }));
+      }
+      const draftMode = activeTab === "Draft";
+      return imageAssets
+        .filter((asset) => {
+          if (!draftMode) return true;
+          const project = data.projects.find(
+            (item) => item.id === asset.projectId,
+          );
+          return project?.lifecyclePhase !== "complete";
+        })
+        .map((asset) => ({
+          id: asset.id,
+          title: asset.originalName,
+          detail:
+            data.projects.find((project) => project.id === asset.projectId)
+              ?.title || "Unassigned media",
+          meta: draftMode ? "Potential draft source" : "Available media source",
+        }));
+    }
+    if (activeTab === "Invoices" || activeTab === "Reports") {
+      return data.projects
+        .filter(
+          (project) =>
+            project.budgetMinCents != null || project.budgetMaxCents != null,
+        )
+        .map((project) => ({
+          id: project.id,
+          title: project.title,
+          detail: `${formatMoney(project.budgetMinCents)} – ${formatMoney(project.budgetMaxCents)}`,
+          meta:
+            activeTab === "Reports"
+              ? `${project.lifecyclePhase} · ${projectClient(project)}`
+              : "Budget range; invoice not issued",
+        }));
+    }
+    return [];
+  }, [activeTab, data, type]);
   return (
     <section className="module-surface">
       <div className="module-tabs">
@@ -1864,13 +2387,28 @@ function ModuleView({
           </button>
         ))}
       </div>
-      <section className="os-panel tall-empty">
-        <EmptyState
-          icon={Icon}
-          title={`${activeTab}: ${config.title}`}
-          body={`${config.body} The ${activeTab.toLowerCase()} filter is active.`}
-        />
-        <div className="module-integrity"><ShieldCheck size={16} /> Empty by design · {data.projects.length} live projects available as future sources</div>
+      <section className={cn("os-panel", !records.length && "tall-empty")}>
+        {records.length ? (
+          <div className="module-records">
+            {records.map((record) => (
+              <article key={record.id}>
+                <span><Icon size={17} /></span>
+                <div>
+                  <strong>{record.title}</strong>
+                  <p>{record.detail}</p>
+                  <small>{record.meta}</small>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={Icon}
+            title={`${activeTab}: ${config.title}`}
+            body={`${config.body} The ${activeTab.toLowerCase()} filter is active.`}
+          />
+        )}
+        <div className="module-integrity"><ShieldCheck size={16} /> Real workspace data only · {data.projects.length} live projects available as sources</div>
       </section>
     </section>
   );
@@ -1880,11 +2418,74 @@ function SettingsView({
   data,
   notify,
   refresh,
+  onView,
 }: {
   data: WorkspaceData;
   notify: (message: string, error?: boolean) => void;
   refresh: () => void;
+  onView: (view: OwnerView) => void;
 }) {
+  const [activeTab, setActiveTab] = useState<
+    "workspace" | "ai" | "team" | "security" | "notifications"
+  >("workspace");
+  const [health, setHealth] = useState<{
+    status: string;
+    checkedAt: string;
+    services: Record<string, string>;
+  } | null>(null);
+  const [checkingHealth, setCheckingHealth] = useState(false);
+  const [preferences, setPreferences] = useState({
+    approvals: true,
+    messages: true,
+    appointments: true,
+    ai: true,
+  });
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      const saved = window.localStorage.getItem(
+        "legacy_notification_preferences",
+      );
+      if (!saved) return;
+      try {
+        setPreferences(JSON.parse(saved) as typeof preferences);
+      } catch {
+        window.localStorage.removeItem("legacy_notification_preferences");
+      }
+    }, 0);
+    return () => window.clearTimeout(handle);
+  }, []);
+
+  async function runHealthCheck() {
+    setCheckingHealth(true);
+    try {
+      const result = await api<{
+        status: string;
+        checkedAt: string;
+        services: Record<string, string>;
+      }>("/api/health");
+      setHealth(result);
+      notify(`System health check completed: ${result.status}.`);
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "Health check failed",
+        true,
+      );
+    } finally {
+      setCheckingHealth(false);
+    }
+  }
+
+  function togglePreference(key: keyof typeof preferences) {
+    const next = { ...preferences, [key]: !preferences[key] };
+    setPreferences(next);
+    window.localStorage.setItem(
+      "legacy_notification_preferences",
+      JSON.stringify(next),
+    );
+    notify("Notification preference saved on this device.");
+  }
+
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -1907,13 +2508,39 @@ function SettingsView({
   return (
     <section className="settings-layout">
       <div className="settings-tabs">
-        <button className="active"><Settings size={15} /> Workspace</button>
-        <button><Bot size={15} /> AI & Models</button>
-        <button><UsersRound size={15} /> Team</button>
-        <button><ShieldCheck size={15} /> Security</button>
-        <button><Bell size={15} /> Notifications</button>
+        <button
+          className={activeTab === "workspace" ? "active" : ""}
+          onClick={() => setActiveTab("workspace")}
+        >
+          <Settings size={15} /> Workspace
+        </button>
+        <button
+          className={activeTab === "ai" ? "active" : ""}
+          onClick={() => setActiveTab("ai")}
+        >
+          <Bot size={15} /> AI & Models
+        </button>
+        <button
+          className={activeTab === "team" ? "active" : ""}
+          onClick={() => setActiveTab("team")}
+        >
+          <UsersRound size={15} /> Team
+        </button>
+        <button
+          className={activeTab === "security" ? "active" : ""}
+          onClick={() => setActiveTab("security")}
+        >
+          <ShieldCheck size={15} /> Security
+        </button>
+        <button
+          className={activeTab === "notifications" ? "active" : ""}
+          onClick={() => setActiveTab("notifications")}
+        >
+          <Bell size={15} /> Notifications
+        </button>
       </div>
-      <form className="settings-grid" onSubmit={save}>
+      {activeTab === "workspace" && (
+        <form className="settings-grid" onSubmit={save}>
         <section className="os-panel setting-card">
           <PanelTitle eyebrow="IDENTITY" title="Workspace" />
           <Field label="Studio name" name="name" required>
@@ -1946,7 +2573,128 @@ function SettingsView({
           ))}
         </section>
         <button className="gold-button save-settings" type="submit"><Check size={16} /> Save changes</button>
-      </form>
+        </form>
+      )}
+      {activeTab === "ai" && (
+        <div className="settings-grid">
+          <section className="os-panel setting-card settings-copy-card">
+            <PanelTitle eyebrow="MODEL-AGNOSTIC CORE" title="Reasoning architecture" />
+            <p>
+              Legacy OS owns memory, context, workflow policy, confidence,
+              approvals, evidence, and audit history. Model providers remain
+              replaceable execution engines.
+            </p>
+            <button className="outline-button" onClick={() => onView("chief")}>
+              <BrainCircuit size={15} /> Open intelligence controls
+            </button>
+          </section>
+          <section className="os-panel setting-card settings-copy-card">
+            <PanelTitle eyebrow="CURRENT CAPTURE" title="Privacy boundary" />
+            <strong>
+              {data.workspace?.aiContentCapture === "redacted_summaries"
+                ? "Redacted summaries"
+                : "Metadata only"}
+            </strong>
+            <p>
+              Every run records purpose, provider, model, confidence, latency,
+              evidence pointers, and outcome without retaining raw prompts by
+              default.
+            </p>
+            <button
+              className="outline-button"
+              onClick={() => onView("operations")}
+            >
+              <Activity size={15} /> Review AI run ledger
+            </button>
+          </section>
+        </div>
+      )}
+      {activeTab === "team" && (
+        <div className="settings-grid">
+          <section className="os-panel setting-card settings-copy-card">
+            <PanelTitle eyebrow="OWNER ACCOUNT" title={data.owner?.displayName || "Studio owner"} />
+            <p>{data.owner?.email || "Private preview identity"}</p>
+            <div className="role-definition">
+              <ShieldCheck size={18} />
+              <div>
+                <strong>Owner / Operations</strong>
+                <small>Full workspace access. Client records remain server isolated.</small>
+              </div>
+            </div>
+          </section>
+          <section className="os-panel setting-card settings-copy-card">
+            <PanelTitle eyebrow="CLIENT ISOLATION" title="Separate access boundary" />
+            <p>
+              Client accounts are bound to one client record and cannot open
+              another client’s project, messages, files, or approvals.
+            </p>
+            <button className="outline-button" onClick={() => onView("clients")}>
+              <UsersRound size={15} /> Manage client access
+            </button>
+          </section>
+        </div>
+      )}
+      {activeTab === "security" && (
+        <div className="settings-grid">
+          <section className="os-panel setting-card health-card">
+            <PanelTitle eyebrow="LIVE CHECK" title="Environment health" />
+            {health ? (
+              Object.entries(health.services).map(([service, status]) => (
+                <p key={service}>
+                  <CheckCircle2 size={16} />
+                  <span>{service.replaceAll("_", " ")}</span>
+                  <strong>{status}</strong>
+                </p>
+              ))
+            ) : (
+              <p className="settings-placeholder">
+                Run a check to verify the application, database, and telemetry
+                connection now.
+              </p>
+            )}
+            <button
+              className="gold-button"
+              onClick={runHealthCheck}
+              disabled={checkingHealth}
+            >
+              <Activity size={15} />{" "}
+              {checkingHealth ? "Checking..." : "Run health check"}
+            </button>
+          </section>
+          <section className="os-panel setting-card settings-copy-card">
+            <PanelTitle eyebrow="ACCESS POLICY" title="Identity protection" />
+            <div className="security-list">
+              <p><Check size={15} /> Verified email for configured accounts</p>
+              <p><Check size={15} /> TOTP two-step verification</p>
+              <p><Check size={15} /> Server-enforced owner and client roles</p>
+              <p><Check size={15} /> Revocable, expiring client access links</p>
+            </div>
+          </section>
+        </div>
+      )}
+      {activeTab === "notifications" && (
+        <section className="os-panel notification-settings">
+          <PanelTitle eyebrow="ON THIS DEVICE" title="Notification preferences" />
+          {(
+            [
+              ["approvals", "Approvals", "Design and client decisions waiting for review"],
+              ["messages", "Client messages", "New messages in the shared portal thread"],
+              ["appointments", "Appointments", "Upcoming schedule commitments"],
+              ["ai", "AI operations", "Completed briefings, learning cycles, and held actions"],
+            ] as const
+          ).map(([key, title, body]) => (
+            <button key={key} onClick={() => togglePreference(key)}>
+              <div>
+                <strong>{title}</strong>
+                <small>{body}</small>
+              </div>
+              <span className={preferences[key] ? "enabled" : ""}>
+                {preferences[key] ? "On" : "Off"}
+              </span>
+            </button>
+          ))}
+        </section>
+      )}
     </section>
   );
 }
@@ -2114,12 +2862,20 @@ function InviteModal({
   onClose: () => void;
   notify: (message: string, error?: boolean) => void;
 }) {
-  const [invite, setInvite] = useState<{ portalUrl: string; expiresAt: string } | null>(null);
+  const [invite, setInvite] = useState<{
+    token: string;
+    portalUrl: string;
+    expiresAt: string;
+  } | null>(null);
   const [creating, setCreating] = useState(false);
   async function create() {
     setCreating(true);
     try {
-      const result = await api<{ portalUrl: string; expiresAt: string }>("/api/portal/invitations", {
+      const result = await api<{
+        token: string;
+        portalUrl: string;
+        expiresAt: string;
+      }>("/api/portal/invitations", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ clientId: client.id }),
@@ -2134,8 +2890,22 @@ function InviteModal({
   }
   async function copy() {
     if (!invite) return;
-    await navigator.clipboard.writeText(invite.portalUrl);
-    notify("Portal link copied.");
+    try {
+      await copyText(invite.portalUrl);
+      notify("Portal link copied.");
+    } catch {
+      notify("Copy failed. Select the link and copy it manually.", true);
+    }
+  }
+
+  async function copyCode() {
+    if (!invite) return;
+    try {
+      await copyText(invite.token);
+      notify("Client access code copied.");
+    } catch {
+      notify("Copy failed. Select the code and copy it manually.", true);
+    }
   }
   return (
     <Modal title={`Client portal · ${fullName(client)}`} eyebrow="SECURE ACCESS" onClose={onClose}>
@@ -2143,9 +2913,10 @@ function InviteModal({
         <div className="security-note"><LockKeyhole size={20} /><div><strong>One active link per client</strong><p>Creating a new link revokes the previous one. Access expires after 30 days and can be renewed.</p></div></div>
         {invite ? (
           <>
-            <label className="field"><span>Private portal link</span><div className="copy-field"><input readOnly value={invite.portalUrl} /><button onClick={copy}><Copy size={16} /></button></div></label>
+            <label className="field"><span>Access code</span><div className="copy-field"><input readOnly value={invite.token} /><button type="button" onClick={copyCode} aria-label="Copy access code"><Copy size={16} /></button></div></label>
+            <label className="field"><span>Private portal link</span><div className="copy-field"><input readOnly value={invite.portalUrl} /><button type="button" onClick={copy} aria-label="Copy portal link"><Copy size={16} /></button></div></label>
             <p className="expiry-note">Expires {formatDate(invite.expiresAt, true)}</p>
-            <div className="modal-actions"><button className="outline-button" onClick={() => window.open(invite.portalUrl, "_blank")}>Open portal</button><button className="gold-button" onClick={copy}><Copy size={15} /> Copy link</button></div>
+            <div className="modal-actions"><button type="button" className="text-button" onClick={copyCode}>Copy code</button><button type="button" className="outline-button" onClick={() => window.open(invite.portalUrl, "_blank", "noopener,noreferrer")}>Open portal</button><button type="button" className="gold-button" onClick={copy}><Copy size={15} /> Copy link</button></div>
           </>
         ) : (
           <button className="gold-button wide" onClick={create} disabled={creating}>{creating ? "Creating secure access..." : "Create client portal link"}</button>
@@ -2168,6 +2939,7 @@ function PortalAccess({
   const [submitted, setSubmitted] = useState(
     authenticated ? "__authenticated__" : initialToken,
   );
+
   if (submitted) {
     return <ClientPortal token={submitted} onExit={onExit} onInvalid={() => setSubmitted("")} />;
   }
@@ -2184,7 +2956,7 @@ function PortalAccess({
             <label><span>ACCESS CODE</span><input value={token} onChange={(event) => setToken(event.target.value)} placeholder="Paste the code from your private link" /></label>
             <button className="gold-button wide" type="submit">Open my project <ArrowRight size={16} /></button>
           </form>
-          <button className="text-button" onClick={onExit}><ArrowLeft size={14} /> Return to owner workspace</button>
+          <button className="text-button" onClick={onExit}><ArrowLeft size={14} /> Exit secure portal</button>
         </section>
         <footer><ShieldCheck size={16} /> Your project information is private and auditable.</footer>
       </div>
@@ -2281,14 +3053,15 @@ function ClientPortal({
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     try {
       await api("/api/portal", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ token, action: "message", projectId: project?.id, body: form.get("body") }),
       });
-      event.currentTarget.reset();
+      formElement.reset();
       setNotice("Message sent to your artist.");
       await load();
     } catch (sendError) {
@@ -2313,16 +3086,30 @@ function ClientPortal({
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!project) return;
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     form.set("projectId", project.id);
     form.set("token", token);
     try {
       await api("/api/files", { method: "POST", body: form });
-      event.currentTarget.reset();
+      formElement.reset();
       setNotice("File shared with your artist.");
       await load();
     } catch (uploadError) {
       setNotice(uploadError instanceof Error ? uploadError.message : "Upload failed");
+    }
+  }
+
+  async function openPortalAsset(asset: AssetRecord) {
+    try {
+      await downloadAsset(asset, token);
+      setNotice(`${asset.originalName} downloaded.`);
+    } catch (downloadError) {
+      setNotice(
+        downloadError instanceof Error
+          ? downloadError.message
+          : "Unable to download file",
+      );
     }
   }
 
@@ -2405,7 +3192,7 @@ function ClientPortal({
         <h1>We could not open this portal.</h1>
         <p>{error}</p>
         <button className="gold-button" onClick={onInvalid}>Try another access code</button>
-        <button className="text-button" onClick={onExit}>Return to owner workspace</button>
+        <button className="text-button" onClick={onExit}>Exit secure portal</button>
       </main>
     );
   }
@@ -2522,7 +3309,7 @@ function ClientPortal({
                 <section className="client-card">
                   <PanelTitle eyebrow="PROJECT FILES" title="Shared media" />
                   {files.length ? <div className="asset-list">{files.map((asset) => (
-                    <a href={`/api/files?id=${asset.id}&token=${encodeURIComponent(token)}`} target="_blank" key={asset.id}><span><FileText size={18} /></span><div><strong>{asset.originalName}</strong><small>{formatBytes(asset.byteSize)} · {formatDate(asset.createdAt)}</small></div><ArrowRight size={14} /></a>
+                    <button onClick={() => void openPortalAsset(asset)} key={asset.id}><span><FileText size={18} /></span><div><strong>{asset.originalName}</strong><small>{formatBytes(asset.byteSize)} · {formatDate(asset.createdAt)}</small></div><Download size={14} /></button>
                   ))}</div> : <EmptyState icon={FileText} title="No files shared yet" body="References and project documents will stay connected here." />}
                 </section>
                 <form className="client-card portal-upload" onSubmit={upload}><Upload size={28} /><h3>Share a reference</h3><p>Upload an image or document up to 25 MB.</p><input type="file" name="file" required /><button className="gold-button" type="submit"><Upload size={15} /> Upload file</button></form>
@@ -2606,10 +3393,12 @@ export function LegacyApp({
   firstName,
   initialMode = "owner",
   authenticatedClient = false,
+  onSignOut,
 }: {
   firstName: string;
   initialMode?: "owner" | "portal";
   authenticatedClient?: boolean;
+  onSignOut: () => void;
 }) {
   const [mode, setMode] = useState<"owner" | "portal">(initialMode);
   const [portalToken, setPortalToken] = useState("");
@@ -2683,9 +3472,18 @@ export function LegacyApp({
   if (mode === "portal") {
     return (
       <PortalAccess
+        key={
+          authenticatedClient
+            ? "__authenticated__"
+            : portalToken || "manual"
+        }
         initialToken={portalToken}
         authenticated={authenticatedClient}
         onExit={() => {
+          if (initialMode === "portal") {
+            onSignOut();
+            return;
+          }
           window.history.replaceState({}, "", window.location.pathname);
           setPortalToken("");
           setMode("owner");
@@ -2717,9 +3515,16 @@ export function LegacyApp({
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onPortal={() => setMode("portal")}
+        onSignOut={onSignOut}
       />
       <main className="owner-main">
-        <OwnerHeader view={view} onMenu={() => setMenuOpen(true)} onNew={openNew} />
+        <OwnerHeader
+          view={view}
+          data={data}
+          onView={setView}
+          onMenu={() => setMenuOpen(true)}
+          onNew={openNew}
+        />
         <div className="owner-content">
           {view === "dashboard" && <Dashboard data={data} firstName={actualFirstName} briefing={briefing} generating={generating} onGenerate={generateBriefing} onClient={() => setModal("client")} onProject={() => setModal("project")} onAppointment={() => setModal("appointment")} onView={setView} />}
           {view === "projects" && <ProjectsView data={data} onCreate={() => setModal("project")} refresh={load} notify={notify} />}
@@ -2730,8 +3535,12 @@ export function LegacyApp({
           {view === "chief" && <ChiefView data={data} briefing={briefing} generating={generating} onGenerate={generateBriefing} />}
           {view === "operations" && <OperationsView data={data} />}
           {view === "analytics" && <AnalyticsView data={data} />}
-          {(view === "knowledge" || view === "content" || view === "finances") && <ModuleView type={view} data={data} />}
-          {view === "settings" && <SettingsView data={data} notify={notify} refresh={load} />}
+          {(view === "knowledge" ||
+            view === "content" ||
+            view === "finances") && (
+            <ModuleView key={view} type={view} data={data} />
+          )}
+          {view === "settings" && <SettingsView data={data} notify={notify} refresh={load} onView={setView} />}
         </div>
         <footer className="owner-footer"><span>LEGACY OS</span><p>Built for creators. Designed to last.</p><span><i /> ALL SYSTEMS OPERATIONAL</span></footer>
       </main>

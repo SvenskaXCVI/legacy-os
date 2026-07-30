@@ -8,6 +8,7 @@ import {
   makeId,
   requireOwner,
   resolveClientAccess,
+  routeError,
   sha256,
   WORKSPACE_ID,
 } from "../_lib";
@@ -97,10 +98,7 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (error) {
-    return jsonError(
-      error instanceof Error ? error.message : "Unable to upload file",
-      500,
-    );
+    return routeError(error, "Unable to upload file");
   }
 }
 
@@ -135,9 +133,6 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    return jsonError(
-      error instanceof Error ? error.message : "Unable to download file",
-      500,
-    );
+    return routeError(error, "Unable to download file");
   }
 }

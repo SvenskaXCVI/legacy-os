@@ -82,6 +82,31 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
         );
         if (!active) return;
         setConfig(nextConfig);
+        const portalInvitation =
+          new URLSearchParams(window.location.search).get("portal")?.trim() ||
+          "";
+        if (portalInvitation) {
+          setRoleIntent("client");
+          setInvitationToken(portalInvitation);
+          sessionStorage.setItem(
+            "legacy_client_invitation",
+            portalInvitation,
+          );
+        }
+        if (
+          nextConfig.mode === "private_preview" &&
+          portalInvitation
+        ) {
+          setUser({
+            email: "",
+            displayName: "Client",
+            role: "client",
+            clientId: null,
+            mfaRequired: false,
+          });
+          setStage("app");
+          resumedSession = true;
+        }
         if (
           nextConfig.mode === "supabase" &&
           nextConfig.supabaseUrl &&
@@ -99,7 +124,9 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
             localStorage.setItem("legacy_access_token", session.access_token);
             await bootstrap(
               nextClient,
-              sessionStorage.getItem("legacy_client_invitation") || "",
+              portalInvitation ||
+                sessionStorage.getItem("legacy_client_invitation") ||
+                "",
             );
             resumedSession = true;
           }
@@ -298,6 +325,34 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
     setStage("app");
   }
 
+  async function signOut() {
+    setBusy(true);
+    setError("");
+    try {
+      if (client) {
+        const result = await client.auth.signOut();
+        if (result.error) throw result.error;
+      }
+    } catch (signOutError) {
+      setError(
+        signOutError instanceof Error
+          ? signOutError.message
+          : "Unable to end this session",
+      );
+    } finally {
+      localStorage.removeItem("legacy_access_token");
+      sessionStorage.removeItem("legacy_client_invitation");
+      setUser(null);
+      setFactorId("");
+      setChallengeId("");
+      setQrCode("");
+      setInvitationToken("");
+      setPasswordVisible(false);
+      setStage("login");
+      setBusy(false);
+    }
+  }
+
   if (stage === "splash") {
     return (
       <main className="legacy-splash">
@@ -316,6 +371,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
         firstName={user.displayName.split(" ")[0] || ownerName}
         initialMode={user.role === "client" ? "portal" : "owner"}
         authenticatedClient={user.role === "client" && Boolean(providerReady)}
+        onSignOut={() => void signOut()}
       />
     );
   }
@@ -510,8 +566,12 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
               <button onClick={() => void provider("google")}>Google</button>
               <button onClick={() => void provider("apple")}>Apple</button>
               <button
-                disabled
                 title="Instagram is a consented data connection, not an identity provider"
+                onClick={() =>
+                  setNotice(
+                    "Instagram connects inside the client portal after verified sign-in so consent and project access stay separate.",
+                  )
+                }
               >
                 Instagram
               </button>

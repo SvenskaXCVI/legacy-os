@@ -385,3 +385,12 @@ export async function validatePortalToken(token: string | null) {
 export function jsonError(message: string, status = 400) {
   return Response.json({ error: message }, { status });
 }
+
+export function routeError(
+  error: unknown,
+  fallback: string,
+  status = 500,
+) {
+  if (error instanceof Response) return error;
+  return jsonError(error instanceof Error ? error.message : fallback, status);
+}

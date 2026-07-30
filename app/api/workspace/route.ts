@@ -15,9 +15,9 @@ import {
 import {
   actorFrom,
   displayNameFrom,
-  jsonError,
   makeId,
   requireOwner,
+  routeError,
   WORKSPACE_ID,
 } from "../_lib";
 
@@ -155,10 +155,7 @@ export async function GET(request: Request) {
       auditEvents: auditRows,
     });
   } catch (error) {
-    return jsonError(
-      error instanceof Error ? error.message : "Unable to load workspace",
-      500,
-    );
+    return routeError(error, "Unable to load workspace");
   }
 }
 
@@ -189,9 +186,6 @@ export async function PATCH(request: Request) {
       .where(eq(workspaces.id, WORKSPACE_ID));
     return Response.json({ status: "saved" });
   } catch (error) {
-    return jsonError(
-      error instanceof Error ? error.message : "Unable to save workspace",
-      500,
-    );
+    return routeError(error, "Unable to save workspace");
   }
 }

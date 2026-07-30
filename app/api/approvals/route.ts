@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { approvals, auditEvents } from "../../../db/schema";
-import { makeId, requireOwner } from "../_lib";
+import { makeId, requireOwner, routeError } from "../_lib";
 
 const DEFAULT_WORKSPACE_ID = "legacy-lines";
 const decisions = new Set(["approved", "revision", "rejected"]);
@@ -113,8 +113,6 @@ export async function POST(request: Request) {
       auditRecorded: true,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to record decision";
-    return Response.json({ error: message }, { status: 500 });
+    return routeError(error, "Unable to record decision");
   }
 }

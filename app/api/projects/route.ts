@@ -1,7 +1,7 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { auditEvents, clients, projects } from "../../../db/schema";
-import { actorFrom, jsonError, makeId, requireOwner, WORKSPACE_ID } from "../_lib";
+import { actorFrom, jsonError, makeId, requireOwner, routeError, WORKSPACE_ID } from "../_lib";
 import {
   captureCompletedProject,
   captureObservation,
@@ -104,10 +104,7 @@ export async function POST(request: Request) {
     await enqueueLearningCycle(WORKSPACE_ID, "project_created", projectId, db);
     return Response.json({ id: projectId, status: "created" }, { status: 201 });
   } catch (error) {
-    return jsonError(
-      error instanceof Error ? error.message : "Unable to create project",
-      500,
-    );
+    return routeError(error, "Unable to create project");
   }
 }
 
@@ -227,10 +224,6 @@ export async function PATCH(request: Request) {
       learningQueued: true,
     });
   } catch (error) {
-    if (error instanceof Response) return error;
-    return jsonError(
-      error instanceof Error ? error.message : "Unable to update project",
-      500,
-    );
+    return routeError(error, "Unable to update project");
   }
 }

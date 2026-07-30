@@ -10,6 +10,7 @@ import {
   jsonError,
   makeId,
   requireOwner,
+  routeError,
   sha256,
   WORKSPACE_ID,
 } from "../../_lib";
@@ -79,9 +80,6 @@ export async function POST(request: Request) {
       { status: 201 },
     );
   } catch (error) {
-    return jsonError(
-      error instanceof Error ? error.message : "Unable to create portal access",
-      500,
-    );
+    return routeError(error, "Unable to create portal access");
   }
 }

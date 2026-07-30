@@ -1,7 +1,7 @@
 import { desc, eq, sql } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { aiRuns, auditEvents, usageEvents } from "../../../db/schema";
-import { requireOwner } from "../_lib";
+import { requireOwner, routeError } from "../_lib";
 
 const DEFAULT_WORKSPACE_ID = "legacy-lines";
 
@@ -61,9 +61,7 @@ export async function GET(request: Request) {
       recentAudit,
     });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to read telemetry";
-    return Response.json({ error: message }, { status: 500 });
+    return routeError(error, "Unable to read telemetry");
   }
 }
 
@@ -108,8 +106,6 @@ export async function POST(request: Request) {
 
     return Response.json({ id: recordId, status: "recorded" }, { status: 201 });
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unable to record telemetry";
-    return Response.json({ error: message }, { status: 500 });
+    return routeError(error, "Unable to record telemetry");
   }
 }

@@ -9,9 +9,10 @@
     "dev": "vinext dev",
     "build": "vinext build",
     "start": "vinext start",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs",
+    "test": "npm run build && node --test --test-isolation=none tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
-    "db:generate": "drizzle-kit generate"
+    "db:generate": "drizzle-kit generate",
+    "db:local:migrate": "node scripts/local-d1-migrate.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.111.0",

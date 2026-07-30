@@ -1,6 +1,6 @@
 import { getDb } from "../../../db";
 import { auditEvents, clients } from "../../../db/schema";
-import { actorFrom, jsonError, makeId, requireOwner, WORKSPACE_ID } from "../_lib";
+import { actorFrom, jsonError, makeId, requireOwner, routeError, WORKSPACE_ID } from "../_lib";
 
 export async function POST(request: Request) {
   try {
@@ -49,9 +49,6 @@ export async function POST(request: Request) {
     ]);
     return Response.json({ id: clientId, status: "created" }, { status: 201 });
   } catch (error) {
-    return jsonError(
-      error instanceof Error ? error.message : "Unable to create client",
-      500,
-    );
+    return routeError(error, "Unable to create client");
   }
 }
