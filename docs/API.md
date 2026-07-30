@@ -1,108 +1,66 @@
 # Legacy OS API Contract
 
 Base path: `/api`  
-Current version: foundation v0.2  
+Current version: operational v0.2
 Encoding: JSON UTF-8
 
 ## Identity
 
-Production requests are attributed from `oai-authenticated-user-email`. The browser never supplies an actor ID in a request body. Local development falls back to `local-preview`.
+Owner requests are attributed from `oai-authenticated-user-email`; the browser
+never supplies an owner actor ID. Client requests use a revocable portal token
+stored only as a SHA-256 hash. The private Sites access policy remains the outer
+authorization boundary for the deployed application.
 
-## Health
+## System
 
-### `GET /api/health`
+- `GET /api/health` returns application, database, and telemetry health.
+- `GET /api/telemetry?hours=24` returns run, usage, and audit summaries.
+- `POST /api/telemetry` records low-level user or agent audit metadata.
+- `GET|PATCH /api/workspace` loads the owner workspace or updates studio and
+  privacy settings.
 
-Returns application, database, and telemetry health.
+## Owner workflows
 
-Success: `200`
+- `POST /api/clients` creates a persistent client.
+- `POST /api/projects` creates a project connected to a client.
+- `POST /api/appointments` schedules a client/project appointment.
+- `POST /api/messages` writes an owner message into the shared conversation.
+- `POST /api/approvals` creates a client-facing approval or records an owner
+  decision.
+- `POST /api/briefing` prioritizes live workspace state and writes a complete
+  observable run.
 
-```json
-{
-  "status": "healthy",
-  "checkedAt": "2026-07-29T23:00:00.000Z",
-  "services": {
-    "application": "healthy",
-    "database": "healthy",
-    "telemetry": "healthy"
-  }
-}
-```
+## Client portal
 
-## Telemetry
+- `POST /api/portal/invitations` revokes previous access and issues a new
+  30-day portal token.
+- `GET /api/portal?token=...` returns only the invited client's projects,
+  appointments, approvals, messages, files, and public updates.
+- `POST /api/portal` sends a client message or records an approval/revision
+  decision.
+- `GET|POST /api/files` uploads project media to R2 or retrieves an authorized
+  asset. Uploads are limited to 25 MB and receive a SHA-256 integrity hash.
 
-### `GET /api/telemetry?hours=24`
+## Approval decisions
 
-Returns run counts, successful and approval-held totals, average latency, token use, estimated cost, and the latest 50 audit records. `hours` is clamped from 1 to 720.
-
-### `POST /api/telemetry`
-
-Records a low-level user or agent audit event. Content is not stored unless a future workspace policy explicitly permits it.
-
-```json
-{
-  "kind": "ui_action",
-  "action": "navigation.changed",
-  "target": "operations",
-  "risk": "low",
-  "correlationId": "optional",
-  "contentCaptured": false,
-  "metadata": {}
-}
-```
-
-Responses:
-
-- `201` recorded
-- `400` invalid request
-- `500` persistence failure
-
-## Approvals
-
-### `POST /api/approvals`
-
-Records a human decision and an append-only audit event in one database batch.
-
-```json
-{
-  "approvalId": "ap-1042",
-  "decision": "approved",
-  "category": "Design direction",
-  "subject": "Renaissance sleeve — composition v4",
-  "reason": "Optional human note"
-}
-```
-
-Allowed decisions: `approved`, `revision`, `rejected`.
-
-## Planned domain routes
-
-The following contracts should be added behind the same workspace authorization boundary:
-
-- `GET|POST /api/clients`
-- `GET|PATCH /api/clients/{clientId}`
-- `GET|POST /api/projects`
-- `GET|PATCH /api/projects/{projectId}`
-- `POST /api/projects/{projectId}/transition`
-- `POST /api/assets/upload-intent`
-- `POST /api/assets/{assetId}/extraction`
-- `GET /api/search`
-- `GET /api/knowledge/items/{itemId}`
-- `POST /api/knowledge/edges`
-- `POST /api/ai/runs`
-- `POST /api/ai/runs/{runId}/events`
-- `POST /api/ai/runs/{runId}/tool-calls`
-- `POST /api/ai/runs/{runId}/usage`
+Allowed decisions are `approved`, `revision`, and `rejected` for owners.
+Client portal decisions are limited to `approved` or `revision`. Every decision
+is paired with an append-only audit event in the same database batch.
 
 ## Error envelope
 
+Routes currently return a compact JSON error:
+
 ```json
 {
-  "error": {
-    "code": "approval_invalid_state",
-    "message": "This approval is no longer pending.",
-    "correlationId": "corr_..."
-  }
+  "error": "Human-readable failure description"
 }
 ```
 
-No error response should contain raw prompts, credentials, provider payloads, or client-sensitive content.
+No error response should contain raw prompts, credentials, provider payloads,
+portal token hashes, or client-sensitive content.
+
+## Planned routes
+
+Future routes will add project transitions, tattoo-session capture, healing,
+payments, content publishing, full-text search, and knowledge graph editing.

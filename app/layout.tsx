@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
       template: "%s · Legacy OS",
     },
     description:
-      "A continuous intelligence system for creative professionals.",
+      "The connected AI operating system for creative professionals.",
     icons: {
       icon: "/favicon.png",
       shortcut: "/favicon.png",
@@ -37,21 +37,21 @@ export async function generateMetadata(): Promise<Metadata> {
     openGraph: {
       type: "website",
       title: "Legacy OS",
-      description: "Creative work, continuously intelligent.",
+      description: "Build your legacy. The system connects the rest.",
       url: origin,
       images: [
         {
           url: `${origin}/og.png`,
           width: 1733,
           height: 909,
-          alt: "Legacy OS — Creative work, continuously intelligent",
+          alt: "Legacy OS — the operating system for creative professionals",
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
       title: "Legacy OS",
-      description: "Creative work, continuously intelligent.",
+      description: "Build your legacy. The system connects the rest.",
       images: [`${origin}/og.png`],
     },
   };

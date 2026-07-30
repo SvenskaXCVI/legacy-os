@@ -23,6 +23,12 @@ erDiagram
     WORKSPACES ||--o{ AUDIT_EVENTS : records
     PROJECTS ||--o{ NOTIFICATIONS : triggers
     USERS ||--o{ NOTIFICATIONS : receives
+    CLIENTS ||--o{ PORTAL_INVITATIONS : receives
+    CLIENTS ||--o{ APPOINTMENTS : attends
+    PROJECTS ||--o{ APPOINTMENTS : schedules
+    CLIENTS ||--o{ CLIENT_MESSAGES : exchanges
+    PROJECTS ||--o{ CLIENT_MESSAGES : contextualizes
+    PROJECTS ||--o{ PROJECT_UPDATES : publishes
 
     WORKSPACES {
       text id PK

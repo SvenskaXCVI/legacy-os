@@ -17,6 +17,13 @@ interface D1Database {
 
 interface R2Bucket {
   get(key: string): Promise<unknown>;
-  put(key: string, value: unknown): Promise<unknown>;
+  put(
+    key: string,
+    value: unknown,
+    options?: {
+      httpMetadata?: { contentType?: string };
+      customMetadata?: Record<string, string>;
+    },
+  ): Promise<unknown>;
   delete(key: string): Promise<void>;
 }

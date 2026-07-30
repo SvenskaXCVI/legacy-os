@@ -16,7 +16,20 @@ Legacy OS is an evidence-led operating system for creative work. This foundation
 - Screen Library covering all 34 planned surfaces
 - Settings and privacy controls
 
-The user interface contains seeded demonstration data so every workflow can be evaluated before external accounts or sensitive client records are connected.
+The workspace starts without demonstration clients, projects, appointments, messages, approvals, or analytics. Owners create durable records through the product, and the secure client portal reads and writes the same D1-backed source of truth.
+
+## Operational flows
+
+- Create clients and tattoo projects.
+- Schedule project-linked appointments.
+- Exchange owner/client messages through one shared conversation history.
+- Generate revocable, expiring client portal access.
+- Upload and retrieve project media through R2.
+- Request and record client approvals.
+- Generate a deterministic daily briefing from live workspace state.
+- Inspect AI runs and owner/client/system actions in the observability ledger.
+
+The deployed Sites project remains private. Client portal links are fully functional for authenticated viewers; opening portal access to external clients requires a deliberate hosting access-policy change.
 
 ## Backend foundation
 

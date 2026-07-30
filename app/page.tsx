@@ -5,14 +5,14 @@ import { LegacyApp } from "./legacy-app";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Legacy OS — Daily Command Center",
+  title: "Legacy OS — Studio Command Center",
   description:
-    "An evidence-led operating system for creative work, clients, and AI-assisted decisions.",
+    "A connected operating system for tattoo projects, clients, and observable AI-assisted work.",
 };
 
 export default async function Home() {
   const user = await getChatGPTUser();
-  const firstName = user?.fullName?.split(" ")[0] || "Joshua";
+  const firstName = user?.fullName?.split(" ")[0] || "Owner";
 
   return <LegacyApp firstName={firstName} />;
 }

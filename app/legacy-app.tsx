@@ -1,9 +1,60 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import {
+  Activity,
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  BarChart3,
+  Bell,
+  BookOpen,
+  Bot,
+  BrainCircuit,
+  Brush,
+  CalendarDays,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  CircleDollarSign,
+  Clock3,
+  Copy,
+  CreditCard,
+  FileText,
+  FolderKanban,
+  Gauge,
+  HeartHandshake,
+  Image as ImageIcon,
+  Inbox,
+  LayoutDashboard,
+  Library,
+  Link2,
+  LockKeyhole,
+  Menu,
+  MessageSquareText,
+  Plus,
+  Search,
+  Send,
+  Settings,
+  ShieldCheck,
+  Sparkles,
+  Upload,
+  UserRound,
+  UsersRound,
+  WandSparkles,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import {
+  FormEvent,
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
-type View =
-  | "briefing"
+type OwnerView =
+  | "dashboard"
   | "projects"
   | "clients"
   | "calendar"
@@ -13,1374 +64,2198 @@ type View =
   | "content"
   | "finances"
   | "analytics"
+  | "chief"
   | "operations"
-  | "library"
   | "settings";
 
-type ApprovalState = "pending" | "approved" | "revision";
-
-type Approval = {
+type ClientRecord = {
   id: string;
-  type: string;
-  title: string;
-  project: string;
-  summary: string;
-  evidence: string;
-  risk: "Low" | "Medium" | "High";
-  state: ApprovalState;
+  firstName: string;
+  lastName: string;
+  email: string | null;
+  phone: string | null;
+  preferredChannel: string | null;
+  status: string;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
 };
 
-const navItems: Array<{ id: View; label: string; glyph: string }> = [
-  { id: "briefing", label: "Dashboard", glyph: "⌂" },
-  { id: "projects", label: "Projects", glyph: "P" },
-  { id: "clients", label: "Clients", glyph: "C" },
-  { id: "calendar", label: "Calendar", glyph: "□" },
-  { id: "inbox", label: "Inbox", glyph: "✉" },
-  { id: "knowledge", label: "Knowledge", glyph: "K" },
-  { id: "design", label: "Design Studio", glyph: "D" },
-  { id: "content", label: "Content", glyph: "▶" },
-  { id: "finances", label: "Finances", glyph: "$" },
-  { id: "analytics", label: "Analytics", glyph: "↗" },
-  { id: "operations", label: "AI Operations", glyph: "◎" },
-  { id: "library", label: "Screen Library", glyph: "▦" },
-  { id: "settings", label: "Settings", glyph: "⚙" },
-];
+type ProjectRecord = {
+  id: string;
+  clientId: string | null;
+  clientFirstName?: string | null;
+  clientLastName?: string | null;
+  title: string;
+  lifecyclePhase: string;
+  status: string;
+  priority: string;
+  placement: string | null;
+  sizeDescription: string | null;
+  styleTagsJson: string;
+  budgetMinCents: number | null;
+  budgetMaxCents: number | null;
+  targetDate: string | null;
+  nextAction: string | null;
+  nextActionAt: string | null;
+  summary: string | null;
+  updatedAt: string;
+};
 
-const initialApprovals: Approval[] = [
-  {
-    id: "ap-1042",
-    type: "Design direction",
-    title: "Renaissance sleeve — composition v4",
-    project: "Marcus Rivera",
-    summary:
-      "Move the angel 8% higher and reduce the architectural background before final stencil prep.",
-    evidence: "3 design versions · 2 client notes · anatomy reference",
-    risk: "Medium",
-    state: "pending",
-  },
-  {
-    id: "ap-1043",
-    type: "Client message",
-    title: "Healing check-in draft",
-    project: "Elena Martinez",
-    summary:
-      "Send the day-10 aftercare check-in with a request for one daylight healing photo.",
-    evidence: "Session notes · aftercare protocol · last message",
-    risk: "Low",
-    state: "pending",
-  },
-];
+type AppointmentRecord = {
+  id: string;
+  clientId: string | null;
+  projectId: string | null;
+  appointmentType: string;
+  startsAt: string;
+  endsAt: string | null;
+  status: string;
+  location: string | null;
+  notes: string | null;
+};
 
-const activity = [
-  {
-    agent: "Chief of Staff",
-    action: "Prepared the daily briefing",
-    detail: "Ranked 12 open items by urgency, reversibility, and client impact.",
-    time: "8:42 AM",
-    status: "Complete",
-    confidence: 94,
-  },
-  {
-    agent: "Knowledge Agent",
-    action: "Built evidence set for Marcus",
-    detail: "Connected 4 past sleeves, 2 mentorship notes, and the current brief.",
-    time: "8:39 AM",
-    status: "Complete",
-    confidence: 91,
-  },
-  {
-    agent: "Client Agent",
-    action: "Drafted healing follow-up",
-    detail: "Held the message for approval because client communication is gated.",
-    time: "8:31 AM",
-    status: "Awaiting approval",
-    confidence: 96,
-  },
-  {
-    agent: "Operations Agent",
-    action: "Checked workflow health",
-    detail: "No stalled automations. One calendar connection expires in 12 days.",
-    time: "8:18 AM",
-    status: "Complete",
-    confidence: 99,
-  },
-];
+type ApprovalRecord = {
+  id: string;
+  projectId: string | null;
+  category: string;
+  subject: string;
+  summary: string;
+  riskLevel: string;
+  status: string;
+  decisionReason: string | null;
+  createdAt: string;
+};
 
-const projects = [
-  {
-    client: "Marcus Rivera",
-    title: "Renaissance angel sleeve",
-    phase: "Design",
-    next: "Review composition v4",
-    date: "Today",
-    progress: 46,
-    tone: "ember",
-  },
-  {
-    client: "Elena Martinez",
-    title: "Floral black & grey",
-    phase: "Healing",
-    next: "Day-10 check-in",
-    date: "Today",
-    progress: 82,
-    tone: "sage",
-  },
-  {
-    client: "Darius Cole",
-    title: "Saint Michael back piece",
-    phase: "Session",
-    next: "Session 2 · shading",
-    date: "Fri 11:00",
-    progress: 61,
-    tone: "violet",
-  },
-];
+type MessageRecord = {
+  id: string;
+  clientId: string;
+  projectId: string | null;
+  senderType: string;
+  body: string;
+  status: string;
+  createdAt: string;
+};
 
-const knowledgeCards = [
-  {
-    label: "Technique",
-    title: "Soft transitions in large-scale realism",
-    source: "Mentorship notes · Vol. 4",
-    links: "Connected to 7 projects",
-  },
-  {
-    label: "Pattern",
-    title: "Healed contrast improves when foreground values separate early",
-    source: "Evidence from 18 healed projects",
-    links: "91% confidence",
-  },
-  {
-    label: "Client language",
-    title: "“Less background” often means a clearer focal hierarchy",
-    source: "11 approved design revisions",
-    links: "Connected to Design Agent",
-  },
-  {
-    label: "Prompt",
-    title: "Stone drapery study — controlled depth and negative space",
-    source: "Prompt library · version 6",
-    links: "Used successfully 4 times",
-  },
-];
+type AssetRecord = {
+  id: string;
+  clientId: string | null;
+  projectId: string | null;
+  originalName: string;
+  mediaType: string;
+  mimeType: string;
+  byteSize: number;
+  sourceType: string;
+  createdAt: string;
+};
 
-const contentQueue = [
-  {
-    title: "Floral black & grey — healed carousel",
-    stage: "Select",
-    detail: "8 photos · 3 recommended",
-  },
-  {
-    title: "Saint Michael session process",
-    stage: "Draft",
-    detail: "42 sec reel · hook prepared",
-  },
-  {
-    title: "Angel sleeve composition study",
-    stage: "Approval",
-    detail: "Caption v2 · evidence attached",
-  },
-  {
-    title: "Week 31 studio recap",
-    stage: "Schedule",
-    detail: "Friday · 6:15 PM",
-  },
-];
+type RunRecord = {
+  id: string;
+  agentName: string;
+  purpose: string;
+  provider: string;
+  model: string;
+  status: string;
+  confidenceBps: number | null;
+  latencyMs: number | null;
+  reasoningSummary: string | null;
+  recommendation: string | null;
+  createdAt: string;
+};
 
-const agentRuns = [
+type AuditRecord = {
+  id: string;
+  actorType: string;
+  actorId: string | null;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  riskLevel: string;
+  outcome: string;
+  occurredAt: string;
+};
+
+type WorkspaceData = {
+  workspace: {
+    id: string;
+    name: string;
+    timezone: string;
+    aiContentCapture: string;
+  } | null;
+  owner: {
+    id: string;
+    email: string;
+    displayName: string;
+    role: string;
+  } | null;
+  clients: ClientRecord[];
+  projects: ProjectRecord[];
+  appointments: AppointmentRecord[];
+  approvals: ApprovalRecord[];
+  messages: MessageRecord[];
+  assets: AssetRecord[];
+  aiRuns: RunRecord[];
+  auditEvents: AuditRecord[];
+};
+
+type PortalData = {
+  workspace: { name: string; timezone: string } | null;
+  client: ClientRecord;
+  projects: ProjectRecord[];
+  appointments: AppointmentRecord[];
+  approvals: ApprovalRecord[];
+  messages: MessageRecord[];
+  assets: AssetRecord[];
+  updates: Array<{
+    id: string;
+    projectId: string;
+    title: string;
+    body: string;
+    createdAt: string;
+  }>;
+  access: { expiresAt: string; hint: string };
+};
+
+type Briefing = {
+  runId: string;
+  summary: string;
+  priorities: Array<{
+    type: string;
+    id: string;
+    title: string;
+    detail: string;
+  }>;
+  confidence: number;
+  generatedAt: string;
+};
+
+const navGroups: Array<{
+  label: string;
+  items: Array<{ id: OwnerView; label: string; icon: LucideIcon }>;
+}> = [
   {
-    id: "run_7PX2",
-    agent: "Chief of Staff",
-    purpose: "Daily prioritization",
-    model: "Reasoning tier",
-    duration: "4.8s",
-    tokens: "6.2k",
-    cost: "$0.18",
-    confidence: "94%",
-    status: "Succeeded",
+    label: "COMMAND CENTER",
+    items: [
+      { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+      { id: "projects", label: "Projects", icon: FolderKanban },
+      { id: "clients", label: "Clients", icon: UsersRound },
+      { id: "calendar", label: "Calendar", icon: CalendarDays },
+      { id: "inbox", label: "Inbox", icon: Inbox },
+      { id: "knowledge", label: "Knowledge", icon: BookOpen },
+      { id: "content", label: "Content", icon: ImageIcon },
+      { id: "finances", label: "Finances", icon: CircleDollarSign },
+      { id: "analytics", label: "Analytics", icon: BarChart3 },
+      { id: "chief", label: "AI Chief of Staff", icon: BrainCircuit },
+    ],
   },
   {
-    id: "run_7PWQ",
-    agent: "Knowledge Agent",
-    purpose: "Project evidence retrieval",
-    model: "Retrieval tier",
-    duration: "2.1s",
-    tokens: "2.8k",
-    cost: "$0.05",
-    confidence: "91%",
-    status: "Succeeded",
+    label: "RESOURCES",
+    items: [
+      { id: "design", label: "Design Studio", icon: Brush },
+      { id: "operations", label: "AI Operations", icon: Activity },
+    ],
   },
   {
-    id: "run_7PVM",
-    agent: "Client Agent",
-    purpose: "Healing follow-up draft",
-    model: "Writing tier",
-    duration: "3.3s",
-    tokens: "1.9k",
-    cost: "$0.04",
-    confidence: "96%",
-    status: "Approval held",
-  },
-  {
-    id: "run_7PSE",
-    agent: "Research Agent",
-    purpose: "Source refresh",
-    model: "Research tier",
-    duration: "12.7s",
-    tokens: "8.6k",
-    cost: "$0.31",
-    confidence: "87%",
-    status: "Succeeded",
+    label: "SETTINGS",
+    items: [{ id: "settings", label: "Settings", icon: Settings }],
   },
 ];
 
-function postTelemetry(payload: Record<string, unknown>) {
-  void fetch("/api/telemetry", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(payload),
-  }).catch(() => undefined);
+const viewDetails: Record<
+  OwnerView,
+  { title: string; subtitle: string; eyebrow?: string }
+> = {
+  dashboard: {
+    title: "Command Center",
+    subtitle: "Your studio, clients, and creative work in one view.",
+  },
+  projects: {
+    title: "Projects",
+    subtitle: "Move every tattoo from inquiry to healed result.",
+  },
+  clients: {
+    title: "Clients",
+    subtitle: "Relationships, consent, communication, and portal access.",
+  },
+  calendar: {
+    title: "Calendar",
+    subtitle: "Consultations, sessions, approvals, and protected time.",
+  },
+  inbox: {
+    title: "Inbox",
+    subtitle: "One conversation history shared with the client portal.",
+  },
+  knowledge: {
+    title: "Knowledge Library",
+    subtitle: "A durable record of techniques, lessons, and creative decisions.",
+  },
+  design: {
+    title: "Design Studio",
+    subtitle: "References, versions, client review, and stencil readiness.",
+  },
+  content: {
+    title: "Content Studio",
+    subtitle: "Turn completed work into a searchable publishing workflow.",
+  },
+  finances: {
+    title: "Finance Center",
+    subtitle: "Deposits, invoices, and project financial visibility.",
+  },
+  analytics: {
+    title: "Analytics",
+    subtitle: "Creative intelligence built only from your real studio data.",
+  },
+  chief: {
+    title: "AI Chief of Staff",
+    subtitle: "Plans, prioritizes, and exposes the evidence behind every recommendation.",
+  },
+  operations: {
+    title: "AI Operations",
+    subtitle: "See exactly what ran, why it ran, and what it changed.",
+  },
+  settings: {
+    title: "Settings",
+    subtitle: "Workspace identity, privacy, portal, and automation controls.",
+  },
+};
+
+const phases = ["consult", "design", "approval", "session", "healing", "complete"];
+
+function cn(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(" ");
 }
 
-function Sidebar({
+function fullName(client?: ClientRecord | null) {
+  return client ? `${client.firstName} ${client.lastName}` : "Unassigned client";
+}
+
+function projectClient(project: ProjectRecord) {
+  const name = [project.clientFirstName, project.clientLastName]
+    .filter(Boolean)
+    .join(" ");
+  return name || "Unassigned client";
+}
+
+function formatDate(value?: string | null, includeTime = false) {
+  if (!value) return "Not scheduled";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
+    hour: includeTime ? "numeric" : undefined,
+    minute: includeTime ? "2-digit" : undefined,
+  }).format(date);
+}
+
+function formatMoney(cents?: number | null) {
+  if (cents == null) return "Not set";
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(cents / 100);
+}
+
+function formatBytes(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, init);
+  const data = (await response.json()) as T & { error?: string };
+  if (!response.ok) throw new Error(data.error || "Something went wrong");
+  return data;
+}
+
+function Brand({ compact = false }: { compact?: boolean }) {
+  return (
+    <div className={cn("legacy-brand", compact && "compact")}>
+      <span className="legacy-monogram" aria-hidden="true">
+        <i>L</i>
+        <b>L</b>
+      </span>
+      <span className="legacy-wordmark">
+        <strong>LEGACY OS</strong>
+        <small>THE AI OPERATING SYSTEM</small>
+        {!compact && <em>FOR CREATIVE PROFESSIONALS</em>}
+      </span>
+    </div>
+  );
+}
+
+function Spinner({ label = "Loading workspace" }: { label?: string }) {
+  return (
+    <div className="loading-state" role="status">
+      <span className="loading-ring" />
+      <p>{label}</p>
+    </div>
+  );
+}
+
+function EmptyState({
+  icon: Icon,
+  title,
+  body,
+  action,
+  onAction,
+}: {
+  icon: LucideIcon;
+  title: string;
+  body: string;
+  action?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="empty-state">
+      <div className="empty-icon">
+        <Icon size={25} strokeWidth={1.4} />
+      </div>
+      <h3>{title}</h3>
+      <p>{body}</p>
+      {action && onAction && (
+        <button className="gold-button small" onClick={onAction}>
+          <Plus size={15} /> {action}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Modal({
+  title,
+  eyebrow,
+  onClose,
+  children,
+}: {
+  title: string;
+  eyebrow: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [onClose]);
+
+  return (
+    <div className="modal-scrim" role="presentation" onMouseDown={onClose}>
+      <section
+        className="modal-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modal-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <header>
+          <div>
+            <p className="eyebrow">{eyebrow}</p>
+            <h2 id="modal-title">{title}</h2>
+          </div>
+          <button className="icon-button" onClick={onClose} aria-label="Close">
+            <X size={19} />
+          </button>
+        </header>
+        {children}
+      </section>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  name,
+  type = "text",
+  required,
+  placeholder,
+  children,
+}: {
+  label: string;
+  name: string;
+  type?: string;
+  required?: boolean;
+  placeholder?: string;
+  children?: ReactNode;
+}) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      {children ?? (
+        <input
+          name={name}
+          type={type}
+          required={required}
+          placeholder={placeholder}
+        />
+      )}
+    </label>
+  );
+}
+
+function OwnerSidebar({
   view,
-  onChange,
-  paused,
-  setPaused,
+  onView,
+  owner,
+  workspace,
+  open,
+  onClose,
+  onPortal,
 }: {
-  view: View;
-  onChange: (view: View) => void;
-  paused: boolean;
-  setPaused: (paused: boolean) => void;
+  view: OwnerView;
+  onView: (view: OwnerView) => void;
+  owner: WorkspaceData["owner"];
+  workspace: WorkspaceData["workspace"];
+  open: boolean;
+  onClose: () => void;
+  onPortal: () => void;
 }) {
-  return (
-    <aside className="sidebar">
-      <button className="brand" onClick={() => onChange("briefing")}>
-        <span className="brand-mark">LL</span>
-        <span>
-          <strong>LEGACY</strong>
-          <small>OPERATING SYSTEM</small>
-        </span>
-      </button>
-
-      <nav aria-label="Legacy OS">
-        <p className="nav-label">Workspace</p>
-        {navItems.map((item) => (
-          <button
-            key={item.id}
-            className={`nav-item ${view === item.id ? "active" : ""}`}
-            onClick={() => {
-              onChange(item.id);
-              postTelemetry({
-                kind: "ui_action",
-                action: "navigation.changed",
-                target: item.id,
-              });
-            }}
-          >
-            <span className="nav-glyph">{item.glyph}</span>
-            {item.label}
-            {item.id === "operations" && <span className="live-dot" />}
-          </button>
-        ))}
-      </nav>
-
-      <div className="sidebar-bottom">
-        <div className="system-mini">
-          <span className={`pulse ${paused ? "paused" : ""}`} />
-          <div>
-            <strong>{paused ? "Automations paused" : "System attentive"}</strong>
-            <small>{paused ? "No queued actions will run" : "8 core agents · healthy"}</small>
-          </div>
-        </div>
-        <button
-          className="quiet-button"
-          onClick={() => {
-            setPaused(!paused);
-            postTelemetry({
-              kind: "audit",
-              action: paused ? "automations.resumed" : "automations.paused",
-              risk: "medium",
-            });
-          }}
-        >
-          {paused ? "Resume automations" : "Pause automations"}
-        </button>
-        <div className="profile">
-          <span>JD</span>
-          <div>
-            <strong>Joshua DeMiguel</strong>
-            <small>Owner · Legacy Lines</small>
-          </div>
-          <button aria-label="Open settings">•••</button>
-        </div>
-      </div>
-    </aside>
-  );
-}
-
-function AssistantRail({
-  firstName,
-  onOpenOperations,
-}: {
-  firstName: string;
-  onOpenOperations: () => void;
-}) {
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState(
-    "I’m watching today’s commitments. Two decisions need you; everything else is contained.",
-  );
-
-  function submit(event: FormEvent) {
-    event.preventDefault();
-    const cleaned = question.trim();
-    if (!cleaned) return;
-    setAnswer(
-      `I’ve captured “${cleaned}”. In the connected release, I’ll answer from project evidence and show every source before recommending an action.`,
-    );
-    setQuestion("");
-    postTelemetry({
-      kind: "ui_action",
-      action: "chief_of_staff.question_submitted",
-      target: "assistant",
-      contentCaptured: false,
-    });
-  }
-
-  return (
-    <aside className="assistant-rail">
-      <div className="assistant-heading">
-        <div className="agent-orb">
-          <span />
-        </div>
-        <div>
-          <p>AI CHIEF OF STAFF</p>
-          <strong>Present & observing</strong>
-        </div>
-        <span className="status-pill">LIVE</span>
-      </div>
-
-      <div className="assistant-message">
-        <p className="eyebrow">Morning read</p>
-        <h3>Your attention is protected.</h3>
-        <p>{answer}</p>
-      </div>
-
-      <div className="suggestion-stack">
-        <button onClick={() => setAnswer("Marcus is the highest-leverage project today. Approving the composition unlocks stencil prep and protects Friday’s session.")}>
-          <span>01</span>
-          What deserves my focus?
-        </button>
-        <button onClick={() => setAnswer("No critical risks. The calendar connection needs renewal within 12 days; I’ve kept it below today’s client work.")}>
-          <span>02</span>
-          Are there hidden risks?
-        </button>
-        <button onClick={onOpenOperations}>
-          <span>03</span>
-          Show what the AI did
-        </button>
-      </div>
-
-      <form className="assistant-input" onSubmit={submit}>
-        <label htmlFor="chief-question">Ask Legacy</label>
-        <div>
-          <input
-            id="chief-question"
-            value={question}
-            onChange={(event) => setQuestion(event.target.value)}
-            placeholder={`Ask about ${firstName}'s day…`}
-          />
-          <button type="submit" aria-label="Send question">
-            ↑
-          </button>
-        </div>
-        <small>Answers include evidence, confidence, and approval boundaries.</small>
-      </form>
-    </aside>
-  );
-}
-
-function BriefingView({
-  firstName,
-  approvals,
-  decide,
-  onOpenOperations,
-}: {
-  firstName: string;
-  approvals: Approval[];
-  decide: (id: string, state: ApprovalState) => void;
-  onOpenOperations: () => void;
-}) {
-  const pending = approvals.filter((approval) => approval.state === "pending");
-
   return (
     <>
-      <header className="view-header">
-        <div>
-          <p className="eyebrow">WEDNESDAY · JULY 29</p>
-          <h1>
-            Good morning, {firstName}. <em>The day is contained.</em>
-          </h1>
-        </div>
-        <div className="header-actions">
-          <button className="search-button">
-            <span>⌕</span> Search everything <kbd>⌘ K</kbd>
-          </button>
-          <button className="primary-button">＋ Capture</button>
-        </div>
-      </header>
-
-      <section className="brief-hero">
-        <div className="brief-copy">
-          <p className="eyebrow accent">CHIEF OF STAFF BRIEFING · 8:42 AM</p>
-          <h2>Two decisions unlock the day.</h2>
-          <p>
-            Your client work is on track. Approve Marcus’s composition, then
-            release Elena’s healing check-in. I moved three lower-value tasks
-            to tomorrow and found no schedule collisions.
-          </p>
-          <div className="brief-evidence">
-            <span>12 open items analyzed</span>
-            <span>4 sources connected</span>
-            <span>94% confidence</span>
-          </div>
-        </div>
-        <div className="brief-priority">
-          <span className="priority-number">01</span>
-          <div>
-            <p>FIRST MOVE</p>
-            <strong>Review Marcus’s design</strong>
-            <small>Unblocks stencil preparation · 12 min</small>
-          </div>
-          <button aria-label="Open highest priority">↗</button>
-        </div>
-      </section>
-
-      <section className="metric-strip" aria-label="Daily summary">
-        <div>
-          <span className="metric-icon rust">A</span>
-          <p><strong>{pending.length}</strong> decisions</p>
-          <small>Need your judgment</small>
-        </div>
-        <div>
-          <span className="metric-icon sage">3</span>
-          <p><strong>3</strong> sessions</p>
-          <small>Next seven days</small>
-        </div>
-        <div>
-          <span className="metric-icon violet">7</span>
-          <p><strong>7</strong> active projects</p>
-          <small>None stalled</small>
-        </div>
-        <div>
-          <span className="metric-icon gold">◎</span>
-          <p><strong>98.7%</strong> AI success</p>
-          <small>Last 24 hours</small>
-        </div>
-      </section>
-
-      <div className="dashboard-grid">
-        <section className="panel approvals-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">JUDGMENT REQUIRED</p>
-              <h2>Approval queue</h2>
-            </div>
-            <span>{pending.length} pending</span>
-          </div>
-
-          <div className="approval-list">
-            {approvals.map((approval) => (
-              <article
-                className={`approval-card ${approval.state !== "pending" ? "decided" : ""}`}
-                key={approval.id}
-              >
-                <div className="approval-meta">
-                  <span>{approval.type}</span>
-                  <span className={`risk ${approval.risk.toLowerCase()}`}>
-                    {approval.risk} risk
-                  </span>
-                </div>
-                <h3>{approval.title}</h3>
-                <p className="project-name">{approval.project}</p>
-                <p>{approval.summary}</p>
-                <div className="evidence-row">
-                  <span>Evidence</span>
-                  <small>{approval.evidence}</small>
-                </div>
-                {approval.state === "pending" ? (
-                  <div className="approval-actions">
-                    <button
-                      className="approve"
-                      onClick={() => decide(approval.id, "approved")}
-                    >
-                      Approve
-                    </button>
-                    <button onClick={() => decide(approval.id, "revision")}>
-                      Needs revision
-                    </button>
-                    <button aria-label="Open approval details">↗</button>
-                  </div>
-                ) : (
-                  <div className={`decision-stamp ${approval.state}`}>
-                    {approval.state === "approved"
-                      ? "Approved — audit record created"
-                      : "Revision requested — agent notified"}
-                  </div>
-                )}
-              </article>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel agenda-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">TIME & COMMITMENTS</p>
-              <h2>Today</h2>
-            </div>
-            <button>Full calendar ↗</button>
-          </div>
-          <div className="timeline">
-            <div className="timeline-item active">
-              <time>10:00</time>
-              <span />
-              <div>
-                <p>Design review · Marcus</p>
-                <small>Studio · 45 min</small>
-              </div>
-            </div>
-            <div className="timeline-item">
-              <time>11:30</time>
-              <span />
-              <div>
-                <p>Stencil refinement</p>
-                <small>Deep work · 90 min protected</small>
-              </div>
-            </div>
-            <div className="timeline-item">
-              <time>2:00</time>
-              <span />
-              <div>
-                <p>Consultation · Amara</p>
-                <small>New inquiry · intake complete</small>
-              </div>
-            </div>
-            <div className="timeline-item muted">
-              <time>4:30</time>
-              <span />
-              <div>
-                <p>Content selects</p>
-                <small>Prepared by Content Agent</small>
-              </div>
-            </div>
-          </div>
-          <div className="protected-time">
-            <span>FOCUS WINDOW</span>
-            <strong>11:30 AM – 1:00 PM</strong>
-            <small>No messages or low-priority alerts</small>
-          </div>
-        </section>
-
-        <section className="panel projects-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">WORK IN MOTION</p>
-              <h2>Active projects</h2>
-            </div>
-            <button>View all 7 ↗</button>
-          </div>
-          <div className="project-list">
-            {projects.map((project) => (
-              <button className="project-row" key={project.client}>
-                <span className={`project-swatch ${project.tone}`} />
-                <div>
-                  <p>{project.title}</p>
-                  <small>{project.client}</small>
-                </div>
-                <span className="phase">{project.phase}</span>
-                <div className="progress-wrap">
-                  <span style={{ width: `${project.progress}%` }} />
-                </div>
-                <div className="project-next">
-                  <strong>{project.next}</strong>
-                  <small>{project.date}</small>
-                </div>
-                <span>↗</span>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="panel activity-panel">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">GLASS BOX</p>
-              <h2>What the AI did</h2>
-            </div>
-            <button onClick={onOpenOperations}>Open ledger ↗</button>
-          </div>
-          <div className="activity-list">
-            {activity.slice(0, 3).map((item) => (
-              <article key={item.action}>
-                <span className="activity-node" />
-                <div>
-                  <div>
-                    <p>{item.agent}</p>
-                    <time>{item.time}</time>
-                  </div>
-                  <strong>{item.action}</strong>
-                  <small>{item.detail}</small>
-                </div>
-              </article>
-            ))}
-          </div>
-        </section>
-      </div>
-    </>
-  );
-}
-
-function ProjectsView() {
-  const lanes = [
-    { label: "Discovery", count: 2, projects: ["Amara · botanical ribs", "Nico · portrait consult"] },
-    { label: "Design", count: 3, projects: ["Marcus · angel sleeve", "Imani · sacred heart", "Theo · sculpture study"] },
-    { label: "Session", count: 1, projects: ["Darius · Saint Michael"] },
-    { label: "Healing", count: 1, projects: ["Elena · floral black & grey"] },
-  ];
-
-  return (
-    <section>
-      <header className="view-header compact">
-        <div>
-          <p className="eyebrow">PROJECT INTELLIGENCE</p>
-          <h1>Every tattoo, <em>one continuous record.</em></h1>
-        </div>
-        <button className="primary-button">＋ New project</button>
-      </header>
-      <div className="project-overview">
-        <div className="insight-card">
-          <p className="eyebrow accent">PATTERN DISCOVERED</p>
-          <h2>Clear focal hierarchy is shortening approval cycles.</h2>
-          <p>
-            Projects with a single dominant subject reached design approval
-            1.7 revisions sooner across the last 12 projects.
-          </p>
-          <small>12 projects · 89% confidence · reviewed today</small>
-        </div>
-        <div className="project-stats">
-          <div><strong>7</strong><span>active</span></div>
-          <div><strong>2</strong><span>at risk</span></div>
-          <div><strong>14d</strong><span>median cycle</span></div>
-        </div>
-      </div>
-      <div className="kanban">
-        {lanes.map((lane) => (
-          <div className="lane" key={lane.label}>
-            <div className="lane-heading">
-              <span>{lane.label}</span><small>{lane.count}</small>
-            </div>
-            {lane.projects.map((project, index) => (
-              <button className="kanban-card" key={project}>
-                <span className="card-index">0{index + 1}</span>
-                <strong>{project.split(" · ")[1]}</strong>
-                <small>{project.split(" · ")[0]}</small>
-                <div className="micro-progress"><span style={{ width: `${32 + index * 23}%` }} /></div>
-                <p>{index === 0 ? "Next action prepared" : "Context complete"}</p>
-              </button>
-            ))}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function KnowledgeView() {
-  const [query, setQuery] = useState("");
-  return (
-    <section>
-      <header className="view-header compact">
-        <div>
-          <p className="eyebrow">KNOWLEDGE ENGINE</p>
-          <h1>Nothing learned <em>stays isolated.</em></h1>
-        </div>
-        <button className="primary-button">＋ Add knowledge</button>
-      </header>
-      <div className="knowledge-search">
-        <span>⌕</span>
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Ask across projects, mentorships, notes, prompts, and outcomes…"
-        />
-        <kbd>Return</kbd>
-      </div>
-      <div className="knowledge-layout">
-        <div className="knowledge-results">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">CONNECTED KNOWLEDGE</p>
-              <h2>{query ? `Results for “${query}”` : "Recently strengthened"}</h2>
-            </div>
-            <span>Evidence required</span>
-          </div>
-          {knowledgeCards.map((card) => (
-            <button className="knowledge-card" key={card.title}>
-              <span>{card.label}</span>
-              <div>
-                <h3>{card.title}</h3>
-                <p>{card.source}</p>
-              </div>
-              <small>{card.links}</small>
-              <b>↗</b>
-            </button>
-          ))}
-        </div>
-        <aside className="graph-panel">
-          <p className="eyebrow">RELATIONSHIP LENS</p>
-          <h2>Marcus · angel sleeve</h2>
-          <div className="relationship-map">
-            <div className="relation core">Project</div>
-            <div className="relation">4 references</div>
-            <div className="relation">2 lessons</div>
-            <div className="relation">3 designs</div>
-            <div className="relation">1 approval</div>
-            <div className="relation">Client language</div>
-          </div>
-          <p>
-            The system connected composition notes to healed outcomes from four
-            earlier realism projects.
-          </p>
-          <button className="outline-button">Explore graph ↗</button>
-        </aside>
-      </div>
-    </section>
-  );
-}
-
-function DesignView() {
-  return (
-    <section>
-      <header className="view-header compact">
-        <div>
-          <p className="eyebrow">DESIGN WORKFLOW</p>
-          <h1>From references to <em>approved direction.</em></h1>
-        </div>
-        <button className="primary-button">＋ New study</button>
-      </header>
-      <div className="studio-context">
-        <div>
-          <span className="project-swatch ember" />
-          <p>Marcus Rivera</p>
-          <strong>Renaissance angel sleeve</strong>
-        </div>
-        <div className="stage-track">
-          <span className="done">Brief</span>
-          <span className="done">References</span>
-          <span className="active">Compose</span>
-          <span>Refine</span>
-          <span>Approve</span>
-          <span>Stencil</span>
-        </div>
-      </div>
-      <div className="design-layout">
-        <aside className="reference-column">
-          <div className="section-heading">
-            <div><p className="eyebrow">SOURCE BOARD</p><h2>References</h2></div>
-            <button>＋</button>
-          </div>
-          <div className="reference-grid">
-            {["Sculpture", "Drapery", "Anatomy", "Architecture"].map((label, index) => (
-              <button className={`reference-tile tile-${index + 1}`} key={label}>
-                <span>0{index + 1}</span>
-                <strong>{label}</strong>
-              </button>
-            ))}
-          </div>
-          <div className="source-note">
-            <span>Knowledge note</span>
-            <p>Prioritize silhouette before texture; background remains subordinate.</p>
-          </div>
-        </aside>
-        <div className="canvas-column">
-          <div className="design-canvas">
-            <div className="canvas-mark"><span>L</span></div>
-            <p>COMPOSITION V4</p>
-            <h3>Angel / ascending gesture</h3>
-            <small>Working study · generated structure, artist-led finish</small>
-          </div>
-          <div className="version-row">
-            {["v1", "v2", "v3", "v4"].map((version) => (
-              <button className={version === "v4" ? "selected" : ""} key={version}>{version}</button>
-            ))}
-            <button>＋ Compare</button>
-          </div>
-        </div>
-        <aside className="design-brief">
-          <p className="eyebrow">EVIDENCE-LED BRIEF</p>
-          <h2>Current direction</h2>
-          <dl>
-            <div><dt>Focal point</dt><dd>Face and upward gesture</dd></div>
-            <div><dt>Flow</dt><dd>Shoulder to outer forearm</dd></div>
-            <div><dt>Contrast</dt><dd>Strongest at eyes and hands</dd></div>
-            <div><dt>Background</dt><dd>Reduce by approximately 20%</dd></div>
-          </dl>
-          <div className="confidence-box">
-            <span>Recommendation confidence</span>
-            <strong>91%</strong>
-            <div><i style={{ width: "91%" }} /></div>
-          </div>
-          <button className="primary-button wide">Send to approval</button>
-          <button className="outline-button wide">Request another direction</button>
-        </aside>
-      </div>
-    </section>
-  );
-}
-
-function ContentView() {
-  return (
-    <section>
-      <header className="view-header compact">
-        <div>
-          <p className="eyebrow">CONTENT WORKFLOW</p>
-          <h1>Finished work becomes <em>future intelligence.</em></h1>
-        </div>
-        <button className="primary-button">＋ Create from project</button>
-      </header>
-      <div className="content-summary">
-        <div>
-          <p className="eyebrow accent">OPPORTUNITY</p>
-          <h2>Healed-work documentation is your highest-value content gap.</h2>
-          <p>
-            Healed carousels earn 32% more saves than session-day posts, but
-            only 3 of the last 11 projects have a complete healed set.
-          </p>
-        </div>
-        <div className="opportunity-score">
-          <strong>8.7</strong>
-          <span>Opportunity score</span>
-          <small>Evidence: 6 months · 48 posts</small>
-        </div>
-      </div>
-      <div className="content-board">
-        {["Select", "Draft", "Approval", "Schedule"].map((stage) => (
-          <div className="content-lane" key={stage}>
-            <div className="lane-heading">
-              <span>{stage}</span>
-              <small>{contentQueue.filter((item) => item.stage === stage).length}</small>
-            </div>
-            {contentQueue
-              .filter((item) => item.stage === stage)
-              .map((item, index) => (
-                <article className="content-card" key={item.title}>
-                  <div className={`media-placeholder media-${index + stage.length}`}>
-                    <span>LEGACY / {stage.toUpperCase()}</span>
-                  </div>
-                  <h3>{item.title}</h3>
-                  <p>{item.detail}</p>
-                  <div><span>Project linked</span><button>Open ↗</button></div>
-                </article>
-              ))}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function ClientsView() {
-  const clientRows = [
-    ["Marcus Rivera", "Renaissance angel sleeve", "Design", "76%", "Today"],
-    ["Elena Martinez", "Floral black & grey", "Healing", "82%", "Day 10"],
-    ["Darius Cole", "Saint Michael back piece", "Session", "61%", "Friday"],
-    ["Amara Lewis", "Botanical rib piece", "Consult", "24%", "2:00 PM"],
-    ["Theo Bennett", "Sculpture forearm", "Discovery", "18%", "Awaiting refs"],
-  ];
-  return (
-    <section>
-      <header className="view-header compact">
-        <div>
-          <p className="eyebrow">CLIENT WORKSPACE</p>
-          <h1>Know the person, <em>not just the project.</em></h1>
-        </div>
-        <button className="primary-button">＋ New client</button>
-      </header>
-      <div className="client-summary">
-        <div><span>Active clients</span><strong>18</strong><small>+3 this month</small></div>
-        <div><span>Response health</span><strong>96%</strong><small>Under 4 hours</small></div>
-        <div><span>Deposits pending</span><strong>3</strong><small>$1,250 total</small></div>
-        <div><span>Healing follow-ups</span><strong>4</strong><small>2 due today</small></div>
-      </div>
-      <div className="client-layout">
-        <section className="panel client-directory">
-          <div className="section-heading">
-            <div><p className="eyebrow">DIRECTORY</p><h2>Active clients</h2></div>
-            <button>Filter ↗</button>
-          </div>
-          {clientRows.map(([name, project, phase, progress, next], index) => (
-            <button className="client-row" key={name}>
-              <span className="client-avatar">{name.split(" ").map((part) => part[0]).join("")}</span>
-              <div><strong>{name}</strong><small>{project}</small></div>
-              <span className="phase">{phase}</span>
-              <div className="client-progress"><i style={{ width: progress }} /><small>{progress}</small></div>
-              <div><strong>{next}</strong><small>Next touch</small></div>
-              <span>↗</span>
-            </button>
-          ))}
-        </section>
-        <aside className="panel selected-client">
-          <p className="eyebrow">PROJECT HEALTH</p>
-          <div className="health-ring"><strong>76%</strong><small>On track</small></div>
-          <h2>Marcus Rivera</h2>
-          <p>Renaissance angel sleeve · left arm</p>
-          <dl>
-            <div><dt>Deposit</dt><dd>$250 paid</dd></div>
-            <div><dt>Approvals</dt><dd>1 pending</dd></div>
-            <div><dt>Next session</dt><dd>Fri · 11:00</dd></div>
-            <div><dt>Context</dt><dd>Complete</dd></div>
-          </dl>
-          <button className="primary-button wide">Open workspace</button>
-          <button className="outline-button wide">Message client</button>
-        </aside>
-      </div>
-    </section>
-  );
-}
-
-function AnalyticsView() {
-  const bars = [28, 35, 42, 38, 51, 48, 61, 58, 72, 69, 78, 88];
-  return (
-    <section>
-      <header className="view-header compact">
-        <div>
-          <p className="eyebrow">COMPARATIVE INTELLIGENCE</p>
-          <h1>Measure what matters. <em>Learn why.</em></h1>
-        </div>
-        <button className="primary-button">Export report</button>
-      </header>
-      <div className="analytics-metrics">
-        <div><span>Total revenue</span><strong>$18,450</strong><small>↑ 21% this month</small></div>
-        <div><span>Hourly revenue</span><strong>$192</strong><small>↑ 18% this month</small></div>
-        <div><span>Tattoo hours</span><strong>96.3</strong><small>24 sessions</small></div>
-        <div><span>Healing score</span><strong>4.7</strong><small>84 submissions</small></div>
-        <div><span>Content reach</span><strong>51.2k</strong><small>↑ 32% on angels</small></div>
-      </div>
-      <div className="analytics-grid">
-        <section className="panel revenue-chart">
-          <div className="section-heading">
-            <div><p className="eyebrow">REVENUE OVER TIME</p><h2>June performance</h2></div>
-            <span>$18,450</span>
-          </div>
-          <div className="bar-chart">
-            {bars.map((height, index) => (
-              <div key={index}><i style={{ height: `${height}%` }} /><span>{index + 1}</span></div>
-            ))}
-          </div>
-        </section>
-        <section className="panel intelligence-panel">
-          <div className="section-heading">
-            <div><p className="eyebrow">AI INSIGHTS</p><h2>Why performance moved</h2></div>
-            <span>4 new</span>
-          </div>
-          {[
-            "Angel tattoos generate the highest revenue and the strongest healing scores.",
-            "Reels using dramatic contrast and upper-arm placement earn 32% more engagement.",
-            "3RL + 9CM is the most reliable needle combination across healed work.",
-            "Clients booking within 7 days of consult retain 24% more often.",
-          ].map((insight, index) => (
-            <article key={insight}><span>0{index + 1}</span><p>{insight}</p><button>↗</button></article>
-          ))}
-        </section>
-        <section className="panel performance-matrix">
-          <div className="section-heading">
-            <div><p className="eyebrow">CRAFT INTELLIGENCE</p><h2>Needle configuration success</h2></div>
-          </div>
-          {[
-            ["3RL + 11CM", 92],
-            ["3RL + 9CM", 88],
-            ["3RL + 13CM", 86],
-            ["9RL + 11CM", 78],
-            ["3RL + 7CM", 72],
-          ].map(([label, score]) => (
-            <div className="matrix-row" key={label}>
-              <span>{label}</span><div><i style={{ width: `${score}%` }} /></div><strong>{score}%</strong>
-            </div>
-          ))}
-        </section>
-        <section className="panel opportunity-panel">
-          <div className="section-heading">
-            <div><p className="eyebrow">OPPORTUNITY DISCOVERY</p><h2>Next best moves</h2></div>
-          </div>
-          {[
-            ["Book two more upper-arm projects", "High demand · high satisfaction"],
-            ["Increase healed-result posting", "Evidence gap · strong save rate"],
-            ["Protect Wednesday deep work", "Highest design throughput"],
-          ].map(([title, detail]) => (
-            <article key={title}><span>✓</span><div><strong>{title}</strong><small>{detail}</small></div></article>
-          ))}
-        </section>
-      </div>
-    </section>
-  );
-}
-
-function ScreenLibraryView({ onNavigate }: { onNavigate: (view: View) => void }) {
-  const groups = [
-    {
-      title: "Core experience",
-      tone: "core",
-      screens: [
-        ["Login", "Secure access and account entry."],
-        ["Dashboard", "Daily command center and overview."],
-        ["Client Workspace", "History, communication, and health."],
-        ["Project Workspace", "Complete tattoo project context."],
-        ["Knowledge Search", "Find anything with evidence."],
-        ["AI Chief of Staff", "Priorities, decisions, and briefing."],
-        ["Design Studio", "References, iterations, and approval."],
-        ["Knowledge Graph", "Visualize meaningful relationships."],
-        ["Analytics", "Performance, patterns, and opportunities."],
-        ["Settings", "Models, permissions, and integrations."],
-      ],
-    },
-    {
-      title: "Workflow & operations",
-      tone: "workflow",
-      screens: [
-        ["Inbox", "All client conversations."],
-        ["Calendar", "Sessions, consults, and focus windows."],
-        ["Content Studio", "Create, approve, and schedule."],
-        ["Media Library", "Organize source and final media."],
-        ["Session Assistant", "In-session notes and support."],
-        ["Healing Tracker", "Check-ins, photos, and outcomes."],
-        ["Approval Queue", "Human judgment for gated actions."],
-        ["Notifications", "Priority-filtered alerts."],
-        ["Inquiry Pipeline", "Qualify leads and create projects."],
-        ["Finance Center", "Deposits, invoices, and revenue."],
-        ["Asset Library", "Reusable creative assets."],
-        ["Prompt Library", "Versioned creative instructions."],
-      ],
-    },
-    {
-      title: "Admin & system",
-      tone: "admin",
-      screens: [
-        ["Automation Builder", "Create event-driven workflows."],
-        ["Workflow Editor", "Version and improve processes."],
-        ["Team Dashboard", "Roles, workload, and performance."],
-        ["AI Agent Manager", "Configure agent boundaries."],
-        ["API & Integrations", "Connected service health."],
-        ["Security & Permissions", "Roles and policy controls."],
-        ["AI Operations", "Runs, tools, cost, and audit."],
-      ],
-    },
-    {
-      title: "Client portal",
-      tone: "portal",
-      screens: [
-        ["Client Portal Home", "Client-facing project status."],
-        ["Intake Forms", "Structured requirements and consent."],
-        ["Project Viewer", "Approved designs and progress."],
-        ["Payments & Invoices", "Secure deposit and billing."],
-        ["Messaging Center", "Project-linked communication."],
-      ],
-    },
-  ];
-  const targets: Record<string, View> = {
-    Dashboard: "briefing",
-    "Client Workspace": "clients",
-    "Knowledge Search": "knowledge",
-    "Design Studio": "design",
-    Analytics: "analytics",
-    Settings: "settings",
-    "AI Operations": "operations",
-    Calendar: "calendar",
-    Inbox: "inbox",
-    "Content Studio": "content",
-    "Finance Center": "finances",
-    "Project Workspace": "projects",
-  };
-  let screenIndex = 0;
-  return (
-    <section>
-      <header className="view-header compact">
-        <div>
-          <p className="eyebrow">DEVELOPER MAP</p>
-          <h1>Screen library. <em>Every surface has a purpose.</em></h1>
-        </div>
-        <button className="primary-button">＋ Suggest screen</button>
-      </header>
-      <div className="library-summary">
-        <span><strong>34</strong> planned screens</span>
-        <span><strong>12</strong> workflow surfaces</span>
-        <span><strong>7</strong> system controls</span>
-        <span><strong>100%</strong> project-connected</span>
-      </div>
-      <div className="screen-groups">
-        {groups.map((group) => (
-          <section className="screen-group" key={group.title}>
-            <div className="lane-heading"><span>{group.title}</span><small>{group.screens.length}</small></div>
-            <div className="screen-grid">
-              {group.screens.map(([title, description]) => {
-                screenIndex += 1;
-                const target = targets[title];
+      <button
+        className={cn("sidebar-backdrop", open && "show")}
+        aria-label="Close menu"
+        onClick={onClose}
+      />
+      <aside className={cn("owner-sidebar", open && "open")}>
+        <button
+          className="brand-button"
+          onClick={() => {
+            onView("dashboard");
+            onClose();
+          }}
+        >
+          <Brand />
+        </button>
+        <nav>
+          {navGroups.map((group) => (
+            <div className="nav-group" key={group.label}>
+              <p>{group.label}</p>
+              {group.items.map((item) => {
+                const Icon = item.icon;
                 return (
                   <button
-                    className={`screen-card ${group.tone} ${target ? "available" : ""}`}
-                    key={title}
-                    onClick={() => target && onNavigate(target)}
+                    key={item.id}
+                    className={cn("nav-link", view === item.id && "active")}
+                    onClick={() => {
+                      onView(item.id);
+                      onClose();
+                    }}
                   >
-                    <span>{String(screenIndex).padStart(2, "0")}</span>
-                    <strong>{title}</strong>
-                    <p>{description}</p>
-                    <small>{target ? "Foundation available ↗" : "Planned"}</small>
+                    <Icon size={17} strokeWidth={1.55} />
+                    <span>{item.label}</span>
+                    {item.id === "chief" && <i />}
                   </button>
                 );
               })}
             </div>
-          </section>
-        ))}
+          ))}
+        </nav>
+        <div className="sidebar-footer">
+          <button className="portal-launch" onClick={onPortal}>
+            <UserRound size={17} />
+            <span>
+              <strong>Client portal</strong>
+              <small>Open a secure client view</small>
+            </span>
+            <ArrowRight size={15} />
+          </button>
+          <div className="owner-profile">
+            <span>{(owner?.displayName || "O").slice(0, 1).toUpperCase()}</span>
+            <div>
+              <strong>{owner?.displayName || "Studio owner"}</strong>
+              <small>{workspace?.name || "Legacy Studio"}</small>
+            </div>
+            <ChevronDown size={15} />
+          </div>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function OwnerHeader({
+  view,
+  onMenu,
+  onNew,
+}: {
+  view: OwnerView;
+  onMenu: () => void;
+  onNew: () => void;
+}) {
+  const detail = viewDetails[view];
+  return (
+    <header className="owner-header">
+      <button className="mobile-menu" onClick={onMenu} aria-label="Open menu">
+        <Menu size={20} />
+      </button>
+      <div>
+        <h1>{detail.title}</h1>
+        <p>{detail.subtitle}</p>
+      </div>
+      <div className="header-tools">
+        <button className="search-control">
+          <Search size={16} />
+          <span>Search anything...</span>
+          <kbd>⌘ K</kbd>
+        </button>
+        <button className="icon-button" aria-label="Notifications">
+          <Bell size={18} />
+        </button>
+        <button className="gold-button" onClick={onNew}>
+          <Plus size={17} /> New
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function SetupPanel({
+  onClient,
+  onProject,
+}: {
+  onClient: () => void;
+  onProject: () => void;
+}) {
+  return (
+    <section className="setup-panel">
+      <div className="setup-orbit">
+        <span />
+        <Brand compact />
+      </div>
+      <div className="setup-copy">
+        <p className="eyebrow gold">YOUR WORKSPACE IS CLEAN</p>
+        <h2>Build your studio system from real work.</h2>
+        <p>
+          Example records have been removed. Add a client, create their first
+          project, then share a secure portal. Every action becomes part of the
+          live audit trail.
+        </p>
+      </div>
+      <div className="setup-actions">
+        <button className="gold-button" onClick={onClient}>
+          <UsersRound size={16} /> Add first client
+        </button>
+        <button className="outline-button" onClick={onProject}>
+          <FolderKanban size={16} /> Create project
+        </button>
       </div>
     </section>
   );
 }
 
-function WorkspaceModuleView({
-  module,
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  detail,
 }: {
-  module: "calendar" | "inbox" | "finances" | "settings";
+  icon: LucideIcon;
+  label: string;
+  value: string | number;
+  detail: string;
 }) {
-  const config = {
-    calendar: {
-      eyebrow: "APPOINTMENT WORKFLOW",
-      title: "Calendar",
-      emphasis: "time with context.",
-      action: "＋ New appointment",
-      metrics: [["Today", "4 commitments"], ["Focus", "90 min protected"], ["This week", "3 sessions"], ["Conflicts", "0 detected"]],
-      rows: [["10:00 AM", "Design review · Marcus", "Studio · 45 min"], ["11:30 AM", "Stencil refinement", "Protected focus · 90 min"], ["2:00 PM", "Consultation · Amara", "Intake complete"], ["4:30 PM", "Content selects", "Prepared by Content Agent"]],
-    },
-    inbox: {
-      eyebrow: "CLIENT COMMUNICATION",
-      title: "Inbox",
-      emphasis: "every message connected.",
-      action: "＋ New message",
-      metrics: [["Unread", "3 conversations"], ["Response", "1h 42m median"], ["Drafts", "2 approval-held"], ["Coverage", "100% project-linked"]],
-      rows: [["8:31 AM", "Elena · Healing photo", "AI draft held for approval"], ["Yesterday", "Marcus · Design feedback", "Project context attached"], ["Yesterday", "Amara · New inquiry", "Intake is 86% complete"], ["Monday", "Darius · Session confirmation", "Confirmed"]],
-    },
-    finances: {
-      eyebrow: "DEPOSIT & PAYMENT WORKFLOW",
-      title: "Finance center",
-      emphasis: "money tied to the work.",
-      action: "＋ Record payment",
-      metrics: [["Revenue", "$18,450 this month"], ["Deposits", "$1,250 pending"], ["Invoices", "2 outstanding"], ["Forecast", "$26,800 next 30d"]],
-      rows: [["Today", "Elena Martinez · Deposit", "$250 · Paid"], ["Jul 28", "Darius Cole · Session 1", "$900 · Paid"], ["Jul 27", "Marcus Rivera · Deposit", "$250 · Paid"], ["Jul 25", "Studio supplies", "$184 · Expense"]],
-    },
-    settings: {
-      eyebrow: "SYSTEM CONTROL",
-      title: "Settings",
-      emphasis: "policy before automation.",
-      action: "Save changes",
-      metrics: [["AI providers", "Model-agnostic"], ["Content capture", "Metadata only"], ["Retention", "90 days"], ["Workspace", "Owner-only"]],
-      rows: [["AI & models", "Routing policy", "Reasoning, retrieval, writing"], ["Security", "Approval policy", "High-impact actions always gated"], ["Notifications", "Attention policy", "Priority-filtered"], ["Integrations", "Connection health", "Ready for provider setup"]],
-    },
-  }[module];
   return (
-    <section>
-      <header className="view-header compact">
-        <div><p className="eyebrow">{config.eyebrow}</p><h1>{config.title}. <em>{config.emphasis}</em></h1></div>
-        <button className="primary-button">{config.action}</button>
-      </header>
-      <div className="module-metrics">
-        {config.metrics.map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}
+    <article className="stat-card">
+      <div>
+        <p>{label}</p>
+        <strong>{value}</strong>
+        <small>{detail}</small>
       </div>
-      <section className="panel module-list">
-        <div className="section-heading"><div><p className="eyebrow">CURRENT STATE</p><h2>{config.title} overview</h2></div><button>Filter ↗</button></div>
-        {config.rows.map(([time, title, detail]) => (
-          <button className="module-row" key={title}>
-            <time>{time}</time><div><strong>{title}</strong><small>{detail}</small></div><span>↗</span>
+      <span>
+        <Icon size={19} strokeWidth={1.5} />
+      </span>
+    </article>
+  );
+}
+
+function Dashboard({
+  data,
+  firstName,
+  briefing,
+  generating,
+  onGenerate,
+  onClient,
+  onProject,
+  onAppointment,
+  onView,
+}: {
+  data: WorkspaceData;
+  firstName: string;
+  briefing: Briefing | null;
+  generating: boolean;
+  onGenerate: () => void;
+  onClient: () => void;
+  onProject: () => void;
+  onAppointment: () => void;
+  onView: (view: OwnerView) => void;
+}) {
+  const upcoming = data.appointments
+    .filter((item) => !["completed", "cancelled"].includes(item.status))
+    .slice(0, 5);
+  const activeProjects = data.projects.filter(
+    (item) => item.status === "active",
+  );
+  const pending = data.approvals.filter((item) => item.status === "pending");
+  const unread = data.messages.filter(
+    (item) => item.senderType === "client" && !item.status.includes("read"),
+  );
+
+  return (
+    <div className="dashboard-view">
+      <section className="welcome-line">
+        <div>
+          <span className="sun-mark">
+            <Sparkles size={23} />
+          </span>
+          <div>
+            <h2>Good {new Date().getHours() < 12 ? "morning" : "evening"}, {firstName}.</h2>
+            <p>Your operating picture is live and based only on saved records.</p>
+          </div>
+        </div>
+        <span className="system-online">
+          <i /> SYSTEM OPERATIONAL
+        </span>
+      </section>
+
+      {data.clients.length === 0 && data.projects.length === 0 && (
+        <SetupPanel onClient={onClient} onProject={onProject} />
+      )}
+
+      <section className="stats-grid">
+        <StatCard
+          icon={FolderKanban}
+          label="ACTIVE PROJECTS"
+          value={activeProjects.length}
+          detail="Across the tattoo lifecycle"
+        />
+        <StatCard
+          icon={CalendarDays}
+          label="UPCOMING APPOINTMENTS"
+          value={upcoming.length}
+          detail="From the current schedule"
+        />
+        <StatCard
+          icon={ShieldCheck}
+          label="APPROVALS WAITING"
+          value={pending.length}
+          detail="Human judgment remains final"
+        />
+        <StatCard
+          icon={MessageSquareText}
+          label="CLIENT MESSAGES"
+          value={unread.length}
+          detail="Awaiting an owner response"
+        />
+      </section>
+
+      <div className="command-grid">
+        <section className="os-panel priority-panel">
+          <PanelTitle
+            eyebrow="TODAY'S PRIORITIES"
+            title="What needs attention"
+            action="Open Chief of Staff"
+            onAction={() => onView("chief")}
+          />
+          {briefing?.priorities.length ? (
+            <div className="priority-list">
+              {briefing.priorities.map((item, index) => (
+                <article key={`${item.type}-${item.id}`}>
+                  <span>{String(index + 1).padStart(2, "0")}</span>
+                  <div>
+                    <p>{item.title}</p>
+                    <small>{item.detail}</small>
+                  </div>
+                  <ArrowRight size={15} />
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon={CheckCircle2}
+              title="Nothing is competing for attention"
+              body={
+                briefing?.summary ||
+                "Run the briefing to prioritize your live appointments, approvals, and projects."
+              }
+              action={generating ? "Preparing..." : "Prepare briefing"}
+              onAction={onGenerate}
+            />
+          )}
+        </section>
+
+        <section className="os-panel schedule-panel">
+          <PanelTitle
+            eyebrow="TODAY'S SCHEDULE"
+            title="Upcoming commitments"
+            action="Schedule"
+            onAction={onAppointment}
+          />
+          {upcoming.length ? (
+            <div className="schedule-list">
+              {upcoming.map((appointment) => {
+                const client = data.clients.find(
+                  (item) => item.id === appointment.clientId,
+                );
+                return (
+                  <article key={appointment.id}>
+                    <time>{formatDate(appointment.startsAt, true)}</time>
+                    <span />
+                    <div>
+                      <p>{appointment.appointmentType}</p>
+                      <small>
+                        {fullName(client)}
+                        {appointment.location ? ` · ${appointment.location}` : ""}
+                      </small>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              icon={CalendarDays}
+              title="The calendar is open"
+              body="Schedule a consultation, tattoo session, or follow-up."
+              action="Add appointment"
+              onAction={onAppointment}
+            />
+          )}
+        </section>
+
+        <section className="os-panel live-projects-panel">
+          <PanelTitle
+            eyebrow="ACTIVE PROJECTS"
+            title="Work in motion"
+            action="View all"
+            onAction={() => onView("projects")}
+          />
+          {activeProjects.length ? (
+            <div className="project-rows">
+              {activeProjects.slice(0, 5).map((project) => {
+                const phaseIndex = Math.max(0, phases.indexOf(project.lifecyclePhase));
+                return (
+                  <article key={project.id}>
+                    <div className="project-avatar">
+                      {project.title.slice(0, 1).toUpperCase()}
+                    </div>
+                    <div className="project-main">
+                      <p>{project.title}</p>
+                      <small>{projectClient(project)}</small>
+                    </div>
+                    <span className="phase-pill">{project.lifecyclePhase}</span>
+                    <div className="project-progress">
+                      <span style={{ width: `${((phaseIndex + 1) / phases.length) * 100}%` }} />
+                    </div>
+                    <strong>{project.nextAction || "Choose next action"}</strong>
+                    <ArrowRight size={15} />
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState
+              icon={FolderKanban}
+              title="No active projects yet"
+              body="Create a project after adding your first client."
+              action="Create project"
+              onAction={onProject}
+            />
+          )}
+        </section>
+
+        <aside className="chief-rail-card">
+          <header>
+            <div className="brain-orb">
+              <BrainCircuit size={29} />
+            </div>
+            <div>
+              <p>AI CHIEF OF STAFF</p>
+              <small><i /> Online</small>
+            </div>
+          </header>
+          <div className="chief-copy">
+            <p>{briefing?.summary || "I am ready to organize your real workspace."}</p>
+            <small>
+              {briefing
+                ? `${briefing.confidence}% confidence · ${formatDate(briefing.generatedAt, true)}`
+                : "No briefing has been generated yet."}
+            </small>
+          </div>
+          <ul>
+            <li><Check size={14} /> Uses current workspace records</li>
+            <li><Check size={14} /> Writes every run to the ledger</li>
+            <li><Check size={14} /> Never acts past approval boundaries</li>
+          </ul>
+          <button className="gold-button wide" onClick={onGenerate} disabled={generating}>
+            <WandSparkles size={16} />
+            {generating ? "Preparing briefing..." : "Prepare daily brief"}
           </button>
-        ))}
+          <button className="text-button" onClick={() => onView("operations")}>
+            Show what the system did <ArrowRight size={14} />
+          </button>
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+function PanelTitle({
+  eyebrow,
+  title,
+  action,
+  onAction,
+}: {
+  eyebrow: string;
+  title: string;
+  action?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <header className="panel-title">
+      <div>
+        <p>{eyebrow}</p>
+        <h2>{title}</h2>
+      </div>
+      {action && onAction && (
+        <button onClick={onAction}>
+          {action} <ArrowRight size={13} />
+        </button>
+      )}
+    </header>
+  );
+}
+
+function ProjectsView({
+  data,
+  onCreate,
+}: {
+  data: WorkspaceData;
+  onCreate: () => void;
+}) {
+  const [selected, setSelected] = useState<string | null>(
+    data.projects[0]?.id ?? null,
+  );
+  const project = data.projects.find((item) => item.id === selected);
+  return (
+    <section className="page-stack">
+      <div className="section-toolbar">
+        <div className="filter-tabs">
+          <button className="active">All projects <span>{data.projects.length}</span></button>
+          <button>Active <span>{data.projects.filter((item) => item.status === "active").length}</span></button>
+          <button>Complete <span>{data.projects.filter((item) => item.lifecyclePhase === "complete").length}</span></button>
+        </div>
+        <button className="gold-button" onClick={onCreate}>
+          <Plus size={16} /> New project
+        </button>
+      </div>
+      {data.projects.length === 0 ? (
+        <section className="os-panel tall-empty">
+          <EmptyState
+            icon={FolderKanban}
+            title="Your project workspace is ready"
+            body="Projects connect client details, design versions, appointments, approvals, files, and healing outcomes."
+            action="Create the first project"
+            onAction={onCreate}
+          />
+        </section>
+      ) : (
+        <div className="split-workspace">
+          <div className="record-list">
+            {data.projects.map((item) => (
+              <button
+                className={cn("record-card", selected === item.id && "active")}
+                key={item.id}
+                onClick={() => setSelected(item.id)}
+              >
+                <span className="record-icon"><FolderKanban size={19} /></span>
+                <div>
+                  <strong>{item.title}</strong>
+                  <small>{projectClient(item)}</small>
+                </div>
+                <span className="phase-pill">{item.lifecyclePhase}</span>
+              </button>
+            ))}
+          </div>
+          {project && (
+            <section className="record-detail os-panel">
+              <div className="record-hero">
+                <div>
+                  <p className="eyebrow gold">PROJECT WORKSPACE</p>
+                  <h2>{project.title}</h2>
+                  <p>{projectClient(project)} · {project.placement || "Placement not set"}</p>
+                </div>
+                <span className="status-badge">{project.status}</span>
+              </div>
+              <Lifecycle phase={project.lifecyclePhase} />
+              <div className="detail-grid">
+                <DetailBox label="Next action" value={project.nextAction || "Not set"} />
+                <DetailBox label="Target date" value={formatDate(project.targetDate)} />
+                <DetailBox
+                  label="Budget"
+                  value={`${formatMoney(project.budgetMinCents)} – ${formatMoney(project.budgetMaxCents)}`}
+                />
+                <DetailBox label="Updated" value={formatDate(project.updatedAt, true)} />
+              </div>
+              <article className="project-brief">
+                <p className="eyebrow">PROJECT BRIEF</p>
+                <p>{project.summary || "No project brief has been added yet."}</p>
+              </article>
+            </section>
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function Lifecycle({ phase }: { phase: string }) {
+  const active = Math.max(0, phases.indexOf(phase));
+  return (
+    <div className="lifecycle">
+      {phases.map((item, index) => (
+        <div className={cn(index < active && "done", index === active && "active")} key={item}>
+          <span>{index < active ? <Check size={13} /> : index + 1}</span>
+          <small>{item}</small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function DetailBox({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="detail-box">
+      <small>{label}</small>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function ClientsView({
+  data,
+  onCreate,
+  onInvite,
+}: {
+  data: WorkspaceData;
+  onCreate: () => void;
+  onInvite: (client: ClientRecord) => void;
+}) {
+  return (
+    <section className="page-stack">
+      <div className="section-toolbar">
+        <div className="filter-tabs">
+          <button className="active">Active clients <span>{data.clients.length}</span></button>
+        </div>
+        <button className="gold-button" onClick={onCreate}>
+          <Plus size={16} /> New client
+        </button>
+      </div>
+      {data.clients.length === 0 ? (
+        <section className="os-panel tall-empty">
+          <EmptyState
+            icon={UsersRound}
+            title="No client records yet"
+            body="Add a client once. Their projects, messages, appointments, files, and approvals stay connected."
+            action="Add first client"
+            onAction={onCreate}
+          />
+        </section>
+      ) : (
+        <section className="os-panel table-panel">
+          <div className="data-table clients-table">
+            <div className="table-row table-head">
+              <span>Client</span><span>Contact</span><span>Projects</span><span>Status</span><span>Portal</span>
+            </div>
+            {data.clients.map((client) => {
+              const count = data.projects.filter(
+                (project) => project.clientId === client.id,
+              ).length;
+              return (
+                <div className="table-row" key={client.id}>
+                  <span className="client-cell">
+                    <i>{client.firstName.slice(0, 1)}{client.lastName.slice(0, 1)}</i>
+                    <span><strong>{fullName(client)}</strong><small>Added {formatDate(client.createdAt)}</small></span>
+                  </span>
+                  <span><strong>{client.email || "No email"}</strong><small>{client.phone || "No phone"}</small></span>
+                  <span>{count}</span>
+                  <span><b className="status-dot" /> {client.status}</span>
+                  <span>
+                    <button className="outline-button small" onClick={() => onInvite(client)}>
+                      <Link2 size={14} /> Create access
+                    </button>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+    </section>
+  );
+}
+
+function CalendarView({
+  data,
+  onCreate,
+}: {
+  data: WorkspaceData;
+  onCreate: () => void;
+}) {
+  return (
+    <section className="page-stack">
+      <div className="section-toolbar">
+        <div className="date-heading">
+          <p className="eyebrow">SCHEDULE</p>
+          <h2>Upcoming appointments</h2>
+        </div>
+        <button className="gold-button" onClick={onCreate}>
+          <Plus size={16} /> Schedule
+        </button>
+      </div>
+      <section className="os-panel calendar-surface">
+        {data.appointments.length === 0 ? (
+          <EmptyState
+            icon={CalendarDays}
+            title="Nothing is scheduled"
+            body="Add consultations, tattoo sessions, design reviews, and healing checks."
+            action="Schedule appointment"
+            onAction={onCreate}
+          />
+        ) : (
+          <div className="calendar-list">
+            {data.appointments.map((appointment) => {
+              const client = data.clients.find(
+                (item) => item.id === appointment.clientId,
+              );
+              const project = data.projects.find(
+                (item) => item.id === appointment.projectId,
+              );
+              return (
+                <article key={appointment.id}>
+                  <div className="calendar-date">
+                    <strong>{new Date(appointment.startsAt).getDate()}</strong>
+                    <span>{new Date(appointment.startsAt).toLocaleString("en-US", { month: "short" })}</span>
+                  </div>
+                  <span className="calendar-line" />
+                  <div>
+                    <p>{appointment.appointmentType}</p>
+                    <strong>{fullName(client)}</strong>
+                    <small>{project?.title || "No linked project"} · {formatDate(appointment.startsAt, true)}</small>
+                  </div>
+                  <span className="status-badge">{appointment.status}</span>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
     </section>
   );
 }
 
-function OperationsView() {
-  const [capture, setCapture] = useState("Metadata only");
+function InboxView({
+  data,
+  onSent,
+  notify,
+}: {
+  data: WorkspaceData;
+  onSent: () => void;
+  notify: (message: string, error?: boolean) => void;
+}) {
+  const [clientId, setClientId] = useState(data.clients[0]?.id || "");
+  const messages = data.messages.filter(
+    (message) => !clientId || message.clientId === clientId,
+  );
+  async function send(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    try {
+      await api("/api/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          clientId,
+          body: form.get("body"),
+        }),
+      });
+      event.currentTarget.reset();
+      notify("Message saved to the shared client conversation.");
+      onSent();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to send", true);
+    }
+  }
   return (
-    <section>
-      <header className="view-header compact operations-header">
+    <section className="inbox-layout">
+      <aside className="conversation-list">
+        <header><p>CONVERSATIONS</p><span>{data.clients.length}</span></header>
+        {data.clients.length === 0 ? (
+          <EmptyState icon={UsersRound} title="No clients" body="Add a client to start a secure conversation." />
+        ) : (
+          data.clients.map((client) => (
+            <button className={cn(clientId === client.id && "active")} key={client.id} onClick={() => setClientId(client.id)}>
+              <span>{client.firstName.slice(0, 1)}{client.lastName.slice(0, 1)}</span>
+              <div><strong>{fullName(client)}</strong><small>{client.email || "Client portal"}</small></div>
+            </button>
+          ))
+        )}
+      </aside>
+      <section className="conversation-panel os-panel">
+        {clientId ? (
+          <>
+            <header>
+              <div><p>{fullName(data.clients.find((item) => item.id === clientId))}</p><small>Shared owner and client portal thread</small></div>
+              <ShieldCheck size={19} />
+            </header>
+            <div className="message-thread">
+              {messages.length === 0 ? (
+                <EmptyState icon={MessageSquareText} title="Start the conversation" body="Messages sent here appear in the client's secure portal." />
+              ) : (
+                [...messages].reverse().map((message) => (
+                  <article className={cn("message-bubble", message.senderType === "owner" && "owner")} key={message.id}>
+                    <small>{message.senderType === "owner" ? "Studio" : "Client"} · {formatDate(message.createdAt, true)}</small>
+                    <p>{message.body}</p>
+                  </article>
+                ))
+              )}
+            </div>
+            <form className="message-composer" onSubmit={send}>
+              <textarea name="body" required placeholder="Write a message..." />
+              <button className="gold-button" type="submit"><Send size={16} /> Send</button>
+            </form>
+          </>
+        ) : (
+          <EmptyState icon={MessageSquareText} title="Choose a client" body="Select a conversation from the left." />
+        )}
+      </section>
+    </section>
+  );
+}
+
+function DesignStudio({
+  data,
+  refresh,
+  notify,
+}: {
+  data: WorkspaceData;
+  refresh: () => void;
+  notify: (message: string, error?: boolean) => void;
+}) {
+  const [projectId, setProjectId] = useState(data.projects[0]?.id || "");
+  const project = data.projects.find((item) => item.id === projectId);
+  const projectAssets = data.assets.filter((item) => item.projectId === projectId);
+  const projectApprovals = data.approvals.filter((item) => item.projectId === projectId);
+
+  async function upload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    form.set("projectId", projectId);
+    try {
+      await api("/api/files", { method: "POST", body: form });
+      event.currentTarget.reset();
+      notify("Design file stored and written to the audit trail.");
+      refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Upload failed", true);
+    }
+  }
+
+  async function requestApproval() {
+    if (!project) return;
+    try {
+      await api("/api/approvals", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          projectId: project.id,
+          category: "design",
+          subject: `${project.title} design review`,
+          summary: "Review the latest shared design file and approve it or request a revision.",
+          riskLevel: "medium",
+        }),
+      });
+      notify("Client approval request created.");
+      refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to request approval", true);
+    }
+  }
+
+  if (!project) {
+    return (
+      <section className="os-panel tall-empty">
+        <EmptyState icon={Brush} title="Design Studio needs a project" body="Create a client project before adding references, design versions, or approval gates." />
+      </section>
+    );
+  }
+
+  return (
+    <section className="design-studio">
+      <div className="design-toolbar">
+        <label>
+          <span>PROJECT</span>
+          <select value={projectId} onChange={(event) => setProjectId(event.target.value)}>
+            {data.projects.map((item) => <option value={item.id} key={item.id}>{item.title}</option>)}
+          </select>
+        </label>
         <div>
-          <p className="eyebrow">AI OPERATIONS · GLASS BOX</p>
-          <h1>Every action is <em>observable.</em></h1>
-          <p className="header-description">
-            Inspect reasoning summaries, evidence, tool use, approvals, cost,
-            latency, and outcomes without storing sensitive prompt content.
-          </p>
+          <button className="outline-button"><Brush size={15} /> Select</button>
+          <button className="outline-button"><WandSparkles size={15} /> AI Enhance</button>
+          <button className="gold-button" onClick={requestApproval}><ShieldCheck size={15} /> Request approval</button>
         </div>
-        <div className="healthy-badge"><span /> All systems healthy</div>
-      </header>
-      <div className="ops-metrics">
-        <div><p>AI runs · 24h</p><strong>146</strong><small>↑ 18% from baseline</small></div>
-        <div><p>Successful</p><strong>98.7%</strong><small>2 recovered failures</small></div>
-        <div><p>Median latency</p><strong>4.2s</strong><small>Target under 6s</small></div>
-        <div><p>Estimated cost</p><strong>$3.84</strong><small>$0.026 per run</small></div>
-        <div><p>Approval held</p><strong>9</strong><small>0 unauthorized actions</small></div>
       </div>
-      <div className="ops-grid">
-        <section className="panel run-ledger">
-          <div className="section-heading">
-            <div><p className="eyebrow">TRACE LEDGER</p><h2>Recent agent runs</h2></div>
-            <div className="filter-pills"><button className="active">All</button><button>Held</button><button>Failed</button></div>
-          </div>
-          <div className="run-table">
-            <div className="run-table-head">
-              <span>Run / agent</span><span>Purpose</span><span>Duration</span><span>Usage</span><span>Confidence</span><span>Status</span>
+      <div className="design-grid">
+        <aside className="reference-column os-panel">
+          <PanelTitle eyebrow="REFERENCE BOARD" title="Project files" />
+          {projectAssets.length ? (
+            <div className="asset-list">
+              {projectAssets.map((asset) => (
+                <a href={`/api/files?id=${asset.id}`} target="_blank" key={asset.id}>
+                  <span><FileText size={17} /></span>
+                  <div><strong>{asset.originalName}</strong><small>{formatBytes(asset.byteSize)} · {asset.sourceType.replace("_", " ")}</small></div>
+                </a>
+              ))}
             </div>
-            {agentRuns.map((run) => (
-              <button className="run-row" key={run.id}>
-                <span><b>{run.agent}</b><small>{run.id}</small></span>
-                <span><b>{run.purpose}</b><small>{run.model}</small></span>
-                <span>{run.duration}</span>
-                <span><b>{run.tokens}</b><small>{run.cost}</small></span>
-                <span>{run.confidence}</span>
-                <span className={run.status.includes("Approval") ? "held" : "success"}>{run.status}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-        <aside className="panel cost-panel">
-          <div className="section-heading">
-            <div><p className="eyebrow">USAGE</p><h2>By agent</h2></div>
-            <span>Today</span>
-          </div>
-          {[
-            ["Chief of Staff", 82, "$1.42"],
-            ["Knowledge", 64, "$0.91"],
-            ["Research", 51, "$0.68"],
-            ["Design", 39, "$0.47"],
-            ["Client", 31, "$0.22"],
-            ["Other", 18, "$0.14"],
-          ].map(([label, width, cost]) => (
-            <div className="cost-row" key={label}>
-              <div><span>{label}</span><small>{cost}</small></div>
-              <div><i style={{ width: `${width}%` }} /></div>
-            </div>
-          ))}
+          ) : (
+            <EmptyState icon={ImageIcon} title="No references yet" body="Upload references, sketches, designs, or stencil files." />
+          )}
+          <form className="upload-box" onSubmit={upload}>
+            <Upload size={21} />
+            <strong>Add a project file</strong>
+            <small>Images or documents up to 25 MB</small>
+            <input type="file" name="file" required />
+            <button className="outline-button small" type="submit">Upload</button>
+          </form>
         </aside>
-        <section className="panel audit-feed">
-          <div className="section-heading">
-            <div><p className="eyebrow">APPEND-ONLY AUDIT</p><h2>Live event stream</h2></div>
-            <span className="live-label"><i /> LIVE</span>
+        <section className="design-canvas os-panel">
+          <header><span>CANVAS</span><small>{project.placement || "Placement not set"}</small></header>
+          <div className="canvas-empty">
+            <div className="canvas-emblem"><span>L</span></div>
+            <p>{project.title}</p>
+            <small>Select a project file to review it here. The stored original remains unchanged.</small>
           </div>
-          {activity.map((item) => (
-            <article key={item.action}>
-              <span className="audit-icon">◎</span>
-              <div><p><b>{item.agent}</b> · {item.action}</p><small>{item.detail}</small></div>
-              <div><time>{item.time}</time><span>{item.confidence}%</span></div>
-            </article>
-          ))}
+          <footer>
+            <span>PROJECT NOTE</span>
+            <p>{project.summary || "Add the creative direction to the project brief."}</p>
+          </footer>
         </section>
-        <aside className="panel privacy-panel">
-          <div className="section-heading">
-            <div><p className="eyebrow">PRIVACY CONTROL</p><h2>Content capture</h2></div>
+        <aside className="approval-column os-panel">
+          <PanelTitle eyebrow="CLIENT REVIEW" title="Approvals" />
+          {projectApprovals.length ? (
+            <div className="approval-stack">
+              {projectApprovals.map((approval) => (
+                <article key={approval.id}>
+                  <span className={cn("approval-status", approval.status)}>{approval.status}</span>
+                  <strong>{approval.subject}</strong>
+                  <p>{approval.summary}</p>
+                  <small>{formatDate(approval.createdAt, true)}</small>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState icon={ShieldCheck} title="No review requested" body="When a design is ready, send it through the approval gate." action="Request approval" onAction={requestApproval} />
+          )}
+        </aside>
+      </div>
+      <Lifecycle phase={project.lifecyclePhase} />
+    </section>
+  );
+}
+
+function ChiefView({
+  briefing,
+  generating,
+  onGenerate,
+  data,
+}: {
+  briefing: Briefing | null;
+  generating: boolean;
+  onGenerate: () => void;
+  data: WorkspaceData;
+}) {
+  return (
+    <section className="chief-workspace">
+      <div className="chief-hero-card">
+        <div className="large-brain-orb"><BrainCircuit size={41} /></div>
+        <div>
+          <p className="eyebrow gold">AI CHIEF OF STAFF · ONLINE</p>
+          <h2>Your studio’s operating picture.</h2>
+          <p>{briefing?.summary || "Generate a briefing from the workspace’s current projects, approvals, and appointments."}</p>
+          <button className="gold-button" onClick={onGenerate} disabled={generating}>
+            <WandSparkles size={16} /> {generating ? "Analyzing workspace..." : "Generate briefing"}
+          </button>
+        </div>
+        <aside>
+          <small>DATA SCOPE</small>
+          <strong>{data.projects.length + data.appointments.length + data.approvals.length}</strong>
+          <span>operational records</span>
+          <small>CAPTURE MODE</small>
+          <strong className="capture-label">Metadata only</strong>
+        </aside>
+      </div>
+      <div className="chief-columns">
+        <section className="os-panel">
+          <PanelTitle eyebrow="RECOMMENDATIONS" title="Prioritized work" />
+          {briefing?.priorities.length ? (
+            <div className="recommendation-list">
+              {briefing.priorities.map((priority, index) => (
+                <article key={priority.id}>
+                  <span>{index + 1}</span>
+                  <div><strong>{priority.title}</strong><p>{priority.detail}</p></div>
+                  <ShieldCheck size={18} />
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState icon={BrainCircuit} title="No current recommendation" body="The planning engine only recommends actions supported by saved workspace data." />
+          )}
+        </section>
+        <section className="os-panel policy-panel">
+          <PanelTitle eyebrow="CONTROL" title="How the Chief of Staff behaves" />
+          <div className="policy-list">
+            <article><LockKeyhole size={18} /><div><strong>Approval first</strong><p>Client messages, scheduling changes, financial actions, and publishing remain gated.</p></div></article>
+            <article><Link2 size={18} /><div><strong>Evidence attached</strong><p>Recommendations point back to projects, appointments, approvals, or messages.</p></div></article>
+            <article><Activity size={18} /><div><strong>Every run recorded</strong><p>Purpose, engine, timing, confidence, and outcome are visible in AI Operations.</p></div></article>
           </div>
-          <p>
-            Operational metadata is always recorded. Sensitive prompt and client
-            content remains off unless explicitly enabled.
-          </p>
-          <div className="capture-options">
-            {["Metadata only", "Redacted summaries", "Full content"].map((option) => (
-              <button className={capture === option ? "active" : ""} onClick={() => setCapture(option)} key={option}>
-                <span>{capture === option ? "●" : "○"}</span>
-                <div><strong>{option}</strong><small>{option === "Metadata only" ? "Recommended · safest default" : option === "Redacted summaries" ? "Useful for quality review" : "Requires explicit workspace policy"}</small></div>
-              </button>
-            ))}
-          </div>
-          <div className="retention"><span>Retention</span><strong>90 days</strong></div>
-          <button className="outline-button wide">Open audit policy ↗</button>
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function OperationsView({ data }: { data: WorkspaceData }) {
+  const succeeded = data.aiRuns.filter((run) => run.status === "succeeded").length;
+  const successRate = data.aiRuns.length
+    ? Math.round((succeeded / data.aiRuns.length) * 100)
+    : 0;
+  return (
+    <section className="page-stack">
+      <div className="operations-banner">
+        <div>
+          <p className="eyebrow gold">GLASS BOX OBSERVABILITY</p>
+          <h2>Nothing the AI does is hidden.</h2>
+          <p>Runs and human actions are recorded from the live workspace. Prompt and client content stays off by default.</p>
+        </div>
+        <div className="capture-chip"><ShieldCheck size={18} /><span><small>CAPTURE POLICY</small><strong>Metadata only</strong></span></div>
+      </div>
+      <section className="stats-grid operations-stats">
+        <StatCard icon={Bot} label="RECORDED RUNS" value={data.aiRuns.length} detail="All time in this workspace" />
+        <StatCard icon={Gauge} label="SUCCESS RATE" value={`${successRate}%`} detail={data.aiRuns.length ? "Calculated from completed runs" : "Waiting for first run"} />
+        <StatCard icon={Clock3} label="LAST RUN" value={data.aiRuns[0] ? formatDate(data.aiRuns[0].createdAt, true) : "None"} detail="Most recent automation event" />
+        <StatCard icon={Activity} label="AUDIT EVENTS" value={data.auditEvents.length} detail="Recent owner, client, and system actions" />
+      </section>
+      <div className="operations-grid">
+        <section className="os-panel table-panel">
+          <PanelTitle eyebrow="AI RUN LEDGER" title="Model activity" />
+          {data.aiRuns.length ? (
+            <div className="data-table runs-table">
+              <div className="table-row table-head"><span>Agent</span><span>Purpose</span><span>Engine</span><span>Latency</span><span>Confidence</span><span>Status</span></div>
+              {data.aiRuns.map((run) => (
+                <div className="table-row" key={run.id}>
+                  <span><strong>{run.agentName}</strong><small>{formatDate(run.createdAt, true)}</small></span>
+                  <span>{run.purpose}</span>
+                  <span><strong>{run.provider}</strong><small>{run.model}</small></span>
+                  <span>{run.latencyMs == null ? "—" : `${run.latencyMs} ms`}</span>
+                  <span>{run.confidenceBps == null ? "—" : `${Math.round(run.confidenceBps / 100)}%`}</span>
+                  <span><b className={cn("status-dot", run.status !== "succeeded" && "warning")} /> {run.status}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState icon={Bot} title="No AI runs yet" body="Generate the first Chief of Staff briefing to create a fully observable run." />
+          )}
+        </section>
+        <aside className="os-panel audit-feed">
+          <PanelTitle eyebrow="AUDIT TRAIL" title="Recent changes" />
+          {data.auditEvents.length ? data.auditEvents.slice(0, 12).map((event) => (
+            <article key={event.id}>
+              <span className="audit-node" />
+              <div><strong>{event.action.replaceAll(".", " ")}</strong><p>{event.actorType} · {event.outcome}</p><small>{formatDate(event.occurredAt, true)}</small></div>
+            </article>
+          )) : (
+            <EmptyState icon={Activity} title="Audit trail is empty" body="Workspace actions will appear here automatically." />
+          )}
         </aside>
       </div>
     </section>
   );
 }
 
-export function LegacyApp({ firstName }: { firstName: string }) {
-  const [view, setView] = useState<View>("briefing");
-  const [paused, setPaused] = useState(false);
-  const [approvals, setApprovals] = useState(initialApprovals);
-  const [toast, setToast] = useState("");
-
-  const viewLabel = useMemo(
-    () => navItems.find((item) => item.id === view)?.label ?? "Legacy OS",
-    [view],
+function AnalyticsView({ data }: { data: WorkspaceData }) {
+  const phaseCounts = phases.map((phase) => ({
+    phase,
+    count: data.projects.filter((project) => project.lifecyclePhase === phase).length,
+  }));
+  const max = Math.max(1, ...phaseCounts.map((item) => item.count));
+  return (
+    <section className="page-stack">
+      {data.projects.length === 0 ? (
+        <section className="os-panel tall-empty">
+          <EmptyState icon={BarChart3} title="Analytics will grow with your studio" body="No fabricated charts are shown. Real trends appear after projects, appointments, approvals, and outcomes are recorded." />
+        </section>
+      ) : (
+        <>
+          <section className="stats-grid">
+            <StatCard icon={UsersRound} label="CLIENTS" value={data.clients.length} detail="Saved client records" />
+            <StatCard icon={FolderKanban} label="PROJECTS" value={data.projects.length} detail="Across every lifecycle phase" />
+            <StatCard icon={CalendarDays} label="APPOINTMENTS" value={data.appointments.length} detail="Recorded schedule commitments" />
+            <StatCard icon={ShieldCheck} label="APPROVALS" value={data.approvals.length} detail="Client and owner decisions" />
+          </section>
+          <section className="os-panel lifecycle-analytics">
+            <PanelTitle eyebrow="PROJECT DISTRIBUTION" title="Lifecycle activity" />
+            <div className="bar-chart">
+              {phaseCounts.map((item) => (
+                <div key={item.phase}>
+                  <span><i style={{ height: `${Math.max(4, (item.count / max) * 100)}%` }} /></span>
+                  <strong>{item.count}</strong>
+                  <small>{item.phase}</small>
+                </div>
+              ))}
+            </div>
+          </section>
+        </>
+      )}
+    </section>
   );
+}
 
-  function decide(id: string, state: ApprovalState) {
-    const approval = approvals.find((item) => item.id === id);
-    if (!approval) return;
-    setApprovals((items) =>
-      items.map((item) => (item.id === id ? { ...item, state } : item)),
+function ModuleView({
+  type,
+  data,
+}: {
+  type: "knowledge" | "content" | "finances";
+  data: WorkspaceData;
+}) {
+  const config = {
+    knowledge: {
+      icon: Library,
+      title: "Your knowledge library starts empty",
+      body: "Technique notes, lessons, references, and evidence will be captured from real projects—never prefilled with fictional work.",
+      labels: ["Techniques", "Lessons", "References", "Project notes"],
+    },
+    content: {
+      icon: ImageIcon,
+      title: "No content is queued",
+      body: "Completed sessions and healed outcomes can become reels, posts, captions, and portfolio entries after you add project media.",
+      labels: ["Select", "Draft", "Approve", "Schedule"],
+    },
+    finances: {
+      icon: CreditCard,
+      title: "No financial records yet",
+      body: "Deposits, invoices, and revenue will appear only after a real project has a financial event.",
+      labels: ["Deposits", "Invoices", "Payments", "Reports"],
+    },
+  }[type];
+  const Icon = config.icon;
+  return (
+    <section className="module-surface">
+      <div className="module-tabs">
+        {config.labels.map((label, index) => <button className={index === 0 ? "active" : ""} key={label}>{label}</button>)}
+      </div>
+      <section className="os-panel tall-empty">
+        <EmptyState icon={Icon} title={config.title} body={config.body} />
+        <div className="module-integrity"><ShieldCheck size={16} /> Empty by design · {data.projects.length} live projects available as future sources</div>
+      </section>
+    </section>
+  );
+}
+
+function SettingsView({
+  data,
+  notify,
+  refresh,
+}: {
+  data: WorkspaceData;
+  notify: (message: string, error?: boolean) => void;
+  refresh: () => void;
+}) {
+  async function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    try {
+      await api("/api/workspace", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          name: form.get("name"),
+          timezone: form.get("timezone"),
+          aiContentCapture: form.get("capture"),
+        }),
+      });
+      notify("Workspace settings saved.");
+      refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to save settings", true);
+    }
+  }
+  return (
+    <section className="settings-layout">
+      <div className="settings-tabs">
+        <button className="active"><Settings size={15} /> Workspace</button>
+        <button><Bot size={15} /> AI & Models</button>
+        <button><UsersRound size={15} /> Team</button>
+        <button><ShieldCheck size={15} /> Security</button>
+        <button><Bell size={15} /> Notifications</button>
+      </div>
+      <form className="settings-grid" onSubmit={save}>
+        <section className="os-panel setting-card">
+          <PanelTitle eyebrow="IDENTITY" title="Workspace" />
+          <Field label="Studio name" name="name" required>
+            <input name="name" defaultValue={data.workspace?.name || "Legacy Studio"} required />
+          </Field>
+          <Field label="Time zone" name="timezone">
+            <select name="timezone" defaultValue={data.workspace?.timezone || "America/Los_Angeles"}>
+              <option value="America/Los_Angeles">Pacific Time</option>
+              <option value="America/Denver">Mountain Time</option>
+              <option value="America/Chicago">Central Time</option>
+              <option value="America/New_York">Eastern Time</option>
+            </select>
+          </Field>
+        </section>
+        <section className="os-panel setting-card">
+          <PanelTitle eyebrow="AI PRIVACY" title="Content capture" />
+          <label className="radio-card">
+            <input type="radio" name="capture" value="metadata_only" defaultChecked={data.workspace?.aiContentCapture === "metadata_only"} />
+            <span><strong>Metadata only</strong><small>Purpose, model, timing, confidence, and outcome. Recommended.</small></span>
+          </label>
+          <label className="radio-card">
+            <input type="radio" name="capture" value="redacted_summaries" defaultChecked={data.workspace?.aiContentCapture === "redacted_summaries"} />
+            <span><strong>Redacted summaries</strong><small>Adds safe operational summaries for deeper quality review.</small></span>
+          </label>
+        </section>
+        <section className="os-panel setting-card health-card">
+          <PanelTitle eyebrow="SYSTEM" title="Environment health" />
+          {["Database", "File storage", "Audit trail", "Client portal"].map((item) => (
+            <p key={item}><CheckCircle2 size={16} /><span>{item}</span><strong>Operational</strong></p>
+          ))}
+        </section>
+        <button className="gold-button save-settings" type="submit"><Check size={16} /> Save changes</button>
+      </form>
+    </section>
+  );
+}
+
+function ClientForm({
+  onClose,
+  onSaved,
+  notify,
+}: {
+  onClose: () => void;
+  onSaved: () => void;
+  notify: (message: string, error?: boolean) => void;
+}) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    try {
+      await api("/api/clients", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(form)),
+      });
+      notify("Client added to the live workspace.");
+      onClose();
+      onSaved();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to add client", true);
+    }
+  }
+  return (
+    <Modal title="Add a client" eyebrow="CLIENT RECORD" onClose={onClose}>
+      <form className="modal-form" onSubmit={submit}>
+        <div className="field-row">
+          <Field label="First name" name="firstName" required />
+          <Field label="Last name" name="lastName" required />
+        </div>
+        <Field label="Email" name="email" type="email" placeholder="client@example.com" />
+        <Field label="Phone" name="phone" type="tel" />
+        <Field label="Preferred channel" name="preferredChannel">
+          <select name="preferredChannel"><option value="email">Email</option><option value="sms">SMS</option><option value="portal">Client portal</option></select>
+        </Field>
+        <Field label="Private studio notes" name="notes">
+          <textarea name="notes" placeholder="Preferences, context, or intake notes..." />
+        </Field>
+        <div className="modal-actions"><button className="text-button" type="button" onClick={onClose}>Cancel</button><button className="gold-button" type="submit">Create client</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+function ProjectForm({
+  clients,
+  onClose,
+  onSaved,
+  notify,
+}: {
+  clients: ClientRecord[];
+  onClose: () => void;
+  onSaved: () => void;
+  notify: (message: string, error?: boolean) => void;
+}) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      await api("/api/projects", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...values,
+          budgetMin: values.budgetMin ? Number(values.budgetMin) : undefined,
+          budgetMax: values.budgetMax ? Number(values.budgetMax) : undefined,
+        }),
+      });
+      notify("Project created and connected to the client.");
+      onClose();
+      onSaved();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to create project", true);
+    }
+  }
+  return (
+    <Modal title="Create a project" eyebrow="TATTOO LIFECYCLE" onClose={onClose}>
+      {clients.length === 0 ? (
+        <EmptyState icon={UsersRound} title="Add a client first" body="Every project belongs to a real client record." />
+      ) : (
+        <form className="modal-form" onSubmit={submit}>
+          <Field label="Client" name="clientId">
+            <select name="clientId" required>{clients.map((client) => <option value={client.id} key={client.id}>{fullName(client)}</option>)}</select>
+          </Field>
+          <Field label="Project title" name="title" required placeholder="e.g. Full sleeve — guardian" />
+          <div className="field-row">
+            <Field label="Placement" name="placement" placeholder="Left upper arm" />
+            <Field label="Target date" name="targetDate" type="date" />
+          </div>
+          <Field label="Style tags" name="style" placeholder="Black & grey, realism, ornamental" />
+          <Field label="Creative brief" name="summary"><textarea name="summary" placeholder="Concept, mood, non-negotiables, and creative direction..." /></Field>
+          <div className="field-row">
+            <Field label="Budget minimum" name="budgetMin" type="number" />
+            <Field label="Budget maximum" name="budgetMax" type="number" />
+          </div>
+          <div className="modal-actions"><button className="text-button" type="button" onClick={onClose}>Cancel</button><button className="gold-button" type="submit">Create project</button></div>
+        </form>
+      )}
+    </Modal>
+  );
+}
+
+function AppointmentForm({
+  data,
+  onClose,
+  onSaved,
+  notify,
+}: {
+  data: WorkspaceData;
+  onClose: () => void;
+  onSaved: () => void;
+  notify: (message: string, error?: boolean) => void;
+}) {
+  const [clientId, setClientId] = useState(data.clients[0]?.id || "");
+  const projects = data.projects.filter((item) => item.clientId === clientId);
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    try {
+      await api("/api/appointments", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(values),
+      });
+      notify("Appointment added to the live schedule.");
+      onClose();
+      onSaved();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to schedule", true);
+    }
+  }
+  return (
+    <Modal title="Schedule an appointment" eyebrow="CALENDAR" onClose={onClose}>
+      {data.clients.length === 0 ? (
+        <EmptyState icon={UsersRound} title="Add a client first" body="Appointments need a connected client." />
+      ) : (
+        <form className="modal-form" onSubmit={submit}>
+          <Field label="Client" name="clientId"><select name="clientId" value={clientId} onChange={(event) => setClientId(event.target.value)}>{data.clients.map((client) => <option value={client.id} key={client.id}>{fullName(client)}</option>)}</select></Field>
+          <Field label="Project" name="projectId"><select name="projectId"><option value="">No project</option>{projects.map((project) => <option value={project.id} key={project.id}>{project.title}</option>)}</select></Field>
+          <div className="field-row">
+            <Field label="Type" name="appointmentType"><select name="appointmentType"><option value="consultation">Consultation</option><option value="design review">Design review</option><option value="tattoo session">Tattoo session</option><option value="healing check">Healing check</option></select></Field>
+            <Field label="Start" name="startsAt" type="datetime-local" required />
+          </div>
+          <Field label="Location" name="location" placeholder="Studio, video call, or address" />
+          <Field label="Notes" name="notes"><textarea name="notes" /></Field>
+          <div className="modal-actions"><button className="text-button" type="button" onClick={onClose}>Cancel</button><button className="gold-button" type="submit">Schedule</button></div>
+        </form>
+      )}
+    </Modal>
+  );
+}
+
+function InviteModal({
+  client,
+  onClose,
+  notify,
+}: {
+  client: ClientRecord;
+  onClose: () => void;
+  notify: (message: string, error?: boolean) => void;
+}) {
+  const [invite, setInvite] = useState<{ portalUrl: string; expiresAt: string } | null>(null);
+  const [creating, setCreating] = useState(false);
+  async function create() {
+    setCreating(true);
+    try {
+      const result = await api<{ portalUrl: string; expiresAt: string }>("/api/portal/invitations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ clientId: client.id }),
+      });
+      setInvite(result);
+      notify("Secure client access created. Any previous link was revoked.");
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to create access", true);
+    } finally {
+      setCreating(false);
+    }
+  }
+  async function copy() {
+    if (!invite) return;
+    await navigator.clipboard.writeText(invite.portalUrl);
+    notify("Portal link copied.");
+  }
+  return (
+    <Modal title={`Client portal · ${fullName(client)}`} eyebrow="SECURE ACCESS" onClose={onClose}>
+      <div className="invite-content">
+        <div className="security-note"><LockKeyhole size={20} /><div><strong>One active link per client</strong><p>Creating a new link revokes the previous one. Access expires after 30 days and can be renewed.</p></div></div>
+        {invite ? (
+          <>
+            <label className="field"><span>Private portal link</span><div className="copy-field"><input readOnly value={invite.portalUrl} /><button onClick={copy}><Copy size={16} /></button></div></label>
+            <p className="expiry-note">Expires {formatDate(invite.expiresAt, true)}</p>
+            <div className="modal-actions"><button className="outline-button" onClick={() => window.open(invite.portalUrl, "_blank")}>Open portal</button><button className="gold-button" onClick={copy}><Copy size={15} /> Copy link</button></div>
+          </>
+        ) : (
+          <button className="gold-button wide" onClick={create} disabled={creating}>{creating ? "Creating secure access..." : "Create client portal link"}</button>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+function PortalAccess({
+  initialToken,
+  onExit,
+}: {
+  initialToken: string;
+  onExit: () => void;
+}) {
+  const [token, setToken] = useState(initialToken);
+  const [submitted, setSubmitted] = useState(initialToken);
+  if (submitted) {
+    return <ClientPortal token={submitted} onExit={onExit} onInvalid={() => setSubmitted("")} />;
+  }
+  return (
+    <main className="portal-login">
+      <div className="portal-login-panel">
+        <Brand />
+        <div className="secure-chip"><LockKeyhole size={14} /> SECURE CLIENT CONNECTION</div>
+        <section>
+          <p className="eyebrow gold">CLIENT PORTAL</p>
+          <h1>Your project, clearly connected.</h1>
+          <p>Use the private access link supplied by your artist. No password or account creation is required.</p>
+          <form onSubmit={(event) => { event.preventDefault(); if (token.trim()) setSubmitted(token.trim()); }}>
+            <label><span>ACCESS CODE</span><input value={token} onChange={(event) => setToken(event.target.value)} placeholder="Paste the code from your private link" /></label>
+            <button className="gold-button wide" type="submit">Open my project <ArrowRight size={16} /></button>
+          </form>
+          <button className="text-button" onClick={onExit}><ArrowLeft size={14} /> Return to owner workspace</button>
+        </section>
+        <footer><ShieldCheck size={16} /> Your project information is private and auditable.</footer>
+      </div>
+      <div className="portal-art">
+        <div className="portal-halo"><span>LL</span></div>
+        <div><p>BUILD YOUR LEGACY.</p><span>THE SYSTEM KEEPS EVERY DETAIL CONNECTED.</span></div>
+      </div>
+    </main>
+  );
+}
+
+function ClientPortal({
+  token,
+  onExit,
+  onInvalid,
+}: {
+  token: string;
+  onExit: () => void;
+  onInvalid: () => void;
+}) {
+  const [data, setData] = useState<PortalData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [tab, setTab] = useState<"overview" | "messages" | "approvals" | "files">("overview");
+  const [projectId, setProjectId] = useState("");
+  const [notice, setNotice] = useState("");
+
+  const load = useCallback(async () => {
+    try {
+      const result = await api<PortalData>(`/api/portal?token=${encodeURIComponent(token)}`);
+      setData(result);
+      setProjectId((current) => current || result.projects[0]?.id || "");
+      setError("");
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Unable to open portal");
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    let active = true;
+    void api<PortalData>(`/api/portal?token=${encodeURIComponent(token)}`)
+      .then((result) => {
+        if (!active) return;
+        setData(result);
+        setProjectId((current) => current || result.projects[0]?.id || "");
+        setError("");
+      })
+      .catch((loadError: unknown) => {
+        if (!active) return;
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to open portal",
+        );
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [token]);
+  const project = data?.projects.find((item) => item.id === projectId) || data?.projects[0];
+  const messages = data?.messages.filter((item) => !project || !item.projectId || item.projectId === project.id) || [];
+  const approvals = data?.approvals.filter((item) => !project || item.projectId === project.id) || [];
+  const files = data?.assets.filter((item) => !project || item.projectId === project.id) || [];
+
+  async function sendMessage(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    try {
+      await api("/api/portal", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, action: "message", projectId: project?.id, body: form.get("body") }),
+      });
+      event.currentTarget.reset();
+      setNotice("Message sent to your artist.");
+      await load();
+    } catch (sendError) {
+      setNotice(sendError instanceof Error ? sendError.message : "Unable to send");
+    }
+  }
+
+  async function decide(approvalId: string, decision: "approved" | "revision") {
+    try {
+      await api("/api/portal", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, action: "approval", approvalId, decision }),
+      });
+      setNotice(decision === "approved" ? "Approval recorded." : "Revision request recorded.");
+      await load();
+    } catch (decisionError) {
+      setNotice(decisionError instanceof Error ? decisionError.message : "Unable to record decision");
+    }
+  }
+
+  async function upload(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!project) return;
+    const form = new FormData(event.currentTarget);
+    form.set("projectId", project.id);
+    form.set("token", token);
+    try {
+      await api("/api/files", { method: "POST", body: form });
+      event.currentTarget.reset();
+      setNotice("File shared with your artist.");
+      await load();
+    } catch (uploadError) {
+      setNotice(uploadError instanceof Error ? uploadError.message : "Upload failed");
+    }
+  }
+
+  if (loading) return <div className="portal-loading"><Brand /><Spinner label="Opening your secure project" /></div>;
+  if (error || !data) {
+    return (
+      <main className="portal-error">
+        <Brand />
+        <AlertCircle size={35} />
+        <h1>We could not open this portal.</h1>
+        <p>{error}</p>
+        <button className="gold-button" onClick={onInvalid}>Try another access code</button>
+        <button className="text-button" onClick={onExit}>Return to owner workspace</button>
+      </main>
     );
-    setToast(
-      state === "approved"
-        ? "Approved. The decision and evidence were written to the audit trail."
-        : "Revision requested. The agent received your direction.",
-    );
-    window.setTimeout(() => setToast(""), 4200);
-    void fetch("/api/approvals", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        approvalId: id,
-        decision: state,
-        category: approval.type,
-        subject: approval.title,
-      }),
-    }).catch(() => undefined);
   }
 
   return (
-    <div className="os-shell">
-      <Sidebar
-        view={view}
-        onChange={setView}
-        paused={paused}
-        setPaused={setPaused}
-      />
-      <main className="main-workspace" aria-label={viewLabel}>
-        {view === "briefing" && (
-          <BriefingView
-            firstName={firstName}
-            approvals={approvals}
-            decide={decide}
-            onOpenOperations={() => setView("operations")}
-          />
+    <div className="client-shell">
+      <header className="client-header">
+        <Brand />
+        <nav>
+          {(["overview", "messages", "approvals", "files"] as const).map((item) => (
+            <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>{item}</button>
+          ))}
+        </nav>
+        <div className="client-account">
+          <span>{data.client.firstName.slice(0, 1)}{data.client.lastName.slice(0, 1)}</span>
+          <div><strong>{fullName(data.client)}</strong><small>Client portal</small></div>
+          <button className="icon-button" onClick={onExit} aria-label="Exit portal"><X size={17} /></button>
+        </div>
+      </header>
+
+      <main className="client-main">
+        <div className="client-topline">
+          <div>
+            <p className="eyebrow gold">WELCOME BACK</p>
+            <h1>{data.client.firstName}, your project is connected.</h1>
+            <p>Review progress, share files, approve work, and message your artist in one secure place.</p>
+          </div>
+          {data.projects.length > 1 && (
+            <label><span>PROJECT</span><select value={project?.id || ""} onChange={(event) => setProjectId(event.target.value)}>{data.projects.map((item) => <option value={item.id} key={item.id}>{item.title}</option>)}</select></label>
+          )}
+        </div>
+        {notice && <div className="portal-notice"><CheckCircle2 size={16} /> {notice}<button onClick={() => setNotice("")}><X size={14} /></button></div>}
+        {!project ? (
+          <section className="client-empty">
+            <div className="large-brain-orb"><HeartHandshake size={38} /></div>
+            <h2>Your portal is active.</h2>
+            <p>Your artist has not connected a project yet. You can return using this same private link.</p>
+          </section>
+        ) : (
+          <>
+            <section className="client-project-hero">
+              <div>
+                <span className="status-badge">{project.lifecyclePhase}</span>
+                <h2>{project.title}</h2>
+                <p>{project.placement || "Placement to be confirmed"}</p>
+              </div>
+              <div className="client-facts">
+                <div><small>NEXT STEP</small><strong>{project.nextAction || "Waiting for studio update"}</strong></div>
+                <div><small>TARGET DATE</small><strong>{formatDate(project.targetDate)}</strong></div>
+                <div><small>BUDGET RANGE</small><strong>{formatMoney(project.budgetMinCents)} – {formatMoney(project.budgetMaxCents)}</strong></div>
+              </div>
+              <Lifecycle phase={project.lifecyclePhase} />
+            </section>
+
+            {tab === "overview" && (
+              <div className="client-grid">
+                <section className="client-card project-summary">
+                  <PanelTitle eyebrow="PROJECT OVERVIEW" title="Creative direction" />
+                  <p>{project.summary || "Your artist has not added a public project summary yet."}</p>
+                  <div className="tag-row">
+                    {JSON.parse(project.styleTagsJson || "[]").map((tag: string) => <span key={tag}>{tag}</span>)}
+                  </div>
+                </section>
+                <section className="client-card">
+                  <PanelTitle eyebrow="UPCOMING" title="Appointments" />
+                  {data.appointments.filter((item) => item.projectId === project.id).length ? data.appointments.filter((item) => item.projectId === project.id).map((item) => (
+                    <article className="client-appointment" key={item.id}><CalendarDays size={19} /><div><strong>{item.appointmentType}</strong><p>{formatDate(item.startsAt, true)}</p><small>{item.location || "Location to be confirmed"}</small></div></article>
+                  )) : <EmptyState icon={CalendarDays} title="No appointment scheduled" body="Your artist will add confirmed dates here." />}
+                </section>
+                <section className="client-card">
+                  <PanelTitle eyebrow="LATEST UPDATES" title="Project timeline" />
+                  {data.updates.filter((item) => item.projectId === project.id).length ? data.updates.filter((item) => item.projectId === project.id).map((item) => (
+                    <article className="update-item" key={item.id}><span /><div><strong>{item.title}</strong><p>{item.body}</p><small>{formatDate(item.createdAt, true)}</small></div></article>
+                  )) : <EmptyState icon={Activity} title="No updates posted" body="Project milestones and studio updates will appear here." />}
+                </section>
+                <section className="client-card quick-client-actions">
+                  <PanelTitle eyebrow="QUICK ACTIONS" title="Keep things moving" />
+                  <button onClick={() => setTab("messages")}><MessageSquareText size={20} /><span><strong>Message artist</strong><small>Ask a question or add context</small></span><ArrowRight size={15} /></button>
+                  <button onClick={() => setTab("files")}><Upload size={20} /><span><strong>Share reference</strong><small>Upload an image or document</small></span><ArrowRight size={15} /></button>
+                  <button onClick={() => setTab("approvals")}><ShieldCheck size={20} /><span><strong>Review approvals</strong><small>{approvals.filter((item) => item.status === "pending").length} waiting</small></span><ArrowRight size={15} /></button>
+                </section>
+              </div>
+            )}
+
+            {tab === "messages" && (
+              <section className="client-card client-messages">
+                <PanelTitle eyebrow="SECURE CONVERSATION" title="Messages with your artist" />
+                <div className="message-thread">
+                  {messages.length ? messages.map((message) => (
+                    <article className={cn("message-bubble", message.senderType === "client" && "owner")} key={message.id}><small>{message.senderType === "client" ? "You" : "Studio"} · {formatDate(message.createdAt, true)}</small><p>{message.body}</p></article>
+                  )) : <EmptyState icon={MessageSquareText} title="No messages yet" body="Start a direct, project-connected conversation." />}
+                </div>
+                <form className="message-composer" onSubmit={sendMessage}><textarea name="body" required placeholder="Write a message to your artist..." /><button className="gold-button"><Send size={16} /> Send</button></form>
+              </section>
+            )}
+
+            {tab === "approvals" && (
+              <section className="client-card">
+                <PanelTitle eyebrow="YOUR DECISIONS" title="Approvals" />
+                {approvals.length ? <div className="portal-approval-list">{approvals.map((approval) => (
+                  <article key={approval.id}>
+                    <span className={cn("approval-status", approval.status)}>{approval.status}</span>
+                    <h3>{approval.subject}</h3>
+                    <p>{approval.summary}</p>
+                    <small>Requested {formatDate(approval.createdAt, true)}</small>
+                    {approval.status === "pending" && <div><button className="gold-button" onClick={() => decide(approval.id, "approved")}><Check size={15} /> Approve</button><button className="outline-button" onClick={() => decide(approval.id, "revision")}><MessageSquareText size={15} /> Request revision</button></div>}
+                  </article>
+                ))}</div> : <EmptyState icon={ShieldCheck} title="Nothing needs approval" body="Designs and other gated decisions will appear here." />}
+              </section>
+            )}
+
+            {tab === "files" && (
+              <div className="client-files-layout">
+                <section className="client-card">
+                  <PanelTitle eyebrow="PROJECT FILES" title="Shared media" />
+                  {files.length ? <div className="asset-list">{files.map((asset) => (
+                    <a href={`/api/files?id=${asset.id}&token=${encodeURIComponent(token)}`} target="_blank" key={asset.id}><span><FileText size={18} /></span><div><strong>{asset.originalName}</strong><small>{formatBytes(asset.byteSize)} · {formatDate(asset.createdAt)}</small></div><ArrowRight size={14} /></a>
+                  ))}</div> : <EmptyState icon={FileText} title="No files shared yet" body="References and project documents will stay connected here." />}
+                </section>
+                <form className="client-card portal-upload" onSubmit={upload}><Upload size={28} /><h3>Share a reference</h3><p>Upload an image or document up to 25 MB.</p><input type="file" name="file" required /><button className="gold-button" type="submit"><Upload size={15} /> Upload file</button></form>
+              </div>
+            )}
+          </>
         )}
-        {view === "projects" && <ProjectsView />}
-        {view === "clients" && <ClientsView />}
-        {view === "calendar" && <WorkspaceModuleView module="calendar" />}
-        {view === "inbox" && <WorkspaceModuleView module="inbox" />}
-        {view === "knowledge" && <KnowledgeView />}
-        {view === "design" && <DesignView />}
-        {view === "content" && <ContentView />}
-        {view === "finances" && <WorkspaceModuleView module="finances" />}
-        {view === "analytics" && <AnalyticsView />}
-        {view === "operations" && <OperationsView />}
-        {view === "library" && <ScreenLibraryView onNavigate={setView} />}
-        {view === "settings" && <WorkspaceModuleView module="settings" />}
-        <footer className="workspace-footer">
-          <span>LEGACY OS · FOUNDATION PREVIEW</span>
-          <span>Evidence over guesses · Human judgment remains final</span>
-        </footer>
       </main>
-      {view === "briefing" && (
-        <AssistantRail
-          firstName={firstName}
-          onOpenOperations={() => setView("operations")}
-        />
-      )}
-      {toast && <div className="toast" role="status">{toast}</div>}
+      <footer className="client-footer"><Brand compact /><span><ShieldCheck size={15} /> Private project access · Expires {formatDate(data.access.expiresAt)}</span></footer>
+    </div>
+  );
+}
+
+export function LegacyApp({ firstName }: { firstName: string }) {
+  const [mode, setMode] = useState<"owner" | "portal">("owner");
+  const [portalToken, setPortalToken] = useState("");
+  const [view, setView] = useState<OwnerView>("dashboard");
+  const [data, setData] = useState<WorkspaceData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [modal, setModal] = useState<"client" | "project" | "appointment" | null>(null);
+  const [inviteClient, setInviteClient] = useState<ClientRecord | null>(null);
+  const [toast, setToast] = useState<{ message: string; error: boolean } | null>(null);
+  const [briefing, setBriefing] = useState<Briefing | null>(null);
+  const [generating, setGenerating] = useState(false);
+
+  const notify = useCallback((message: string, isError = false) => {
+    setToast({ message, error: isError });
+    window.setTimeout(() => setToast(null), 4200);
+  }, []);
+
+  const load = useCallback(async () => {
+    try {
+      const result = await api<WorkspaceData>("/api/workspace");
+      setData(result);
+      setError("");
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Unable to load Legacy OS");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      const token = new URLSearchParams(window.location.search).get("portal");
+      if (token) {
+        setPortalToken(token);
+        setMode("portal");
+      }
+      void load();
+    }, 0);
+    return () => window.clearTimeout(handle);
+  }, [load]);
+
+  async function generateBriefing() {
+    setGenerating(true);
+    try {
+      const result = await api<Briefing>("/api/briefing", { method: "POST" });
+      setBriefing(result);
+      notify("Daily briefing generated and recorded in AI Operations.");
+      await load();
+    } catch (briefError) {
+      notify(briefError instanceof Error ? briefError.message : "Unable to prepare briefing", true);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  const firstClient = data?.clients[0];
+  function openNew() {
+    if (view === "clients") setModal("client");
+    else if (view === "calendar") setModal("appointment");
+    else if (!firstClient) setModal("client");
+    else setModal("project");
+  }
+
+  const actualFirstName = useMemo(() => {
+    const name = data?.owner?.displayName || firstName || "Owner";
+    return name.split(" ")[0];
+  }, [data?.owner?.displayName, firstName]);
+
+  if (mode === "portal") {
+    return (
+      <PortalAccess
+        initialToken={portalToken}
+        onExit={() => {
+          window.history.replaceState({}, "", window.location.pathname);
+          setPortalToken("");
+          setMode("owner");
+        }}
+      />
+    );
+  }
+
+  if (loading) return <div className="full-loading"><Brand /><Spinner /></div>;
+  if (error || !data) {
+    return (
+      <main className="fatal-state">
+        <Brand />
+        <AlertCircle size={34} />
+        <h1>Legacy OS could not load the workspace.</h1>
+        <p>{error}</p>
+        <button className="gold-button" onClick={() => { setLoading(true); void load(); }}>Try again</button>
+      </main>
+    );
+  }
+
+  return (
+    <div className="owner-shell">
+      <OwnerSidebar
+        view={view}
+        onView={setView}
+        owner={data.owner}
+        workspace={data.workspace}
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onPortal={() => setMode("portal")}
+      />
+      <main className="owner-main">
+        <OwnerHeader view={view} onMenu={() => setMenuOpen(true)} onNew={openNew} />
+        <div className="owner-content">
+          {view === "dashboard" && <Dashboard data={data} firstName={actualFirstName} briefing={briefing} generating={generating} onGenerate={generateBriefing} onClient={() => setModal("client")} onProject={() => setModal("project")} onAppointment={() => setModal("appointment")} onView={setView} />}
+          {view === "projects" && <ProjectsView data={data} onCreate={() => setModal("project")} />}
+          {view === "clients" && <ClientsView data={data} onCreate={() => setModal("client")} onInvite={setInviteClient} />}
+          {view === "calendar" && <CalendarView data={data} onCreate={() => setModal("appointment")} />}
+          {view === "inbox" && <InboxView data={data} onSent={load} notify={notify} />}
+          {view === "design" && <DesignStudio data={data} refresh={load} notify={notify} />}
+          {view === "chief" && <ChiefView data={data} briefing={briefing} generating={generating} onGenerate={generateBriefing} />}
+          {view === "operations" && <OperationsView data={data} />}
+          {view === "analytics" && <AnalyticsView data={data} />}
+          {(view === "knowledge" || view === "content" || view === "finances") && <ModuleView type={view} data={data} />}
+          {view === "settings" && <SettingsView data={data} notify={notify} refresh={load} />}
+        </div>
+        <footer className="owner-footer"><span>LEGACY OS</span><p>Built for creators. Designed to last.</p><span><i /> ALL SYSTEMS OPERATIONAL</span></footer>
+      </main>
+
+      {modal === "client" && <ClientForm onClose={() => setModal(null)} onSaved={load} notify={notify} />}
+      {modal === "project" && <ProjectForm clients={data.clients} onClose={() => setModal(null)} onSaved={load} notify={notify} />}
+      {modal === "appointment" && <AppointmentForm data={data} onClose={() => setModal(null)} onSaved={load} notify={notify} />}
+      {inviteClient && <InviteModal client={inviteClient} onClose={() => setInviteClient(null)} notify={notify} />}
+      {toast && <div className={cn("toast", toast.error && "error")} role="status">{toast.error ? <AlertCircle size={17} /> : <CheckCircle2 size={17} />}{toast.message}</div>}
     </div>
   );
 }

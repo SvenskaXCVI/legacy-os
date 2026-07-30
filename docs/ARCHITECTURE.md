@@ -7,7 +7,9 @@ Scope: single-owner Legacy Lines workspace, designed to evolve into a multi-arti
 
 Legacy OS is a continuous intelligence system around creative work. Projects are the operational spine; the knowledge graph is the memory; the Chief of Staff is the prioritization interface; approval policies keep the human responsible.
 
-The current release is an executable foundation, not a claim that external providers are connected. The interface uses seeded demonstration data while the persistent data model, migration, audit routes, and storage bindings are real.
+The current release is an executable owner workspace and client portal. Product records are empty by default and are stored in D1; project media is stored in R2. The release does not claim that external calendars, payment processors, messaging providers, social networks, or generative-model providers are connected.
+
+The Chief of Staff currently uses a transparent policy planner over saved approvals, appointments, and project next actions. This creates observable `ai_runs`, `ai_events`, `usage_events`, and `audit_events` without presenting a language-model response as connected before provider credentials and policies exist.
 
 ## Runtime shape
 

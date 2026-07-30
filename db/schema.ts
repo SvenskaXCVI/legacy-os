@@ -423,3 +423,107 @@ export const notifications = sqliteTable(
     ),
   ],
 );
+
+export const portalInvitations = sqliteTable(
+  "portal_invitations",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => clients.id),
+    tokenHash: text("token_hash").notNull(),
+    tokenHint: text("token_hint").notNull(),
+    status: text("status").notNull().default("active"),
+    expiresAt: text("expires_at").notNull(),
+    lastUsedAt: text("last_used_at"),
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at"),
+  },
+  (table) => [
+    uniqueIndex("portal_invitations_token_uq").on(table.tokenHash),
+    index("portal_invitations_client_idx").on(table.clientId, table.status),
+  ],
+);
+
+export const appointments = sqliteTable(
+  "appointments",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    clientId: text("client_id").references(() => clients.id),
+    projectId: text("project_id").references(() => projects.id),
+    appointmentType: text("appointment_type").notNull().default("session"),
+    startsAt: text("starts_at").notNull(),
+    endsAt: text("ends_at"),
+    status: text("status").notNull().default("scheduled"),
+    location: text("location"),
+    notes: text("notes"),
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    index("appointments_workspace_start_idx").on(
+      table.workspaceId,
+      table.startsAt,
+    ),
+    index("appointments_client_idx").on(table.clientId),
+    index("appointments_project_idx").on(table.projectId),
+  ],
+);
+
+export const clientMessages = sqliteTable(
+  "client_messages",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => clients.id),
+    projectId: text("project_id").references(() => projects.id),
+    senderType: text("sender_type").notNull(),
+    senderId: text("sender_id"),
+    body: text("body").notNull(),
+    status: text("status").notNull().default("sent"),
+    readAt: text("read_at"),
+    createdAt: timestamp("created_at"),
+  },
+  (table) => [
+    index("client_messages_client_created_idx").on(
+      table.clientId,
+      table.createdAt,
+    ),
+    index("client_messages_project_idx").on(table.projectId),
+  ],
+);
+
+export const projectUpdates = sqliteTable(
+  "project_updates",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    visibility: text("visibility").notNull().default("client"),
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at"),
+  },
+  (table) => [
+    index("project_updates_project_created_idx").on(
+      table.projectId,
+      table.createdAt,
+    ),
+  ],
+);
