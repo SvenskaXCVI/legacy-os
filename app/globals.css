@@ -2136,7 +2136,7 @@ button:disabled {
 
 .learning-footer {
   display: grid;
-  grid-template-columns: repeat(3, 1fr) auto;
+  grid-template-columns: repeat(4, 1fr) auto auto;
   align-items: center;
   gap: 12px;
   border-top: 1px solid var(--line);

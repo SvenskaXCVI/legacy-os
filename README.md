@@ -31,6 +31,7 @@ The workspace starts without demonstration clients, projects, appointments, mess
 - Discover cross-project patterns using explicit evidence thresholds.
 - Generate recommendations with confidence, risk, autonomy, and outcome plans.
 - Grant or revoke client-controlled Instagram observation permissions.
+- Synchronize consented Instagram evidence without retaining raw captions.
 - Create verified owner/client accounts with TOTP MFA when Supabase is configured.
 - Inspect AI runs and owner/client/system actions in the observability ledger.
 

@@ -69,3 +69,4 @@ Human override is final and is written to the audit trail.
 
 Instagram is a revocable client-authorized data connection, not a Legacy OS login provider. The client grants named scopes and can revoke them at any time. Tokens are encrypted, raw captions are not retained by default, and synchronization stops when consent is revoked. The current connection is limited to professional Business or Creator accounts supported by Meta’s Instagram Login API.
 
+The social observer runs an initial read-only synchronization after connection, refreshes before a daily briefing, and can be refreshed from the Intelligence workspace. It stores permitted media type, time, aggregate engagement, a hashed permalink, and a conservative project-match score. A caption is used transiently for matching and discarded; the database records only matched terms and whether the confidence threshold was crossed. New observations trigger a learning cycle.

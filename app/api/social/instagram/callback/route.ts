@@ -7,6 +7,7 @@ import {
   socialConnections,
 } from "../../../../../db/schema";
 import { jsonError, makeId, WORKSPACE_ID } from "../../../_lib";
+import { syncSocialConnections } from "../../../../../lib/social-sync";
 
 type StatePayload = {
   clientId: string;
@@ -217,6 +218,20 @@ export async function GET(request: Request) {
         occurredAt: now,
       }),
     ]);
+    const connected = await db
+      .select({ id: socialConnections.id })
+      .from(socialConnections)
+      .where(
+        and(
+          eq(socialConnections.workspaceId, WORKSPACE_ID),
+          eq(socialConnections.platform, "instagram"),
+          eq(socialConnections.externalAccountId, externalAccountId),
+        ),
+      )
+      .get();
+    if (connected) {
+      await syncSocialConnections(WORKSPACE_ID, connected.id);
+    }
 
     return Response.redirect(
       `${url.origin}/?social=connected`,
@@ -231,4 +246,3 @@ export async function GET(request: Request) {
     );
   }
 }
-

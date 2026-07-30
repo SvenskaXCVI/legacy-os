@@ -10,12 +10,18 @@ import {
   usageEvents,
 } from "../../../db/schema";
 import { actorFrom, jsonError, makeId, requireOwner, WORKSPACE_ID } from "../_lib";
+import { syncSocialConnections } from "../../../lib/social-sync";
 
 export async function POST(request: Request) {
   try {
     await requireOwner(request);
     const db = getDb();
     const startedAt = new Date();
+    const socialSync = await syncSocialConnections(WORKSPACE_ID).catch(() => ({
+      connectionsSynced: 0,
+      mediaObserved: 0,
+      projectMatches: 0,
+    }));
     const [projectRows, appointmentRows, approvalRows] = await Promise.all([
       db
         .select()
@@ -98,6 +104,7 @@ export async function POST(request: Request) {
           projects: projectRows.length,
           appointments: upcoming.length,
           pendingApprovals: pendingApprovals.length,
+          socialSync,
         }),
         confidenceBps: 10000,
         status: "succeeded",

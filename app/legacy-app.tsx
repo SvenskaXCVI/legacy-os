@@ -1539,6 +1539,7 @@ function ChiefView({
     null,
   );
   const [learning, setLearning] = useState(false);
+  const [syncingSocial, setSyncingSocial] = useState(false);
   const [intelligenceError, setIntelligenceError] = useState("");
 
   const loadIntelligence = useCallback(async () => {
@@ -1576,6 +1577,26 @@ function ChiefView({
       );
     } finally {
       setLearning(false);
+    }
+  }
+
+  async function syncSocial() {
+    setSyncingSocial(true);
+    try {
+      await api("/api/social/sync", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      await loadIntelligence();
+    } catch (syncError) {
+      setIntelligenceError(
+        syncError instanceof Error
+          ? syncError.message
+          : "Unable to synchronize social evidence",
+      );
+    } finally {
+      setSyncingSocial(false);
     }
   }
 
@@ -1679,6 +1700,18 @@ function ChiefView({
             <strong>{intelligence?.learningCycles.length ?? 0}</strong>
             <span>learning cycles recorded</span>
           </div>
+          <div>
+            <strong>{intelligence?.socialConnections.filter((item) => item.status === "connected").length ?? 0}</strong>
+            <span>consented social connections</span>
+          </div>
+          <button
+            className="outline-button"
+            onClick={syncSocial}
+            disabled={syncingSocial}
+          >
+            <Link2 size={15} />
+            {syncingSocial ? "Synchronizing…" : "Sync social evidence"}
+          </button>
           <button
             className="outline-button"
             onClick={learnNow}
