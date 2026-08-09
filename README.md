@@ -1,78 +1,101 @@
 # Legacy OS
 
-Legacy OS is an evidence-led operating system for creative work. This foundation release translates the founder specifications into an interactive product shell and an observable backend.
+Legacy OS is a secure, evidence-led operating system for tattoo studios and
+creative professionals. It connects owner operations, a client portal,
+project workflows, durable knowledge, and observable AI automation in one
+source of truth.
 
-## Included product surfaces
+The workspace starts clean: no demonstration clients, projects, messages,
+appointments, approvals, analytics, or financial records are inserted.
 
-- Daily Chief of Staff briefing
-- Human approval queue with decision feedback
-- Project and client workspaces
-- Knowledge search and relationship lens
-- Design Studio
-- Content workflow
-- Calendar, inbox, and finance foundations
-- Comparative analytics and opportunity discovery
-- AI Operations ledger for runs, usage, cost, latency, confidence, approvals, and audit events
-- Screen Library covering all 34 planned surfaces
-- Settings and privacy controls
+## What works
 
-The workspace starts without demonstration clients, projects, appointments, messages, approvals, or analytics. Owners create durable records through the product, and the secure client portal reads and writes the same D1-backed source of truth.
+- Separate owner and client experiences with server-enforced authorization.
+- Email verification, TOTP MFA, and Google/Apple OAuth through optional
+  Supabase configuration.
+- Expiring, revocable, hashed client access links and invitation-bound client
+  account creation.
+- Client, project, appointment, message, approval, and private R2 file flows.
+- Project lifecycle from consult through design, approval, session, healing,
+  and completion.
+- A daily Chief of Staff briefing built from live workspace state.
+- Continuous event capture, workflow notifications, queued learning cycles,
+  cross-project pattern discovery, evidence-backed recommendations, confidence
+  scoring, outcomes, and an owner-controlled automation switch.
+- AI Operations records runs, tool calls, usage, confidence, latency, held
+  actions, and audit events. Legacy OS owns memory, workflow, evidence, and
+  policy while model providers remain replaceable.
+- Client-controlled Instagram observation consent and an optional professional
+  account connection. Raw captions are not retained by default.
+- Progressive web app installation without offline-caching private pages or API
+  responses.
 
-## Operational flows
+## Automation boundary
 
-- Create clients and tattoo projects.
-- Schedule project-linked appointments.
-- Exchange owner/client messages through one shared conversation history.
-- Generate revocable, expiring client portal access.
-- Upload and retrieve project media through R2.
-- Request and record client approvals.
-- Generate a deterministic daily briefing from live workspace state.
-- Capture workflow observations and learn from each completed project.
-- Discover cross-project patterns using explicit evidence thresholds.
-- Generate recommendations with confidence, risk, autonomy, and outcome plans.
-- Grant or revoke client-controlled Instagram observation permissions.
-- Synchronize consented Instagram evidence without retaining raw captions.
-- Create verified owner/client accounts with TOTP MFA when Supabase is configured.
-- Inspect AI runs and owner/client/system actions in the observability ledger.
+Safe internal and reversible organization can run automatically. Client
+messages, scheduling changes, publishing, payments, permission changes,
+destructive operations, and health-sensitive decisions always require human
+approval. Pausing automations stops job processing without deleting evidence or
+the queue.
 
-The deployed Sites project remains private. Client portal links are fully functional for authenticated viewers; opening portal access to external clients requires a deliberate hosting access-policy change.
+## Runtime
 
-## Backend foundation
+- OpenAI Sites / Cloudflare Worker application runtime
+- D1 relational database
+- R2 private media storage
+- Drizzle migrations
+- Optional Supabase Auth
+- Optional OpenAI-compatible model adapter
+- Optional Instagram professional-account adapter
 
-- Cloudflare Worker application runtime
-- D1 relational schema with 27 implemented tables
-- R2 media-storage binding reserved as `MEDIA`
-- Generated database migration
-- Health, telemetry, and approval endpoints
-- Platform-authenticated user attribution
-- Metadata-only AI content capture by default
-- Append-only audit model
+## Local development
+
+Use Node.js 22.13 or later.
+
+```bash
+npm ci
+npm run dev
+```
+
+Run the full validation gate:
+
+```bash
+npm run check
+```
+
+For an existing local Sites D1 instance:
+
+```bash
+npm run db:local:migrate
+```
+
+## GitHub and deployment
+
+The repository includes a least-privilege GitHub Actions workflow, a proprietary
+license notice, security policy, contribution guide, environment template, and
+alpha checklist. See [Deployment and sharing](docs/DEPLOYMENT.md) before making
+the hosted application externally accessible.
+
+The current private Sites boundary is suitable for owner setup. External client
+account testing requires configured Supabase credentials and `OWNER_EMAILS`
+before the hosting access policy is changed. Provider secrets must be configured
+in the hosting environment and must never be committed.
 
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md)
 - [API contract](docs/API.md)
 - [Entity relationship diagram](docs/ERD.md)
-- [Operations runbook](docs/OPERATIONS_RUNBOOK.md)
-- [Intelligence and autonomy](docs/INTELLIGENCE_AND_AUTONOMY.md)
 - [Identity and access](docs/IDENTITY_AND_ACCESS.md)
+- [Intelligence and autonomy](docs/INTELLIGENCE_AND_AUTONOMY.md)
+- [Operations runbook](docs/OPERATIONS_RUNBOOK.md)
+- [Deployment and sharing](docs/DEPLOYMENT.md)
+- [Alpha testing checklist](docs/ALPHA_TESTING.md)
 
-## Local development
+## Real-world boundary
 
-Requirements: Node.js 22.13 or later.
-
-```bash
-npm install
-npm run dev
-```
-
-Validation:
-
-```bash
-npm run build
-npm run test
-```
-
-## Important boundary
-
-This release provides the product, persistence, policy, identity adapter, consent, and observability foundations. It never silently connects email, calendar, social, payment, or AI-provider accounts. Each integration requires explicit provider configuration and remains behind the approval and audit contracts.
+The codebase is alpha-ready only after the validation suite passes. An external
+alpha is operationally ready only after real identity, email, MFA, backup, and
+provider settings are configured and the alpha checklist is completed with
+synthetic users. Legacy OS never fabricates integration credentials or silently
+connects email, calendar, social, payment, or model-provider accounts.

@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { getDb } from "../../../db";
 import { assets, auditEvents, projects } from "../../../db/schema";
+import { captureAutomationSignal } from "../../../lib/automation-engine";
 import {
   actorFrom,
   jsonError,
@@ -30,6 +31,10 @@ export async function POST(request: Request) {
     if (file.size > 25 * 1024 * 1024) {
       return jsonError("Files must be 25 MB or smaller", 413);
     }
+    const extension = file.name.split(".").pop()?.toLowerCase() || "";
+    if (["exe", "dll", "js", "mjs", "html", "htm", "svg", "bat", "cmd"].includes(extension)) {
+      return jsonError("This file type is not permitted", 415);
+    }
 
     const clientAccess = await resolveClientAccess(request, token || null);
     if (!clientAccess) await requireOwner(request);
@@ -37,7 +42,12 @@ export async function POST(request: Request) {
     const project = await db
       .select({ id: projects.id, clientId: projects.clientId })
       .from(projects)
-      .where(eq(projects.id, projectId))
+      .where(
+        and(
+          eq(projects.id, projectId),
+          eq(projects.workspaceId, WORKSPACE_ID),
+        ),
+      )
       .get();
     if (!project) return jsonError("Project not found", 404);
     if (clientAccess && project.clientId !== clientAccess.clientId) {
@@ -92,6 +102,28 @@ export async function POST(request: Request) {
         occurredAt: now,
       }),
     ]);
+    await captureAutomationSignal(
+      {
+        workspaceId: WORKSPACE_ID,
+        eventType: "asset_uploaded",
+        sourceType: "asset",
+        sourceId: assetId,
+        projectId,
+        clientId: project.clientId,
+        category: "knowledge",
+        signalKey: `asset.uploaded:${file.type || "application/octet-stream"}`,
+        value: {
+          assetId,
+          mediaType: file.type.startsWith("image/") ? "image" : "file",
+          mimeType: file.type || "application/octet-stream",
+          byteSize: file.size,
+          sourceType: clientAccess ? "client_upload" : "owner_upload",
+          integrityVerified: true,
+        },
+        priority: 70,
+      },
+      db,
+    );
 
     return Response.json(
       { id: assetId, name: file.name, status: "stored" },

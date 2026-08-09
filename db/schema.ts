@@ -17,6 +17,10 @@ export const workspaces = sqliteTable("workspaces", {
   timezone: text("timezone").notNull().default("America/Los_Angeles"),
   aiContentCapture: text("ai_content_capture").notNull().default("metadata_only"),
   retentionDays: integer("retention_days").notNull().default(90),
+  automationStatus: text("automation_status").notNull().default("active"),
+  automationMode: text("automation_mode").notNull().default("safe_auto"),
+  lastAutomationAt: text("last_automation_at"),
+  lastBriefingAt: text("last_briefing_at"),
   createdAt: timestamp("created_at"),
   updatedAt: timestamp("updated_at"),
 });

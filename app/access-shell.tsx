@@ -23,6 +23,8 @@ type PublicAuthConfig = {
   apple: boolean;
   instagramIdentity: false;
   instagramConnection: boolean;
+  ownerAllowlistConfigured: boolean;
+  externalClientReady: boolean;
   supabaseUrl: string | null;
   supabaseAnonKey: string | null;
 };
@@ -342,6 +344,15 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
     } finally {
       localStorage.removeItem("legacy_access_token");
       sessionStorage.removeItem("legacy_client_invitation");
+      const cleanUrl = new URL(window.location.href);
+      if (cleanUrl.searchParams.has("portal")) {
+        cleanUrl.searchParams.delete("portal");
+        window.history.replaceState(
+          {},
+          "",
+          `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`,
+        );
+      }
       setUser(null);
       setFactorId("");
       setChallengeId("");

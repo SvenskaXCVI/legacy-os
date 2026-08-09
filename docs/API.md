@@ -1,7 +1,7 @@
 # Legacy OS API Contract
 
 Base path: `/api`  
-Current version: operational v0.2
+Current version: alpha v0.3
 Encoding: JSON UTF-8
 
 ## Identity
@@ -13,16 +13,22 @@ authorization boundary for the deployed application.
 
 ## System
 
-- `GET /api/health` returns application, database, and telemetry health.
+- `GET /api/health` returns database, storage, identity, automation, model, and
+  social-integration readiness without exposing credentials.
 - `GET /api/telemetry?hours=24` returns run, usage, and audit summaries.
 - `POST /api/telemetry` records low-level user or agent audit metadata.
 - `GET|PATCH /api/workspace` loads the owner workspace or updates studio and
   privacy settings.
+- `GET /api/automations` returns the owner-only queue, status, and generated
+  notifications.
+- `POST /api/automations` runs, pauses, or resumes internal processing and marks
+  a notification read or dismissed.
 
 ## Owner workflows
 
 - `POST /api/clients` creates a persistent client.
-- `POST /api/projects` creates a project connected to a client.
+- `POST|PATCH /api/projects` creates a project or advances its lifecycle and
+  learning state.
 - `POST /api/appointments` schedules a client/project appointment.
 - `POST /api/messages` writes an owner message into the shared conversation.
 - `POST /api/approvals` creates a client-facing approval or records an owner
@@ -39,7 +45,8 @@ authorization boundary for the deployed application.
 - `POST /api/portal` sends a client message or records an approval/revision
   decision.
 - `GET|POST /api/files` uploads project media to R2 or retrieves an authorized
-  asset. Uploads are limited to 25 MB and receive a SHA-256 integrity hash.
+  asset. Uploads are limited to 25 MB, reject executable/active-content
+  formats, and receive a SHA-256 integrity hash.
 
 ## Approval decisions
 
@@ -62,5 +69,7 @@ portal token hashes, or client-sensitive content.
 
 ## Planned routes
 
-Future routes will add project transitions, tattoo-session capture, healing,
-payments, content publishing, full-text search, and knowledge graph editing.
+Future routes will add dedicated tattoo-session capture, structured healing,
+payments, content publishing, full-text search, and direct knowledge graph
+editing. Their lifecycle checkpoints already generate internal workflow
+guidance but do not fabricate domain records that have not been entered.

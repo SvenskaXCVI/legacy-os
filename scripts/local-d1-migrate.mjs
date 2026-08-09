@@ -34,11 +34,10 @@ if (!selected) {
 
 const database = new DatabaseSync(selected);
 database.exec("pragma foreign_keys = on");
-const migrations = [
-  "drizzle/0000_past_alice.sql",
-  "drizzle/0001_free_runaways.sql",
-  "drizzle/0002_chubby_bruce_banner.sql",
-];
+const migrations = (await readdir(path.resolve("drizzle")))
+  .filter((name) => /^\d+.*\.sql$/.test(name))
+  .sort((left, right) => left.localeCompare(right))
+  .map((name) => path.join("drizzle", name));
 
 for (const migration of migrations) {
   const marker = `local:${path.basename(migration)}`;

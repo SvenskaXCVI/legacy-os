@@ -1191,9 +1191,10 @@ button:disabled {
 }
 
 .chief-rail-card > .daily-brief-button {
+  display: flex;
   width: calc(100% - 30px);
   max-width: calc(100% - 30px);
-  margin-inline: auto;
+  margin: 0 15px 9px;
 }
 
 .empty-state {
@@ -2721,6 +2722,80 @@ button:disabled {
 
 .security-list svg {
   color: var(--green);
+}
+
+.automation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: auto 15px 10px;
+}
+
+.automation-settings > .automation-queue-card {
+  grid-column: 1 / -1;
+}
+
+.automation-settings .settings-copy-card > small {
+  margin: 0 15px;
+  color: #707774;
+  font-size: 8px;
+}
+
+.automation-queue-card {
+  padding-bottom: 14px;
+}
+
+.automation-job {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 15px;
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0;
+}
+
+.automation-job strong,
+.automation-job small {
+  display: block;
+}
+
+.automation-job strong {
+  font-family: var(--display);
+  font-size: 9px;
+  font-weight: 450;
+  text-transform: capitalize;
+}
+
+.automation-job small {
+  margin-top: 3px;
+  color: #6f7672;
+  font-size: 7px;
+}
+
+.automation-job > span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #8a918d;
+  font-family: var(--display);
+  font-size: 7px;
+  text-transform: uppercase;
+}
+
+.automation-job > span.succeeded {
+  border-color: rgba(85, 185, 115, 0.28);
+  color: var(--green);
+}
+
+.automation-job > span.failed {
+  border-color: rgba(216, 92, 74, 0.3);
+  color: #e07868;
+}
+
+.install-app-button {
+  width: calc(100% - 30px);
+  justify-content: center;
 }
 
 .notification-settings {

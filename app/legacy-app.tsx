@@ -55,6 +55,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { InstallAppButton } from "./install-app-button";
 
 type OwnerView =
   | "dashboard"
@@ -177,12 +178,43 @@ type AuditRecord = {
   occurredAt: string;
 };
 
+type NotificationRecord = {
+  id: string;
+  severity: string;
+  category: string;
+  title: string;
+  body: string;
+  actionUrl: string | null;
+  status: string;
+  createdAt: string;
+};
+
+type AutomationSnapshot = {
+  status: string;
+  mode: string;
+  lastAutomationAt: string | null;
+  jobs: Array<{
+    id: string;
+    jobType: string;
+    entityType: string | null;
+    status: string;
+    attempts: number;
+    runAfter: string;
+    lastError: string | null;
+    createdAt: string;
+  }>;
+  notifications: NotificationRecord[];
+};
+
 type WorkspaceData = {
   workspace: {
     id: string;
     name: string;
     timezone: string;
     aiContentCapture: string;
+    automationStatus: string;
+    automationMode: string;
+    lastAutomationAt: string | null;
   } | null;
   owner: {
     id: string;
@@ -198,6 +230,7 @@ type WorkspaceData = {
   assets: AssetRecord[];
   aiRuns: RunRecord[];
   auditEvents: AuditRecord[];
+  notifications: NotificationRecord[];
 };
 
 type PortalData = {
@@ -756,12 +789,14 @@ function OwnerHeader({
   onNew,
   onView,
   data,
+  refresh,
 }: {
   view: OwnerView;
   onMenu: () => void;
   onNew: () => void;
   onView: (view: OwnerView) => void;
   data: WorkspaceData;
+  refresh: () => void;
 }) {
   const detail = viewDetails[view];
   const [searchOpen, setSearchOpen] = useState(false);
@@ -798,7 +833,25 @@ function OwnerHeader({
         .toLowerCase()
         .includes(normalized),
   );
+  const persistedNotifications = data.notifications.map((item) => {
+    const destination = item.actionUrl?.split(":")[0];
+    const destinationMap: Record<string, OwnerView> = {
+      approvals: "design",
+      calendar: "calendar",
+      clients: "clients",
+      projects: "projects",
+      inbox: "inbox",
+    };
+    return {
+      id: item.id,
+      title: item.title,
+      detail: item.body,
+      view: destinationMap[destination || ""] || ("chief" as OwnerView),
+      persistent: true,
+    };
+  });
   const notifications = [
+    ...persistedNotifications,
     ...data.approvals
       .filter((item) => item.status === "pending")
       .map((item) => ({
@@ -806,6 +859,7 @@ function OwnerHeader({
         title: item.subject,
         detail: "Approval is waiting",
         view: "design" as OwnerView,
+        persistent: false,
       })),
     ...data.messages
       .filter(
@@ -816,6 +870,7 @@ function OwnerHeader({
         title: "New client message",
         detail: item.body,
         view: "inbox" as OwnerView,
+        persistent: false,
       })),
     ...data.appointments
       .filter(
@@ -829,6 +884,7 @@ function OwnerHeader({
         title: item.appointmentType,
         detail: formatDate(item.startsAt, true),
         view: "calendar" as OwnerView,
+        persistent: false,
       })),
   ];
 
@@ -899,6 +955,17 @@ function OwnerHeader({
                   <button
                     key={`${item.view}-${item.id}`}
                     onClick={() => {
+                      if (item.persistent) {
+                        void api("/api/automations", {
+                          method: "POST",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({
+                            action: "mark_notification",
+                            notificationId: item.id,
+                            notificationStatus: "read",
+                          }),
+                        }).then(refresh);
+                      }
                       onView(item.view);
                       setNotificationsOpen(false);
                     }}
@@ -1085,7 +1152,7 @@ function Dashboard({
           </div>
         </div>
         <span className="system-online">
-          <i /> SYSTEM OPERATIONAL
+          <i /> CORE SYSTEMS OPERATIONAL
         </span>
       </section>
 
@@ -2426,8 +2493,15 @@ function SettingsView({
   onView: (view: OwnerView) => void;
 }) {
   const [activeTab, setActiveTab] = useState<
-    "workspace" | "ai" | "team" | "security" | "notifications"
+    | "workspace"
+    | "ai"
+    | "automations"
+    | "team"
+    | "security"
+    | "notifications"
   >("workspace");
+  const [automation, setAutomation] = useState<AutomationSnapshot | null>(null);
+  const [automationBusy, setAutomationBusy] = useState(false);
   const [health, setHealth] = useState<{
     status: string;
     checkedAt: string;
@@ -2455,6 +2529,44 @@ function SettingsView({
     }, 0);
     return () => window.clearTimeout(handle);
   }, []);
+
+  const loadAutomations = useCallback(async () => {
+    try {
+      setAutomation(await api<AutomationSnapshot>("/api/automations"));
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "Unable to load automations",
+        true,
+      );
+    }
+  }, [notify]);
+
+  async function updateAutomations(action: "run" | "pause" | "resume") {
+    setAutomationBusy(true);
+    try {
+      const result = await api<
+        AutomationSnapshot | { snapshot: AutomationSnapshot }
+      >("/api/automations", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      setAutomation("snapshot" in result ? result.snapshot : result);
+      notify(
+        action === "run"
+          ? "Automation sweep completed."
+          : `Automations ${action === "pause" ? "paused" : "resumed"}.`,
+      );
+      refresh();
+    } catch (error) {
+      notify(
+        error instanceof Error ? error.message : "Unable to update automations",
+        true,
+      );
+    } finally {
+      setAutomationBusy(false);
+    }
+  }
 
   async function runHealthCheck() {
     setCheckingHealth(true);
@@ -2521,6 +2633,15 @@ function SettingsView({
           <Bot size={15} /> AI & Models
         </button>
         <button
+          className={activeTab === "automations" ? "active" : ""}
+          onClick={() => {
+            setActiveTab("automations");
+            void loadAutomations();
+          }}
+        >
+          <WandSparkles size={15} /> Automations
+        </button>
+        <button
           className={activeTab === "team" ? "active" : ""}
           onClick={() => setActiveTab("team")}
         >
@@ -2571,6 +2692,7 @@ function SettingsView({
           {["Database", "File storage", "Audit trail", "Client portal"].map((item) => (
             <p key={item}><CheckCircle2 size={16} /><span>{item}</span><strong>Operational</strong></p>
           ))}
+          <InstallAppButton />
         </section>
         <button className="gold-button save-settings" type="submit"><Check size={16} /> Save changes</button>
         </form>
@@ -2606,6 +2728,74 @@ function SettingsView({
             >
               <Activity size={15} /> Review AI run ledger
             </button>
+          </section>
+        </div>
+      )}
+      {activeTab === "automations" && (
+        <div className="settings-grid automation-settings">
+          <section className="os-panel setting-card settings-copy-card">
+            <PanelTitle
+              eyebrow="SAFE AUTONOMY"
+              title={automation?.status === "paused" ? "Paused" : "Active"}
+            />
+            <p>
+              Legacy OS continuously organizes internal workflow events,
+              captures structured evidence, creates reminders, and runs the
+              learning cycle. External actions remain behind approval gates.
+            </p>
+            <div className="automation-actions">
+              <button
+                className="gold-button"
+                disabled={automationBusy}
+                onClick={() => void updateAutomations("run")}
+              >
+                <WandSparkles size={15} />
+                {automationBusy ? "Working..." : "Run now"}
+              </button>
+              <button
+                className="outline-button"
+                disabled={automationBusy}
+                onClick={() =>
+                  void updateAutomations(
+                    automation?.status === "paused" ? "resume" : "pause",
+                  )
+                }
+              >
+                {automation?.status === "paused" ? "Resume" : "Pause"}
+              </button>
+            </div>
+            <small>
+              Last completed: {formatDate(automation?.lastAutomationAt)}
+            </small>
+          </section>
+          <section className="os-panel setting-card settings-copy-card">
+            <PanelTitle eyebrow="APPROVAL BOUNDARY" title="Owner stays in control" />
+            <div className="security-list">
+              <p><Check size={15} /> Internal, reversible organization can run automatically</p>
+              <p><ShieldCheck size={15} /> Client messages and scheduling require approval</p>
+              <p><ShieldCheck size={15} /> Publishing, payments, and permissions require approval</p>
+              <p><ShieldCheck size={15} /> Destructive or health-sensitive actions are never automatic</p>
+            </div>
+          </section>
+          <section className="os-panel setting-card automation-queue-card">
+            <PanelTitle eyebrow="LIVE QUEUE" title="Recent automation jobs" />
+            {automation?.jobs.length ? (
+              automation.jobs.slice(0, 10).map((job) => (
+                <div className="automation-job" key={job.id}>
+                  <div>
+                    <strong>{job.jobType.replaceAll("_", " ")}</strong>
+                    <small>
+                      {job.entityType || "workspace"} · {formatDate(job.createdAt, true)}
+                    </small>
+                  </div>
+                  <span className={job.status}>{job.status}</span>
+                </div>
+              ))
+            ) : (
+              <p className="settings-placeholder">
+                No jobs are waiting. New workspace activity is captured automatically.
+              </p>
+            )}
           </section>
         </div>
       )}
@@ -3197,6 +3387,35 @@ function ClientPortal({
     );
   }
 
+  const emptyPortal = {
+    overview: {
+      icon: HeartHandshake,
+      title: "Your portal is active.",
+      body: "Your artist has not connected a project yet. You can return using this same private link.",
+    },
+    messages: {
+      icon: MessageSquareText,
+      title: "No project conversation yet",
+      body: "Messages become available as soon as the studio connects your first project.",
+    },
+    approvals: {
+      icon: ShieldCheck,
+      title: "Nothing needs your approval",
+      body: "Versioned designs and other gated decisions will appear here after a project is connected.",
+    },
+    files: {
+      icon: FileText,
+      title: "No project files yet",
+      body: "References and shared documents need a connected project so they remain correctly scoped.",
+    },
+    privacy: {
+      icon: LockKeyhole,
+      title: "Your privacy boundary is active",
+      body: "Social observation permissions remain off until a project is connected and you explicitly grant consent.",
+    },
+  }[tab];
+  const EmptyPortalIcon = emptyPortal.icon;
+
   return (
     <div className="client-shell">
       <header className="client-header">
@@ -3227,9 +3446,9 @@ function ClientPortal({
         {notice && <div className="portal-notice"><CheckCircle2 size={16} /> {notice}<button onClick={() => setNotice("")}><X size={14} /></button></div>}
         {!project ? (
           <section className="client-empty">
-            <div className="large-brain-orb"><HeartHandshake size={38} /></div>
-            <h2>Your portal is active.</h2>
-            <p>Your artist has not connected a project yet. You can return using this same private link.</p>
+            <div className="large-brain-orb"><EmptyPortalIcon size={38} /></div>
+            <h2>{emptyPortal.title}</h2>
+            <p>{emptyPortal.body}</p>
           </section>
         ) : (
           <>
@@ -3524,6 +3743,7 @@ export function LegacyApp({
           onView={setView}
           onMenu={() => setMenuOpen(true)}
           onNew={openNew}
+          refresh={load}
         />
         <div className="owner-content">
           {view === "dashboard" && <Dashboard data={data} firstName={actualFirstName} briefing={briefing} generating={generating} onGenerate={generateBriefing} onClient={() => setModal("client")} onProject={() => setModal("project")} onAppointment={() => setModal("appointment")} onView={setView} />}
@@ -3542,7 +3762,7 @@ export function LegacyApp({
           )}
           {view === "settings" && <SettingsView data={data} notify={notify} refresh={load} onView={setView} />}
         </div>
-        <footer className="owner-footer"><span>LEGACY OS</span><p>Built for creators. Designed to last.</p><span><i /> ALL SYSTEMS OPERATIONAL</span></footer>
+        <footer className="owner-footer"><span>LEGACY OS</span><p>Built for creators. Designed to last.</p><span><i /> CORE SYSTEMS OPERATIONAL</span></footer>
       </main>
 
       {modal === "client" && <ClientForm onClose={() => setModal(null)} onSaved={load} notify={notify} />}

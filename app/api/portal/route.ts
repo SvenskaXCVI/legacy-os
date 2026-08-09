@@ -18,6 +18,7 @@ import {
   resolveClientAccess,
   WORKSPACE_ID,
 } from "../_lib";
+import { captureAutomationSignal } from "../../../lib/automation-engine";
 
 export async function GET(request: Request) {
   try {
@@ -39,22 +40,42 @@ export async function GET(request: Request) {
         db
           .select()
           .from(clients)
-          .where(eq(clients.id, access.clientId))
+          .where(
+            and(
+              eq(clients.id, access.clientId),
+              eq(clients.workspaceId, access.workspaceId),
+            ),
+          )
           .get(),
         db
           .select()
           .from(projects)
-          .where(eq(projects.clientId, access.clientId))
+          .where(
+            and(
+              eq(projects.clientId, access.clientId),
+              eq(projects.workspaceId, access.workspaceId),
+            ),
+          )
           .orderBy(desc(projects.updatedAt)),
         db
           .select()
           .from(appointments)
-          .where(eq(appointments.clientId, access.clientId))
+          .where(
+            and(
+              eq(appointments.clientId, access.clientId),
+              eq(appointments.workspaceId, access.workspaceId),
+            ),
+          )
           .orderBy(appointments.startsAt),
         db
           .select()
           .from(clientMessages)
-          .where(eq(clientMessages.clientId, access.clientId))
+          .where(
+            and(
+              eq(clientMessages.clientId, access.clientId),
+              eq(clientMessages.workspaceId, access.workspaceId),
+            ),
+          )
           .orderBy(clientMessages.createdAt),
       ]);
 
@@ -172,6 +193,25 @@ export async function POST(request: Request) {
           occurredAt: now,
         }),
       ]);
+      await captureAutomationSignal(
+        {
+          workspaceId: WORKSPACE_ID,
+          eventType: "client_message_received",
+          sourceType: "message",
+          sourceId: messageId,
+          projectId: payload.projectId || null,
+          clientId: access.clientId,
+          category: "communication",
+          signalKey: "communication.client_message",
+          value: {
+            direction: "inbound",
+            characterCount: payload.body.trim().length,
+            contentCaptured: false,
+          },
+          priority: 90,
+        },
+        db,
+      );
       return Response.json({ id: messageId, status: "sent" }, { status: 201 });
     }
 
@@ -190,7 +230,12 @@ export async function POST(request: Request) {
         })
         .from(approvals)
         .leftJoin(projects, eq(approvals.projectId, projects.id))
-        .where(eq(approvals.id, payload.approvalId))
+        .where(
+          and(
+            eq(approvals.id, payload.approvalId),
+            eq(approvals.workspaceId, access.workspaceId),
+          ),
+        )
         .get();
       if (!approval || approval.clientId !== access.clientId) {
         return jsonError("Approval not found", 404);
@@ -220,6 +265,24 @@ export async function POST(request: Request) {
           occurredAt: now,
         }),
       ]);
+      await captureAutomationSignal(
+        {
+          workspaceId: WORKSPACE_ID,
+          eventType: "approval_decided",
+          sourceType: "approval",
+          sourceId: approval.id,
+          projectId: approval.projectId,
+          clientId: access.clientId,
+          category: "approval",
+          signalKey: `approval.client_decision:${payload.decision}`,
+          value: {
+            decision: payload.decision,
+            decisionBy: "client",
+          },
+          priority: 95,
+        },
+        db,
+      );
       return Response.json({ status: payload.decision });
     }
 

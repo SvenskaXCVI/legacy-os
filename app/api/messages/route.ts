@@ -1,5 +1,12 @@
+import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { auditEvents, clientMessages } from "../../../db/schema";
+import {
+  auditEvents,
+  clientMessages,
+  clients,
+  projects,
+} from "../../../db/schema";
+import { captureAutomationSignal } from "../../../lib/automation-engine";
 import { actorFrom, jsonError, makeId, requireOwner, routeError, WORKSPACE_ID } from "../_lib";
 
 export async function POST(request: Request) {
@@ -17,6 +24,31 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const actor = actorFrom(request);
     const db = getDb();
+    const client = await db
+      .select({ id: clients.id })
+      .from(clients)
+      .where(
+        and(
+          eq(clients.id, payload.clientId),
+          eq(clients.workspaceId, WORKSPACE_ID),
+        ),
+      )
+      .get();
+    if (!client) return jsonError("Client not found", 404);
+    if (payload.projectId) {
+      const project = await db
+        .select({ id: projects.id })
+        .from(projects)
+        .where(
+          and(
+            eq(projects.id, payload.projectId),
+            eq(projects.workspaceId, WORKSPACE_ID),
+            eq(projects.clientId, payload.clientId),
+          ),
+        )
+        .get();
+      if (!project) return jsonError("Project not found for this client", 404);
+    }
     await db.batch([
       db.insert(clientMessages).values({
         id: messageId,
@@ -43,6 +75,25 @@ export async function POST(request: Request) {
         occurredAt: now,
       }),
     ]);
+    await captureAutomationSignal(
+      {
+        workspaceId: WORKSPACE_ID,
+        eventType: "owner_message_sent",
+        sourceType: "message",
+        sourceId: messageId,
+        projectId: payload.projectId || null,
+        clientId: payload.clientId,
+        category: "communication",
+        signalKey: "communication.owner_message",
+        value: {
+          direction: "outbound",
+          characterCount: payload.body.trim().length,
+          contentCaptured: false,
+        },
+        priority: 55,
+      },
+      db,
+    );
     return Response.json({ id: messageId, status: "sent" }, { status: 201 });
   } catch (error) {
     return routeError(error, "Unable to send message");

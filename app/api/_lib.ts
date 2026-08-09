@@ -30,6 +30,7 @@ type SupabaseIdentity = {
 export function authConfiguration() {
   const supabase =
     Boolean(env.SUPABASE_URL?.trim()) && Boolean(env.SUPABASE_ANON_KEY?.trim());
+  const ownerAllowlistConfigured = ownerAllowlist().size > 0;
   return {
     mode: supabase ? "supabase" : "private_preview",
     email: supabase,
@@ -43,6 +44,8 @@ export function authConfiguration() {
       Boolean(env.INSTAGRAM_CLIENT_SECRET?.trim()) &&
       Boolean(env.INSTAGRAM_REDIRECT_URI?.trim()) &&
       Boolean(env.SOCIAL_TOKEN_ENCRYPTION_KEY?.trim()),
+    ownerAllowlistConfigured,
+    externalClientReady: supabase && ownerAllowlistConfigured,
   };
 }
 
@@ -113,7 +116,18 @@ export async function resolveUser(request: Request) {
   }
 
   if (authConfiguration().mode === "private_preview") {
-    const email = actorFrom(request).toLowerCase();
+    const url = new URL(request.url);
+    const localPreview = ["localhost", "127.0.0.1", "::1"].includes(
+      url.hostname,
+    );
+    const platformEmail = request.headers
+      .get("oai-authenticated-user-email")
+      ?.trim()
+      .toLowerCase();
+    if (!localPreview && !platformEmail) return null;
+    const email = platformEmail || "local-owner@legacy.local";
+    const allowlist = ownerAllowlist();
+    if (allowlist.size > 0 && !allowlist.has(email)) return null;
     const user = await db
       .select()
       .from(users)

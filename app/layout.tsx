@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { headers } from "next/headers";
 import "./globals.css";
+import { PwaRegister } from "./pwa-register";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -34,6 +35,7 @@ export async function generateMetadata(): Promise<Metadata> {
       icon: "/favicon.png",
       shortcut: "/favicon.png",
     },
+    manifest: "/manifest.webmanifest",
     openGraph: {
       type: "website",
       title: "Legacy OS",
@@ -66,6 +68,7 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         {children}
+        <PwaRegister />
       </body>
     </html>
   );

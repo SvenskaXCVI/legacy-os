@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Legacy OS">
+  <defs>
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#e2aa5a"/>
+      <stop offset="1" stop-color="#8c5422"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="104" fill="#050809"/>
+  <rect x="22" y="22" width="468" height="468" rx="86" fill="none" stroke="#bd7b32" stroke-opacity=".35" stroke-width="4"/>
+  <path d="M143 105h54v238c0 28 12 42 37 42h43v28H143V105Z" fill="url(#gold)"/>
+  <path d="M236 138h46v193c0 36 17 54 51 54h42v28H236V138Z" fill="url(#gold)" opacity=".86"/>
+</svg>

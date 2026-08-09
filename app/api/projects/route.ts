@@ -2,12 +2,8 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import { auditEvents, clients, projects } from "../../../db/schema";
 import { actorFrom, jsonError, makeId, requireOwner, routeError, WORKSPACE_ID } from "../_lib";
-import {
-  captureCompletedProject,
-  captureObservation,
-  enqueueLearningCycle,
-  runLearningCycle,
-} from "../../../lib/intelligence-engine";
+import { captureCompletedProject } from "../../../lib/intelligence-engine";
+import { captureAutomationSignal } from "../../../lib/automation-engine";
 
 export async function POST(request: Request) {
   try {
@@ -30,7 +26,12 @@ export async function POST(request: Request) {
     const client = await db
       .select({ id: clients.id })
       .from(clients)
-      .where(eq(clients.id, payload.clientId))
+      .where(
+        and(
+          eq(clients.id, payload.clientId),
+          eq(clients.workspaceId, WORKSPACE_ID),
+        ),
+      )
       .get();
     if (!client) return jsonError("Client not found", 404);
 
@@ -79,9 +80,10 @@ export async function POST(request: Request) {
         occurredAt: now,
       }),
     ]);
-    await captureObservation(
+    await captureAutomationSignal(
       {
         workspaceId: WORKSPACE_ID,
+        eventType: "project_created",
         projectId,
         clientId: payload.clientId,
         sourceType: "project",
@@ -97,11 +99,9 @@ export async function POST(request: Request) {
               .map((tag) => tag.trim())
               .filter(Boolean) ?? [],
         },
-        occurredAt: now,
       },
       db,
     );
-    await enqueueLearningCycle(WORKSPACE_ID, "project_created", projectId, db);
     return Response.json({ id: projectId, status: "created" }, { status: 201 });
   } catch (error) {
     return routeError(error, "Unable to create project");
@@ -181,9 +181,19 @@ export async function PATCH(request: Request) {
         occurredAt: now,
       }),
     ]);
-    await captureObservation(
+    if (
+      nextPhase === "complete" &&
+      existing.lifecyclePhase !== "complete"
+    ) {
+      await captureCompletedProject(WORKSPACE_ID, existing.id, db);
+    }
+    await captureAutomationSignal(
       {
         workspaceId: WORKSPACE_ID,
+        eventType:
+          nextPhase === "complete"
+            ? "project_completed"
+            : `project_${nextPhase}`,
         projectId: existing.id,
         clientId: existing.clientId,
         sourceType: "project",
@@ -195,28 +205,10 @@ export async function PATCH(request: Request) {
           nextPhase,
           nextAction: payload.nextAction ?? existing.nextAction,
         },
-        occurredAt: now,
+        priority: nextPhase === "complete" ? 95 : 70,
       },
       db,
     );
-    if (
-      nextPhase === "complete" &&
-      existing.lifecyclePhase !== "complete"
-    ) {
-      await captureCompletedProject(WORKSPACE_ID, existing.id, db);
-      await runLearningCycle(
-        WORKSPACE_ID,
-        "project_completed",
-        existing.id,
-      );
-    } else {
-      await enqueueLearningCycle(
-        WORKSPACE_ID,
-        "project_updated",
-        existing.id,
-        db,
-      );
-    }
     return Response.json({
       id: existing.id,
       status: "updated",

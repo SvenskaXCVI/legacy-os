@@ -1,6 +1,6 @@
 {
   "name": "legacy-os",
-  "version": "0.2.0",
+  "version": "0.3.0-alpha.1",
   "private": true,
   "engines": {
     "node": ">=22.13.0"
@@ -11,6 +11,8 @@
     "start": "vinext start",
     "test": "npm run build && node --test --test-isolation=none tests/*.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run lint && npm run typecheck && npm run test",
     "db:generate": "drizzle-kit generate",
     "db:local:migrate": "node scripts/local-d1-migrate.mjs"
   },

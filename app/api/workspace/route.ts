@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import {
   aiRuns,
@@ -8,6 +8,7 @@ import {
   auditEvents,
   clientMessages,
   clients,
+  notifications,
   projects,
   users,
   workspaces,
@@ -20,6 +21,7 @@ import {
   routeError,
   WORKSPACE_ID,
 } from "../_lib";
+import { runAutomationSweepIfDue } from "../../../lib/automation-engine";
 
 export async function GET(request: Request) {
   try {
@@ -52,6 +54,12 @@ export async function GET(request: Request) {
         set: { displayName, updatedAt: new Date().toISOString() },
       });
 
+    await runAutomationSweepIfDue(
+      WORKSPACE_ID,
+      "workspace_opened",
+      db,
+    ).catch(() => null);
+
     const [
       workspace,
       owner,
@@ -63,6 +71,7 @@ export async function GET(request: Request) {
       assetRows,
       runRows,
       auditRows,
+      notificationRows,
     ] = await Promise.all([
       db
         .select()
@@ -72,7 +81,12 @@ export async function GET(request: Request) {
       db
         .select()
         .from(users)
-        .where(eq(users.email, email))
+        .where(
+          and(
+            eq(users.email, email),
+            eq(users.workspaceId, WORKSPACE_ID),
+          ),
+        )
         .get(),
       db
         .select()
@@ -140,6 +154,17 @@ export async function GET(request: Request) {
         .where(eq(auditEvents.workspaceId, WORKSPACE_ID))
         .orderBy(desc(auditEvents.occurredAt))
         .limit(50),
+      db
+        .select()
+        .from(notifications)
+        .where(
+          and(
+            eq(notifications.workspaceId, WORKSPACE_ID),
+            eq(notifications.status, "unread"),
+          ),
+        )
+        .orderBy(desc(notifications.createdAt))
+        .limit(50),
     ]);
 
     return Response.json({
@@ -153,6 +178,7 @@ export async function GET(request: Request) {
       assets: assetRows,
       aiRuns: runRows,
       auditEvents: auditRows,
+      notifications: notificationRows,
     });
   } catch (error) {
     return routeError(error, "Unable to load workspace");
