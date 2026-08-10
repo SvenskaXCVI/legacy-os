@@ -1,5 +1,11 @@
 # Legacy OS
 
+## [Open Legacy OS →](https://legacy-os-studio.svenskaxcvi.chatgpt.site/)
+
+The application runs on its secure, backend-enabled deployment. This GitHub
+repository contains the source code, technical documentation, and release
+history; use the link above to launch the product.
+
 Legacy OS is a secure, evidence-led operating system for tattoo studios and
 creative professionals. It connects owner operations, a client portal,
 project workflows, durable knowledge, and observable AI automation in one
