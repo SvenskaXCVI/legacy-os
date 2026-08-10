@@ -82,10 +82,10 @@ license notice, security policy, contribution guide, environment template, and
 alpha checklist. See [Deployment and sharing](docs/DEPLOYMENT.md) before making
 the hosted application externally accessible.
 
-The current private Sites boundary is suitable for owner setup. External client
-account testing requires configured Supabase credentials and `OWNER_EMAILS`
-before the hosting access policy is changed. Provider secrets must be configured
-in the hosting environment and must never be committed.
+The public alpha entry allows clients to reach invitation-scoped portal access
+from any device. Owner operations remain protected by a server-verified access
+code until Supabase account authentication is enabled. Provider secrets and the
+owner code must be configured only in the hosting environment and never committed.
 
 ## Documentation
 

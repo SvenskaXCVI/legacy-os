@@ -17,9 +17,12 @@ uses a Cloudflare Worker, D1, and R2 through OpenAI Sites.
 ## Runtime configuration
 
 Configure the values documented in `.env.example` as hosting secrets. For an
-externally shared alpha, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and
+account-based external alpha, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and
 `OWNER_EMAILS` are required. Enable verified email, TOTP MFA, and only the OAuth
-providers that have complete redirect configuration.
+providers that have complete redirect configuration. The temporary public
+client-link build instead uses `OWNER_ACCESS_CODE_HASH` to protect owner
+operations while client access remains scoped by revocable portal invitations.
+Store only the SHA-256 hash as a protected hosting secret; never commit the code.
 
 AI and Instagram credentials are optional integrations. Without an external AI
 provider, deterministic Legacy OS policy, evidence, briefing, workflow, and
@@ -28,18 +31,18 @@ four Instagram/encryption variables are configured.
 
 ## Access policy
 
-Keep the deployment private during owner setup. Before changing it to a shared
-or public access policy:
+Before changing the deployment to public access:
 
-1. Confirm `/api/health` reports external client accounts ready.
-2. Sign in as the allowlisted owner and complete TOTP.
+1. Confirm `/api/health` reports either external accounts or owner access-code mode ready.
+2. Sign in as the owner and confirm protected APIs reject a missing or incorrect code.
 3. Create a real test client and invitation.
 4. Verify the client can see only that client record.
 5. Revoke the invitation and confirm it immediately stops working.
 6. Complete the alpha checklist in `docs/ALPHA_TESTING.md`.
 
-Client links use `?portal=TOKEN`. Treat them as credentials: deliver them over a
-trusted channel, use the shortest practical expiration, and revoke them when a
+Client links use `?portal=TOKEN`. Anyone may reach the client entry screen, but
+project data is returned only for a valid invitation. Treat links as credentials:
+deliver them over a trusted channel, use the shortest practical expiration, and revoke them when a
 verified client account is bound.
 
 ## Installation

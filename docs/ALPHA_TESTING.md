@@ -5,8 +5,10 @@ real personal, health, payment, or social-account data.
 
 ## Identity and isolation
 
-- [ ] Owner email is present in `OWNER_EMAILS`.
-- [ ] Owner email verification and TOTP are required.
+- [ ] Owner access code succeeds only through the server and is absent from source and browser storage.
+- [ ] Incorrect owner codes are rejected and repeated failures are rate limited.
+- [ ] Sign out clears the owner session cookie and protected APIs reject the next request.
+- [ ] When Supabase replaces the temporary code, the owner email is allowlisted and email verification plus TOTP are required.
 - [ ] Client signup without an invitation is rejected.
 - [ ] A client invitation cannot open another client's records or files.
 - [ ] A revoked or expired invitation returns an access error.

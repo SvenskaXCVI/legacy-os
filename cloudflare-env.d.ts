@@ -5,6 +5,7 @@ declare module "cloudflare:workers" {
     SUPABASE_URL?: string;
     SUPABASE_ANON_KEY?: string;
     OWNER_EMAILS?: string;
+    OWNER_ACCESS_CODE_HASH?: string;
     AI_PROVIDER?: string;
     AI_BASE_URL?: string;
     AI_API_KEY?: string;

@@ -8,6 +8,8 @@ import {
 } from "../../db/schema";
 
 export const WORKSPACE_ID = "legacy-lines";
+export const OWNER_SESSION_COOKIE = "legacy_owner_session";
+const OWNER_SESSION_TTL_SECONDS = 12 * 60 * 60;
 
 export function makeId(prefix: string) {
   return `${prefix}_${crypto.randomUUID()}`;
@@ -30,9 +32,14 @@ type SupabaseIdentity = {
 export function authConfiguration() {
   const supabase =
     Boolean(env.SUPABASE_URL?.trim()) && Boolean(env.SUPABASE_ANON_KEY?.trim());
+  const ownerAccessCode = Boolean(env.OWNER_ACCESS_CODE_HASH?.trim());
   const ownerAllowlistConfigured = ownerAllowlist().size > 0;
   return {
-    mode: supabase ? "supabase" : "private_preview",
+    mode: supabase
+      ? "supabase"
+      : ownerAccessCode
+        ? "access_code"
+        : "private_preview",
     email: supabase,
     emailVerification: supabase,
     totpMfa: supabase,
@@ -45,7 +52,9 @@ export function authConfiguration() {
       Boolean(env.INSTAGRAM_REDIRECT_URI?.trim()) &&
       Boolean(env.SOCIAL_TOKEN_ENCRYPTION_KEY?.trim()),
     ownerAllowlistConfigured,
-    externalClientReady: supabase && ownerAllowlistConfigured,
+    ownerAccessCode,
+    externalClientReady:
+      (supabase && ownerAllowlistConfigured) || ownerAccessCode,
   };
 }
 
@@ -115,7 +124,11 @@ export async function resolveUser(request: Request) {
     };
   }
 
-  if (authConfiguration().mode === "private_preview") {
+  const configuration = authConfiguration();
+  if (
+    configuration.mode === "private_preview" ||
+    configuration.mode === "access_code"
+  ) {
     const url = new URL(request.url);
     const localPreview = ["localhost", "127.0.0.1", "::1"].includes(
       url.hostname,
@@ -124,10 +137,23 @@ export async function resolveUser(request: Request) {
       .get("oai-authenticated-user-email")
       ?.trim()
       .toLowerCase();
-    if (!localPreview && !platformEmail) return null;
-    const email = platformEmail || "local-owner@legacy.local";
+    const codeSession =
+      configuration.mode === "access_code" &&
+      (await hasValidOwnerSession(request));
+    if (!localPreview && !platformEmail && !codeSession) return null;
     const allowlist = ownerAllowlist();
-    if (allowlist.size > 0 && !allowlist.has(email)) return null;
+    if (
+      platformEmail &&
+      allowlist.size > 0 &&
+      !allowlist.has(platformEmail) &&
+      !codeSession
+    ) {
+      return null;
+    }
+    const email =
+      platformEmail ||
+      [...allowlist][0] ||
+      "owner-access@legacy.local";
     const user = await db
       .select()
       .from(users)
@@ -375,6 +401,108 @@ export async function sha256(value: string | ArrayBuffer) {
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
+}
+
+function constantTimeEqual(left: string, right: string) {
+  if (left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  }
+  return difference === 0;
+}
+
+function ownerCodeHash() {
+  return String(env.OWNER_ACCESS_CODE_HASH || "").trim().toLowerCase();
+}
+
+export async function verifyOwnerAccessCode(code: string) {
+  const expected = ownerCodeHash();
+  if (!expected || !/^[a-f0-9]{64}$/.test(expected)) return false;
+  return constantTimeEqual(await sha256(code), expected);
+}
+
+function encodeBase64Url(value: string | ArrayBuffer) {
+  const bytes =
+    typeof value === "string"
+      ? new TextEncoder().encode(value)
+      : new Uint8Array(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
+
+function decodeBase64Url(value: string) {
+  const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
+  const binary = atob(
+    normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="),
+  );
+  return new TextDecoder().decode(
+    Uint8Array.from(binary, (character) => character.charCodeAt(0)),
+  );
+}
+
+async function signOwnerSession(payload: string) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(ownerCodeHash()),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return encodeBase64Url(
+    await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(payload)),
+  );
+}
+
+export async function createOwnerSessionToken() {
+  if (!ownerCodeHash()) throw new Error("Owner access is not configured");
+  const payload = encodeBase64Url(
+    JSON.stringify({
+      version: 1,
+      expiresAt: Math.floor(Date.now() / 1000) + OWNER_SESSION_TTL_SECONDS,
+      nonce: crypto.randomUUID(),
+    }),
+  );
+  return `${payload}.${await signOwnerSession(payload)}`;
+}
+
+export async function hasValidOwnerSession(request: Request) {
+  const cookie = request.headers.get("cookie") || "";
+  const token = cookie
+    .split(";")
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${OWNER_SESSION_COOKIE}=`))
+    ?.slice(OWNER_SESSION_COOKIE.length + 1);
+  if (!token || !ownerCodeHash()) return false;
+  const [payload, signature, extra] = token.split(".");
+  if (!payload || !signature || extra) return false;
+  const expected = await signOwnerSession(payload);
+  if (!constantTimeEqual(signature, expected)) return false;
+  try {
+    const decoded = JSON.parse(decodeBase64Url(payload)) as {
+      version?: number;
+      expiresAt?: number;
+    };
+    return (
+      decoded.version === 1 &&
+      typeof decoded.expiresAt === "number" &&
+      decoded.expiresAt > Math.floor(Date.now() / 1000)
+    );
+  } catch {
+    return false;
+  }
+}
+
+export function ownerSessionCookie(token: string) {
+  return `${OWNER_SESSION_COOKIE}=${token}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${OWNER_SESSION_TTL_SECONDS}`;
+}
+
+export function clearOwnerSessionCookie() {
+  return `${OWNER_SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
 }
 
 export async function validatePortalToken(token: string | null) {

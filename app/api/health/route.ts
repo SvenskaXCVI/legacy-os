@@ -34,7 +34,11 @@ export async function GET() {
         automations:
           workspace?.automationStatus === "active" ? "active" : "paused",
         secure_identity:
-          auth.mode === "supabase" ? "configured" : "private deployment only",
+          auth.mode === "supabase"
+            ? "account authentication configured"
+            : auth.mode === "access_code"
+              ? "owner access code configured"
+              : "private deployment only",
         external_client_accounts: auth.externalClientReady
           ? "ready"
           : "configuration required",

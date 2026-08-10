@@ -15,7 +15,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { LegacyApp } from "./legacy-app";
 
 type PublicAuthConfig = {
-  mode: "supabase" | "private_preview";
+  mode: "supabase" | "access_code" | "private_preview";
   email: boolean;
   emailVerification: boolean;
   totpMfa: boolean;
@@ -24,6 +24,7 @@ type PublicAuthConfig = {
   instagramIdentity: false;
   instagramConnection: boolean;
   ownerAllowlistConfigured: boolean;
+  ownerAccessCode: boolean;
   externalClientReady: boolean;
   supabaseUrl: string | null;
   supabaseAnonKey: string | null;
@@ -72,6 +73,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
   const [challengeId, setChallengeId] = useState("");
   const [qrCode, setQrCode] = useState("");
   const [invitationToken, setInvitationToken] = useState("");
+  const [ownerAccessCode, setOwnerAccessCode] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -95,10 +97,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
             portalInvitation,
           );
         }
-        if (
-          nextConfig.mode === "private_preview" &&
-          portalInvitation
-        ) {
+        if (nextConfig.mode !== "supabase" && portalInvitation) {
           setUser({
             email: "",
             displayName: "Client",
@@ -108,6 +107,22 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
           });
           setStage("app");
           resumedSession = true;
+        }
+        if (nextConfig.mode === "access_code" && !portalInvitation) {
+          const ownerAccess = await json<{ authenticated: boolean }>(
+            await fetch("/api/auth/owner-access"),
+          );
+          if (ownerAccess.authenticated) {
+            setUser({
+              email: "",
+              displayName: ownerName,
+              role: "owner",
+              clientId: null,
+              mfaRequired: false,
+            });
+            setStage("app");
+            resumedSession = true;
+          }
         }
         if (
           nextConfig.mode === "supabase" &&
@@ -327,6 +342,39 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
     setStage("app");
   }
 
+  async function submitOwnerAccessCode(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    setNotice("");
+    try {
+      await json<{ authenticated: boolean }>(
+        await fetch("/api/auth/owner-access", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ code: ownerAccessCode }),
+        }),
+      );
+      setOwnerAccessCode("");
+      setUser({
+        email: "",
+        displayName: ownerName,
+        role: "owner",
+        clientId: null,
+        mfaRequired: false,
+      });
+      setStage("app");
+    } catch (accessError) {
+      setError(
+        accessError instanceof Error
+          ? accessError.message
+          : "Unable to verify owner access",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function signOut() {
     setBusy(true);
     setError("");
@@ -334,6 +382,11 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
       if (client) {
         const result = await client.auth.signOut();
         if (result.error) throw result.error;
+      }
+      if (config?.mode === "access_code") {
+        await json<{ authenticated: boolean }>(
+          await fetch("/api/auth/owner-access", { method: "DELETE" }),
+        );
       }
     } catch (signOutError) {
       setError(
@@ -358,6 +411,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
       setChallengeId("");
       setQrCode("");
       setInvitationToken("");
+      setOwnerAccessCode("");
       setPasswordVisible(false);
       setStage("login");
       setBusy(false);
@@ -443,7 +497,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
           <Monogram />
           <div>
             <strong>LEGACY OS</strong>
-            <span>PRIVATE STUDIO ACCESS</span>
+            <span>SECURE STUDIO ACCESS</span>
           </div>
         </header>
         <div className="access-intro">
@@ -588,6 +642,67 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
               </button>
             </div>
           </>
+        ) : config?.mode === "access_code" ? (
+          <div className="private-preview">
+            <div>
+              <ShieldCheck size={19} />
+              <p>
+                <strong>
+                  {roleIntent === "owner"
+                    ? "Protected owner operations"
+                    : "Private client project access"}
+                </strong>
+                <span>
+                  {roleIntent === "owner"
+                    ? "Enter the studio owner access code. Successful access expires automatically and can be ended with Sign out."
+                    : "Clients can open the portal from any device and enter the access code provided by the studio."}
+                </span>
+              </p>
+            </div>
+            {roleIntent === "owner" ? (
+              <form className="access-form" onSubmit={submitOwnerAccessCode}>
+                <label className="access-field">
+                  <span>Owner access code</span>
+                  <div>
+                    <LockKeyhole size={17} />
+                    <input
+                      type={passwordVisible ? "text" : "password"}
+                      value={ownerAccessCode}
+                      onChange={(event) => setOwnerAccessCode(event.target.value)}
+                      autoComplete="current-password"
+                      minLength={10}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPasswordVisible((value) => !value)}
+                      aria-label={
+                        passwordVisible ? "Hide access code" : "Show access code"
+                      }
+                    >
+                      {passwordVisible ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </label>
+                {error && <p className="access-error">{error}</p>}
+                <button className="gold-button wide" disabled={busy}>
+                  {busy ? "Verifying access..." : "Open owner workspace"}
+                  <ArrowRight size={16} />
+                </button>
+              </form>
+            ) : (
+              <>
+                {error && <p className="access-error">{error}</p>}
+                <button
+                  className="gold-button wide"
+                  onClick={() => enterPrivatePreview("client")}
+                >
+                  Open client portal
+                  <ArrowRight size={16} />
+                </button>
+              </>
+            )}
+          </div>
         ) : (
           <div className="private-preview">
             <div>
@@ -613,8 +728,10 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
           </div>
         )}
         <footer>
-          <ShieldCheck size={14} /> Verified identity · Two-step protection ·
-          Role isolation
+          <ShieldCheck size={14} />
+          {config?.mode === "access_code"
+            ? "Protected owner access · Scoped client invitations · Role isolation"
+            : "Verified identity · Two-step protection · Role isolation"}
         </footer>
       </section>
       <aside className="access-art">

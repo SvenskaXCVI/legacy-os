@@ -5,12 +5,20 @@ import test from "node:test";
 const read = (path) =>
   readFile(new URL(`../${path}`, import.meta.url), "utf8");
 
-test("private preview fails closed outside local or platform identity", async () => {
-  const auth = await read("app/api/_lib.ts");
-  assert.match(auth, /localPreview/);
-  assert.match(auth, /if \(!localPreview && !platformEmail\) return null/);
+test("public alpha keeps owner operations behind server-side code sessions", async () => {
+  const [auth, ownerRoute, accessShell] = await Promise.all([
+    read("app/api/_lib.ts"),
+    read("app/api/auth/owner-access/route.ts"),
+    read("app/access-shell.tsx"),
+  ]);
+  assert.match(auth, /OWNER_ACCESS_CODE_HASH/);
+  assert.match(auth, /hasValidOwnerSession/);
   assert.match(auth, /access\.user\.role !== "owner"/);
-  assert.match(auth, /assuranceLevel !== "aal2"/);
+  assert.match(auth, /HttpOnly; Secure; SameSite=Strict/);
+  assert.match(ownerRoute, /MAX_ATTEMPTS/);
+  assert.match(ownerRoute, /sameOrigin/);
+  assert.match(accessShell, /submitOwnerAccessCode/);
+  assert.match(accessShell, /nextConfig\.mode !== "supabase" && portalInvitation/);
 });
 
 test("continuous automation captures, processes, and remains internal", async () => {
@@ -50,5 +58,5 @@ test("GitHub release controls are present", async () => {
   assert.match(workflow, /npm run typecheck/);
   assert.match(workflow, /npm test/);
   assert.match(security, /Never commit/);
-  assert.match(deployment, /external client accounts ready/);
+  assert.match(deployment, /owner access-code mode ready/);
 });
