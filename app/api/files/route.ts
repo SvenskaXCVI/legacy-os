@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { getDb } from "../../../db";
 import { assets, auditEvents, projects } from "../../../db/schema";
@@ -80,6 +80,12 @@ export async function POST(request: Request) {
         byteSize: file.size,
         sha256: digest,
         sourceType: clientAccess ? "client_upload" : "owner_upload",
+        assetRole: clientAccess ? "reference" : "design_iteration",
+        visibility: clientAccess ? "client_shared" : "internal",
+        versionGroupId: assetId,
+        rightsStatus: clientAccess ? "client_provided" : "studio_created",
+        consentStatus: "not_required",
+        contentEligible: false,
         extractionStatus: "stored",
         createdBy: actor,
         createdAt: now,
@@ -144,12 +150,21 @@ export async function GET(request: Request) {
     const row = await db
       .select()
       .from(assets)
-      .where(and(eq(assets.id, assetId), eq(assets.workspaceId, WORKSPACE_ID)))
+      .where(
+        and(
+          eq(assets.id, assetId),
+          eq(assets.workspaceId, WORKSPACE_ID),
+          isNull(assets.deletedAt),
+        ),
+      )
       .get();
     if (!row) return jsonError("File not found", 404);
     const clientAccess = await resolveClientAccess(request, token);
     if (clientAccess) {
-      if (row.clientId !== clientAccess.clientId) {
+      if (
+        row.clientId !== clientAccess.clientId ||
+        !["client_shared", "public"].includes(row.visibility)
+      ) {
         return jsonError("Portal access is invalid or expired", 401);
       }
     } else {

@@ -113,6 +113,8 @@ export async function GET(request: Request) {
           nextAction: projects.nextAction,
           nextActionAt: projects.nextActionAt,
           summary: projects.summary,
+          clientSummary: projects.clientSummary,
+          isTest: projects.isTest,
           createdAt: projects.createdAt,
           updatedAt: projects.updatedAt,
         })

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb } from "../../../db";
 import {
   appointments,
@@ -38,22 +38,44 @@ export async function GET(request: Request) {
           .where(eq(workspaces.id, WORKSPACE_ID))
           .get(),
         db
-          .select()
+          .select({
+            id: clients.id,
+            firstName: clients.firstName,
+            lastName: clients.lastName,
+            status: clients.status,
+          })
           .from(clients)
           .where(
             and(
               eq(clients.id, access.clientId),
               eq(clients.workspaceId, access.workspaceId),
+              isNull(clients.archivedAt),
             ),
           )
           .get(),
         db
-          .select()
+          .select({
+            id: projects.id,
+            clientId: projects.clientId,
+            title: projects.title,
+            lifecyclePhase: projects.lifecyclePhase,
+            status: projects.status,
+            placement: projects.placement,
+            styleTagsJson: projects.styleTagsJson,
+            budgetMinCents: projects.budgetMinCents,
+            budgetMaxCents: projects.budgetMaxCents,
+            targetDate: projects.targetDate,
+            nextAction: projects.nextAction,
+            clientSummary: projects.clientSummary,
+            updatedAt: projects.updatedAt,
+          })
           .from(projects)
           .where(
             and(
               eq(projects.clientId, access.clientId),
               eq(projects.workspaceId, access.workspaceId),
+              eq(projects.isTest, false),
+              isNull(projects.archivedAt),
             ),
           )
           .orderBy(desc(projects.updatedAt)),
@@ -83,14 +105,51 @@ export async function GET(request: Request) {
     const [approvalRows, assetRows, updateRows] = projectIds.length
       ? await Promise.all([
           db
-            .select()
+            .select({
+              id: approvals.id,
+              projectId: approvals.projectId,
+              assetId: approvals.assetId,
+              assetVersion: approvals.assetVersion,
+              category: approvals.category,
+              subject: approvals.subject,
+              summary: approvals.summary,
+              status: approvals.status,
+              decisionReason: approvals.decisionReason,
+              createdAt: approvals.createdAt,
+            })
             .from(approvals)
-            .where(inArray(approvals.projectId, projectIds))
+            .where(
+              and(
+                inArray(approvals.projectId, projectIds),
+                eq(approvals.workspaceId, access.workspaceId),
+                eq(approvals.audience, "client"),
+              ),
+            )
             .orderBy(desc(approvals.createdAt)),
           db
-            .select()
+            .select({
+              id: assets.id,
+              clientId: assets.clientId,
+              projectId: assets.projectId,
+              originalName: assets.originalName,
+              mediaType: assets.mediaType,
+              mimeType: assets.mimeType,
+              byteSize: assets.byteSize,
+              sourceType: assets.sourceType,
+              assetRole: assets.assetRole,
+              visibility: assets.visibility,
+              version: assets.version,
+              createdAt: assets.createdAt,
+            })
             .from(assets)
-            .where(inArray(assets.projectId, projectIds))
+            .where(
+              and(
+                inArray(assets.projectId, projectIds),
+                eq(assets.workspaceId, access.workspaceId),
+                inArray(assets.visibility, ["client_shared", "public"]),
+                isNull(assets.deletedAt),
+              ),
+            )
             .orderBy(desc(assets.createdAt)),
           db
             .select()
@@ -161,6 +220,7 @@ export async function POST(request: Request) {
             and(
               eq(projects.id, payload.projectId),
               eq(projects.clientId, access.clientId),
+              eq(projects.workspaceId, access.workspaceId),
             ),
           )
           .get();

@@ -102,6 +102,9 @@ export const projects = sqliteTable(
     nextAction: text("next_action"),
     nextActionAt: text("next_action_at"),
     summary: text("summary"),
+    clientSummary: text("client_summary"),
+    requestKey: text("request_key"),
+    isTest: integer("is_test", { mode: "boolean" }).notNull().default(false),
     createdAt: timestamp("created_at"),
     updatedAt: timestamp("updated_at"),
     archivedAt: text("archived_at"),
@@ -113,6 +116,10 @@ export const projects = sqliteTable(
     ),
     index("projects_client_idx").on(table.clientId),
     index("projects_next_action_idx").on(table.nextActionAt),
+    uniqueIndex("projects_workspace_request_key_uq").on(
+      table.workspaceId,
+      table.requestKey,
+    ),
   ],
 );
 
@@ -134,6 +141,15 @@ export const assets = sqliteTable(
     sourceType: text("source_type").notNull(),
     sourceUrl: text("source_url"),
     version: integer("version").notNull().default(1),
+    versionGroupId: text("version_group_id"),
+    parentAssetId: text("parent_asset_id"),
+    assetRole: text("asset_role").notNull().default("unspecified"),
+    visibility: text("visibility").notNull().default("internal"),
+    rightsStatus: text("rights_status").notNull().default("unknown"),
+    consentStatus: text("consent_status").notNull().default("not_required"),
+    contentEligible: integer("content_eligible", { mode: "boolean" })
+      .notNull()
+      .default(false),
     extractionStatus: text("extraction_status").notNull().default("pending"),
     metadataJson: text("metadata_json").notNull().default("{}"),
     createdBy: text("created_by"),
@@ -144,6 +160,11 @@ export const assets = sqliteTable(
     uniqueIndex("assets_storage_key_uq").on(table.storageKey),
     index("assets_project_idx").on(table.projectId),
     index("assets_hash_idx").on(table.sha256),
+    index("assets_project_visibility_idx").on(table.projectId, table.visibility),
+    index("assets_content_eligible_idx").on(
+      table.workspaceId,
+      table.contentEligible,
+    ),
   ],
 );
 
@@ -218,6 +239,10 @@ export const approvals = sqliteTable(
       .notNull()
       .references(() => workspaces.id),
     projectId: text("project_id").references(() => projects.id),
+    assetId: text("asset_id").references(() => assets.id),
+    assetSha256: text("asset_sha256"),
+    assetVersion: integer("asset_version"),
+    audience: text("audience").notNull().default("owner"),
     requestedByType: text("requested_by_type").notNull(),
     requestedById: text("requested_by_id"),
     category: text("category").notNull(),
@@ -244,6 +269,11 @@ export const approvals = sqliteTable(
       table.status,
     ),
     index("approvals_project_idx").on(table.projectId),
+    index("approvals_asset_idx").on(table.assetId),
+    index("approvals_project_audience_idx").on(
+      table.projectId,
+      table.audience,
+    ),
   ],
 );
 

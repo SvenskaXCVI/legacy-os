@@ -1,7 +1,7 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { approvals, auditEvents, projects } from "../../../db/schema";
-import { makeId, requireOwner, routeError } from "../_lib";
+import { approvals, assets, auditEvents, projects } from "../../../db/schema";
+import { jsonError, makeId, requireOwner, routeError, sha256 } from "../_lib";
 import { captureAutomationSignal } from "../../../lib/automation-engine";
 
 const DEFAULT_WORKSPACE_ID = "legacy-lines";
@@ -17,6 +17,7 @@ export async function POST(request: Request) {
       subject?: string;
       reason?: string;
       projectId?: string;
+      assetId?: string;
       summary?: string;
       riskLevel?: string;
     };
@@ -40,20 +41,63 @@ export async function POST(request: Request) {
       if (!project) {
         return Response.json({ error: "Project not found" }, { status: 404 });
       }
+      const clientFacing = ["design", "client_approval"].includes(
+        payload.category || "client_approval",
+      );
+      const asset = payload.assetId
+        ? await db
+            .select()
+            .from(assets)
+            .where(
+              and(
+                eq(assets.id, payload.assetId),
+                eq(assets.projectId, payload.projectId),
+                eq(assets.workspaceId, DEFAULT_WORKSPACE_ID),
+                isNull(assets.deletedAt),
+              ),
+            )
+            .get()
+        : null;
+      if (clientFacing && !asset) {
+        return jsonError(
+          "Select the exact design version before requesting client approval",
+        );
+      }
       const approvalId = makeId("approval");
+      const payloadHash = asset
+        ? await sha256(
+            `${payload.projectId}:${asset.id}:${asset.sha256}:${asset.version}`,
+          )
+        : await sha256(`${payload.projectId}:${approvalId}`);
       await db.batch([
         db.insert(approvals).values({
           id: approvalId,
           workspaceId: DEFAULT_WORKSPACE_ID,
           projectId: payload.projectId,
+          assetId: asset?.id ?? null,
+          assetSha256: asset?.sha256 ?? null,
+          assetVersion: asset?.version ?? null,
+          audience: clientFacing ? "client" : "owner",
           requestedByType: "owner",
           requestedById: actor,
           category: payload.category || "client_approval",
           actionType: "review",
           subject: payload.subject.trim(),
           summary: payload.summary?.trim() || "Client review requested.",
-          payloadHash: approvalId,
-          evidenceJson: "[]",
+          payloadHash,
+          payloadRedactedJson: JSON.stringify(
+            asset
+              ? {
+                  assetId: asset.id,
+                  originalName: asset.originalName,
+                  version: asset.version,
+                  sha256: asset.sha256,
+                }
+              : {},
+          ),
+          evidenceJson: JSON.stringify(
+            asset ? [{ assetId: asset.id, sha256: asset.sha256 }] : [],
+          ),
           riskLevel: payload.riskLevel || "medium",
           reversibility: "reversible",
           status: "pending",
@@ -70,9 +114,21 @@ export async function POST(request: Request) {
           targetId: approvalId,
           riskLevel: payload.riskLevel || "medium",
           outcome: "recorded",
-          metadataJson: JSON.stringify({ projectId: payload.projectId }),
+          metadataJson: JSON.stringify({
+            projectId: payload.projectId,
+            assetId: asset?.id ?? null,
+            assetVersion: asset?.version ?? null,
+          }),
           occurredAt: now,
         }),
+        ...(asset
+          ? [
+              db
+                .update(assets)
+                .set({ visibility: "client_shared" })
+                .where(eq(assets.id, asset.id)),
+            ]
+          : []),
       ]);
       await captureAutomationSignal(
         {
@@ -93,7 +149,12 @@ export async function POST(request: Request) {
         db,
       );
       return Response.json(
-        { approvalId, status: "pending" },
+        {
+          approvalId,
+          assetId: asset?.id ?? null,
+          assetVersion: asset?.version ?? null,
+          status: "pending",
+        },
         { status: 201 },
       );
     }

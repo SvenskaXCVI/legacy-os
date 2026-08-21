@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import {
   auditEvents,
@@ -24,7 +24,12 @@ export async function POST(request: Request) {
     const client = await db
       .select({ id: clients.id })
       .from(clients)
-      .where(eq(clients.id, payload.clientId))
+      .where(
+        and(
+          eq(clients.id, payload.clientId),
+          eq(clients.workspaceId, WORKSPACE_ID),
+        ),
+      )
       .get();
     if (!client) return jsonError("Client not found", 404);
 
@@ -42,7 +47,12 @@ export async function POST(request: Request) {
       db
         .update(portalInvitations)
         .set({ status: "revoked" })
-        .where(eq(portalInvitations.clientId, payload.clientId)),
+        .where(
+          and(
+            eq(portalInvitations.clientId, payload.clientId),
+            eq(portalInvitations.workspaceId, WORKSPACE_ID),
+          ),
+        ),
       db.insert(portalInvitations).values({
         id: inviteId,
         workspaceId: WORKSPACE_ID,

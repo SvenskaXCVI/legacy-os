@@ -14,6 +14,8 @@ export async function POST(request: Request) {
       placement?: string;
       style?: string;
       summary?: string;
+      clientSummary?: string;
+      requestKey?: string;
       budgetMin?: number;
       budgetMax?: number;
       targetDate?: string;
@@ -23,6 +25,26 @@ export async function POST(request: Request) {
       return jsonError("A client and project title are required");
     }
     const db = getDb();
+    const requestKey = payload.requestKey?.trim() || null;
+    if (requestKey) {
+      const prior = await db
+        .select({ id: projects.id })
+        .from(projects)
+        .where(
+          and(
+            eq(projects.workspaceId, WORKSPACE_ID),
+            eq(projects.requestKey, requestKey),
+          ),
+        )
+        .get();
+      if (prior) {
+        return Response.json({
+          id: prior.id,
+          status: "existing",
+          idempotent: true,
+        });
+      }
+    }
     const client = await db
       .select({ id: clients.id })
       .from(clients)
@@ -53,6 +75,8 @@ export async function POST(request: Request) {
             .filter(Boolean) ?? [],
         ),
         summary: payload.summary?.trim() || null,
+        clientSummary: payload.clientSummary?.trim() || null,
+        requestKey,
         budgetMinCents:
           typeof payload.budgetMin === "number"
             ? Math.round(payload.budgetMin * 100)

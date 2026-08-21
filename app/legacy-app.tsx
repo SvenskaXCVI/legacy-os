@@ -103,6 +103,8 @@ type ProjectRecord = {
   nextAction: string | null;
   nextActionAt: string | null;
   summary: string | null;
+  clientSummary?: string | null;
+  isTest?: boolean;
   updatedAt: string;
 };
 
@@ -121,6 +123,8 @@ type AppointmentRecord = {
 type ApprovalRecord = {
   id: string;
   projectId: string | null;
+  assetId?: string | null;
+  assetVersion?: number | null;
   category: string;
   subject: string;
   summary: string;
@@ -149,6 +153,10 @@ type AssetRecord = {
   mimeType: string;
   byteSize: number;
   sourceType: string;
+  assetRole?: string;
+  visibility?: string;
+  version?: number;
+  contentEligible?: boolean;
   createdAt: string;
 };
 
@@ -1823,15 +1831,20 @@ function DesignStudio({
 
   async function requestApproval() {
     if (!project) return;
+    if (!selectedAsset) {
+      notify("Select the exact design version the client should review.", true);
+      return;
+    }
     try {
       await api("/api/approvals", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           projectId: project.id,
+          assetId: selectedAsset.id,
           category: "design",
           subject: `${project.title} design review`,
-          summary: "Review the latest shared design file and approve it or request a revision.",
+          summary: `Review ${selectedAsset.originalName} (version ${selectedAsset.version ?? 1}) and approve it or request a revision.`,
           riskLevel: "medium",
         }),
       });
@@ -2382,8 +2395,9 @@ function ModuleView({
         }));
     }
     if (type === "content") {
-      const imageAssets = data.assets.filter((asset) =>
-        asset.mimeType.startsWith("image/"),
+      const imageAssets = data.assets.filter(
+        (asset) =>
+          asset.mimeType.startsWith("image/") && asset.contentEligible === true,
       );
       if (activeTab === "Approve") {
         return data.approvals
@@ -2946,8 +2960,12 @@ function ProjectForm({
   onSaved: () => void;
   notify: (message: string, error?: boolean) => void;
 }) {
+  const [submitting, setSubmitting] = useState(false);
+  const [requestKey] = useState(() => crypto.randomUUID());
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (submitting) return;
+    setSubmitting(true);
     const values = Object.fromEntries(new FormData(event.currentTarget));
     try {
       await api("/api/projects", {
@@ -2955,6 +2973,7 @@ function ProjectForm({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           ...values,
+          requestKey,
           budgetMin: values.budgetMin ? Number(values.budgetMin) : undefined,
           budgetMax: values.budgetMax ? Number(values.budgetMax) : undefined,
         }),
@@ -2964,6 +2983,8 @@ function ProjectForm({
       onSaved();
     } catch (error) {
       notify(error instanceof Error ? error.message : "Unable to create project", true);
+    } finally {
+      setSubmitting(false);
     }
   }
   return (
@@ -2981,12 +3002,13 @@ function ProjectForm({
             <Field label="Target date" name="targetDate" type="date" />
           </div>
           <Field label="Style tags" name="style" placeholder="Black & grey, realism, ornamental" />
-          <Field label="Creative brief" name="summary"><textarea name="summary" placeholder="Concept, mood, non-negotiables, and creative direction..." /></Field>
+          <Field label="Internal creative brief" name="summary"><textarea name="summary" placeholder="Private studio context, constraints, and creative direction..." /></Field>
+          <Field label="Client-facing project summary" name="clientSummary"><textarea name="clientSummary" placeholder="Only information you intend to share in the client portal..." /></Field>
           <div className="field-row">
             <Field label="Budget minimum" name="budgetMin" type="number" />
             <Field label="Budget maximum" name="budgetMax" type="number" />
           </div>
-          <div className="modal-actions"><button className="text-button" type="button" onClick={onClose}>Cancel</button><button className="gold-button" type="submit">Create project</button></div>
+          <div className="modal-actions"><button className="text-button" type="button" onClick={onClose}>Cancel</button><button className="gold-button" type="submit" disabled={submitting}>{submitting ? "Creating…" : "Create project"}</button></div>
         </form>
       )}
     </Modal>
@@ -3470,7 +3492,7 @@ function ClientPortal({
               <div className="client-grid">
                 <section className="client-card project-summary">
                   <PanelTitle eyebrow="PROJECT OVERVIEW" title="Creative direction" />
-                  <p>{project.summary || "Your artist has not added a public project summary yet."}</p>
+                  <p>{project.clientSummary || "Your artist has not added a public project summary yet."}</p>
                   <div className="tag-row">
                     {JSON.parse(project.styleTagsJson || "[]").map((tag: string) => <span key={tag}>{tag}</span>)}
                   </div>
