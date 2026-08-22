@@ -4,6 +4,7 @@ import { captureEvents } from "../db/schema";
 import { publishRealtimeCapture } from "./realtime-engine";
 
 type Db = ReturnType<typeof getDb>;
+const CAPTURE_LOOKUP_BATCH_SIZE = 50;
 
 export type UniversalCaptureInput = {
   workspaceId: string;
@@ -133,16 +134,21 @@ export async function backfillAuditCaptureEvents(
   db: Db = getDb(),
 ) {
   if (!events.length) return;
-  const existing = await db
-    .select({ sourceId: captureEvents.sourceId })
-    .from(captureEvents)
-    .where(
-      and(
-        eq(captureEvents.workspaceId, workspaceId),
-        eq(captureEvents.sourceType, "audit_event"),
-        inArray(captureEvents.sourceId, events.map((event) => event.id)),
-      ),
-    );
+  const sourceIds = [...new Set(events.map((event) => event.id))];
+  const existing: Array<{ sourceId: string | null }> = [];
+  for (let offset = 0; offset < sourceIds.length; offset += CAPTURE_LOOKUP_BATCH_SIZE) {
+    const batch = sourceIds.slice(offset, offset + CAPTURE_LOOKUP_BATCH_SIZE);
+    existing.push(...await db
+      .select({ sourceId: captureEvents.sourceId })
+      .from(captureEvents)
+      .where(
+        and(
+          eq(captureEvents.workspaceId, workspaceId),
+          eq(captureEvents.sourceType, "audit_event"),
+          inArray(captureEvents.sourceId, batch),
+        ),
+      ));
+  }
   const capturedIds = new Set(existing.map((row) => row.sourceId));
   for (const event of events.filter((item) => !capturedIds.has(item.id))) {
     const channel = event.actorType === "client"

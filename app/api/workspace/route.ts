@@ -96,8 +96,10 @@ export async function GET(request: Request) {
       .where(eq(auditEvents.workspaceId, WORKSPACE_ID))
       .orderBy(desc(auditEvents.occurredAt))
       .limit(100);
-    await backfillAuditCaptureEvents(WORKSPACE_ID, existingAuditRows, db);
-    await consolidateCaptureMemory(WORKSPACE_ID, db);
+    // Historical normalization improves intelligence but must never prevent the
+    // owner from opening the operational workspace.
+    await backfillAuditCaptureEvents(WORKSPACE_ID, existingAuditRows, db).catch(() => null);
+    await consolidateCaptureMemory(WORKSPACE_ID, db).catch(() => null);
     await ensureAgentRegistry(WORKSPACE_ID, db);
     await ensureConnectorRegistry(WORKSPACE_ID, db);
     await ensureToolRegistry(WORKSPACE_ID, db);

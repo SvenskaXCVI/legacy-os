@@ -645,5 +645,9 @@ export function routeError(
   status = 500,
 ) {
   if (error instanceof Response) return error;
+  // Internal query, connector, and provider details must never reach a browser.
+  // Expected client-facing validation errors are returned directly with
+  // jsonError before this boundary.
+  if (status >= 500) return jsonError(fallback, status);
   return jsonError(error instanceof Error ? error.message : fallback, status);
 }

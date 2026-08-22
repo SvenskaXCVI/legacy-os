@@ -2,6 +2,7 @@
 
 ## 0.7.0-alpha.28 — 2026-08-22
 
+- Production hotfix: bounded audit-capture backfill lookups to safe database parameter batches and prevented internal database or provider errors from being rendered in the owner interface.
 - Added explicit owner-defined tattoo, design, admin, and protected personal capacity windows instead of treating empty calendar time as availability.
 - Added project-level session requirements for duration, preparation, travel, buffers, energy demand, date boundaries, location, and expected value.
 - Added a deterministic scheduling evaluator that requires session-stage readiness, an exact approved design version, a paid deposit, and a complete session requirement before suggesting a fit.
