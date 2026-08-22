@@ -4,6 +4,7 @@ export type ModelRequest = {
   purpose: string;
   system: string;
   context: unknown;
+  images?: Array<{ mimeType: string; dataBase64: string }>;
 };
 
 export type ModelResult = {
@@ -37,6 +38,20 @@ export async function runModel(request: ModelRequest): Promise<ModelResult> {
   }
 
   const baseUrl = String(env.AI_BASE_URL).replace(/\/+$/, "");
+  const model = String(
+    request.images?.length && env.AI_VISION_MODEL
+      ? env.AI_VISION_MODEL
+      : env.AI_MODEL,
+  );
+  const userContent = request.images?.length
+    ? [
+        { type: "text", text: JSON.stringify(request.context) },
+        ...request.images.map((image) => ({
+          type: "image_url",
+          image_url: { url: `data:${image.mimeType};base64,${image.dataBase64}`, detail: "high" },
+        })),
+      ]
+    : JSON.stringify(request.context);
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
@@ -44,11 +59,11 @@ export async function runModel(request: ModelRequest): Promise<ModelResult> {
       "content-type": "application/json",
     },
     body: JSON.stringify({
-      model: String(env.AI_MODEL),
+      model,
       temperature: 0.2,
       messages: [
         { role: "system", content: request.system },
-        { role: "user", content: JSON.stringify(request.context) },
+        { role: "user", content: userContent },
       ],
     }),
   });
@@ -62,10 +77,9 @@ export async function runModel(request: ModelRequest): Promise<ModelResult> {
   };
   return {
     provider: String(env.AI_PROVIDER || "OpenAI-compatible"),
-    model: String(env.AI_MODEL),
+    model,
     summary:
       payload.choices?.[0]?.message?.content?.trim() || request.purpose,
     usedExternalModel: true,
   };
 }
-

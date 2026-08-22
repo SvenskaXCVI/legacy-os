@@ -9,6 +9,7 @@ erDiagram
     WORKSPACES ||--o{ PROJECTS : owns
     CLIENTS ||--o{ PROJECTS : commissions
     PROJECTS ||--o{ ASSETS : contains
+    ASSETS ||--o{ ASSET_ANALYSES : analyzed_as
     CLIENTS ||--o{ ASSETS : supplies
     PROJECTS ||--o{ KNOWLEDGE_ITEMS : produces
     ASSETS ||--o{ KNOWLEDGE_ITEMS : extracted_into
@@ -130,5 +131,18 @@ erDiagram
       text event_type
       text payload_digest
       text status
+    }
+
+    ASSET_ANALYSES {
+      text id PK
+      text project_id FK
+      text asset_id FK
+      text asset_sha256
+      integer asset_version
+      text analysis_version
+      text provider
+      text model
+      text status
+      integer confidence_bps
     }
 ```

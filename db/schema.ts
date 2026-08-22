@@ -304,9 +304,42 @@ export const assets = sqliteTable(
     index("assets_project_idx").on(table.projectId),
     index("assets_hash_idx").on(table.sha256),
     index("assets_project_visibility_idx").on(table.projectId, table.visibility),
+    index("assets_version_group_idx").on(table.versionGroupId, table.version),
+    index("assets_project_role_idx").on(table.projectId, table.assetRole),
     index("assets_content_eligible_idx").on(
       table.workspaceId,
       table.contentEligible,
+    ),
+  ],
+);
+
+export const assetAnalyses = sqliteTable(
+  "asset_analyses",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    projectId: text("project_id").notNull().references(() => projects.id),
+    assetId: text("asset_id").notNull().references(() => assets.id),
+    assetSha256: text("asset_sha256").notNull(),
+    assetVersion: integer("asset_version").notNull(),
+    analysisVersion: text("analysis_version").notNull(),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    status: text("status").notNull(),
+    summary: text("summary").notNull(),
+    observationsJson: text("observations_json").notNull().default("[]"),
+    evidenceJson: text("evidence_json").notNull().default("[]"),
+    confidenceBps: integer("confidence_bps").notNull().default(0),
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at"),
+  },
+  (table) => [
+    index("asset_analyses_asset_idx").on(table.assetId, table.createdAt),
+    index("asset_analyses_project_idx").on(table.projectId, table.createdAt),
+    uniqueIndex("asset_analyses_asset_hash_version_uq").on(
+      table.assetId,
+      table.assetSha256,
+      table.analysisVersion,
     ),
   ],
 );

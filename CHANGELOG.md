@@ -1,5 +1,15 @@
 # Legacy OS release history
 
+## 0.7.0-alpha.5 — 2026-08-21
+
+- Replaced the Design Studio filename placeholder with authenticated image previews of private R2 assets.
+- Added client-facing previews for the exact immutable artifact and version under approval.
+- Activated tattoo-specific asset roles, visibility, rights, consent, and Content Studio eligibility controls.
+- Added true version lineage for uploaded design iterations while preserving every original file.
+- Prevented references and unrelated files from being submitted as client design approvals.
+- Added version-bound, auditable visual design analysis through an optional vision-capable model adapter.
+- Added an additive analysis ledger and asset indexes without modifying existing alpha records.
+
 ## 0.6.0-alpha.4 — 2026-08-21
 
 - Added owner-created, owner-approved deposits, invoices, balances, and other payment requests.

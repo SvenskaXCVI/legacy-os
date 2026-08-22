@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import { getDb } from "../../../db";
 import { assets, auditEvents, projects } from "../../../db/schema";
@@ -19,12 +19,24 @@ type StoredObject = {
   httpMetadata?: { contentType?: string };
 };
 
+const assetRoles = new Set([
+  "client_reference", "artist_reference", "body_photo", "mockup",
+  "design_iteration", "final_design", "stencil", "session_photo",
+  "fresh_tattoo", "healed_tattoo", "content_asset", "consent_document", "other",
+]);
+const visibilities = new Set(["internal", "client_shared", "public"]);
+const rightsStatuses = new Set(["unknown", "client_provided", "studio_created", "authorized", "restricted"]);
+const consentStatuses = new Set(["not_required", "pending", "granted", "revoked"]);
+const contentRoles = new Set(["final_design", "session_photo", "fresh_tattoo", "healed_tattoo", "content_asset"]);
+
 export async function POST(request: Request) {
   try {
     const form = await request.formData();
     const file = form.get("file");
     const projectId = String(form.get("projectId") ?? "");
     const token = String(form.get("token") ?? "");
+    const requestedRole = String(form.get("assetRole") ?? "");
+    const parentAssetId = String(form.get("parentAssetId") ?? "");
     if (!(file instanceof File) || !projectId) {
       return jsonError("A file and project are required");
     }
@@ -62,6 +74,23 @@ export async function POST(request: Request) {
       ? `client:${clientAccess.clientId}`
       : actorFrom(request);
     const now = new Date().toISOString();
+    const parent = !clientAccess && parentAssetId
+      ? await db.select().from(assets).where(and(
+          eq(assets.id, parentAssetId), eq(assets.projectId, projectId),
+          eq(assets.workspaceId, WORKSPACE_ID), isNull(assets.deletedAt),
+        )).get()
+      : null;
+    if (parentAssetId && !clientAccess && !parent) return jsonError("The selected parent design was not found", 404);
+    const assetRole = clientAccess
+      ? "client_reference"
+      : parent?.assetRole || (assetRoles.has(requestedRole) ? requestedRole : "design_iteration");
+    const versionGroupId = parent?.versionGroupId || parent?.id || assetId;
+    const latestVersion = parent
+      ? await db.select({ version: assets.version }).from(assets)
+          .where(and(eq(assets.versionGroupId, versionGroupId), eq(assets.workspaceId, WORKSPACE_ID)))
+          .orderBy(desc(assets.version)).get()
+      : null;
+    const version = parent ? (latestVersion?.version || parent.version) + 1 : 1;
 
     await env.MEDIA.put(storageKey, bytes, {
       httpMetadata: { contentType: file.type || "application/octet-stream" },
@@ -80,9 +109,11 @@ export async function POST(request: Request) {
         byteSize: file.size,
         sha256: digest,
         sourceType: clientAccess ? "client_upload" : "owner_upload",
-        assetRole: clientAccess ? "reference" : "design_iteration",
+        assetRole,
         visibility: clientAccess ? "client_shared" : "internal",
-        versionGroupId: assetId,
+        version,
+        versionGroupId,
+        parentAssetId: parent?.id || null,
         rightsStatus: clientAccess ? "client_provided" : "studio_created",
         consentStatus: "not_required",
         contentEligible: false,
@@ -104,6 +135,10 @@ export async function POST(request: Request) {
           projectId,
           byteSize: file.size,
           mimeType: file.type,
+          assetRole,
+          version,
+          versionGroupId,
+          parentAssetId: parent?.id || null,
         }),
         occurredAt: now,
       }),
@@ -124,6 +159,9 @@ export async function POST(request: Request) {
           mimeType: file.type || "application/octet-stream",
           byteSize: file.size,
           sourceType: clientAccess ? "client_upload" : "owner_upload",
+          assetRole,
+          version,
+          versionGroupId,
           integrityVerified: true,
         },
         priority: 70,
@@ -137,6 +175,51 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     return routeError(error, "Unable to upload file");
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const access = await requireOwner(request);
+    const payload = (await request.json()) as {
+      id?: string;
+      assetRole?: string;
+      visibility?: string;
+      rightsStatus?: string;
+      consentStatus?: string;
+      contentEligible?: boolean;
+    };
+    if (!payload.id) return jsonError("Asset id is required");
+    const db = getDb();
+    const asset = await db.select().from(assets).where(and(
+      eq(assets.id, payload.id), eq(assets.workspaceId, WORKSPACE_ID), isNull(assets.deletedAt),
+    )).get();
+    if (!asset) return jsonError("File not found", 404);
+    const assetRole = payload.assetRole ?? asset.assetRole;
+    const visibility = payload.visibility ?? asset.visibility;
+    const rightsStatus = payload.rightsStatus ?? asset.rightsStatus;
+    const consentStatus = payload.consentStatus ?? asset.consentStatus;
+    if (!assetRoles.has(assetRole) || !visibilities.has(visibility) || !rightsStatuses.has(rightsStatus) || !consentStatuses.has(consentStatus)) {
+      return jsonError("One or more asset classifications are invalid");
+    }
+    const wantsContent = payload.contentEligible ?? asset.contentEligible;
+    if (wantsContent && (!contentRoles.has(assetRole) || !["studio_created", "authorized"].includes(rightsStatus) || consentStatus !== "granted")) {
+      return jsonError("Publishing eligibility requires an eligible tattoo/content role, authorized rights, and granted client consent");
+    }
+    const now = new Date().toISOString();
+    await db.batch([
+      db.update(assets).set({ assetRole, visibility, rightsStatus, consentStatus, contentEligible: wantsContent }).where(eq(assets.id, asset.id)),
+      db.insert(auditEvents).values({
+        id: makeId("audit"), workspaceId: WORKSPACE_ID, actorType: "owner", actorId: access.user!.id,
+        action: "asset.classification_updated", targetType: "asset", targetId: asset.id,
+        riskLevel: visibility === "public" || wantsContent ? "high" : "medium", outcome: "updated",
+        metadataJson: JSON.stringify({ before: { assetRole: asset.assetRole, visibility: asset.visibility, rightsStatus: asset.rightsStatus, consentStatus: asset.consentStatus, contentEligible: asset.contentEligible }, after: { assetRole, visibility, rightsStatus, consentStatus, contentEligible: wantsContent } }),
+        occurredAt: now,
+      }),
+    ]);
+    return Response.json({ id: asset.id, assetRole, visibility, rightsStatus, consentStatus, contentEligible: wantsContent });
+  } catch (error) {
+    return routeError(error, "Unable to update asset classification");
   }
 }
 

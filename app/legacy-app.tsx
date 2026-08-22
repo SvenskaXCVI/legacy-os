@@ -55,6 +55,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import NextImage from "next/image";
 import { InstallAppButton } from "./install-app-button";
 import { LEGACY_OS_RELEASE, LEGACY_OS_VERSION } from "../lib/version";
 
@@ -203,6 +204,10 @@ type AssetRecord = {
   assetRole?: string;
   visibility?: string;
   version?: number;
+  versionGroupId?: string | null;
+  parentAssetId?: string | null;
+  rightsStatus?: string;
+  consentStatus?: string;
   contentEligible?: boolean;
   createdAt: string;
 };
@@ -579,7 +584,7 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
   return data;
 }
 
-async function downloadAsset(asset: AssetRecord, portalToken?: string) {
+async function fetchAssetBlob(asset: AssetRecord, portalToken?: string) {
   const headers = new Headers();
   if (activeApiAccessToken) {
     headers.set("authorization", `Bearer ${activeApiAccessToken}`);
@@ -598,7 +603,11 @@ async function downloadAsset(asset: AssetRecord, portalToken?: string) {
     } | null;
     throw new Error(result?.error || "Unable to open this file");
   }
-  const objectUrl = URL.createObjectURL(await response.blob());
+  return response.blob();
+}
+
+async function downloadAsset(asset: AssetRecord, portalToken?: string) {
+  const objectUrl = URL.createObjectURL(await fetchAssetBlob(asset, portalToken));
   const link = document.createElement("a");
   link.href = objectUrl;
   link.download = asset.originalName;
@@ -607,6 +616,27 @@ async function downloadAsset(asset: AssetRecord, portalToken?: string) {
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30_000);
+}
+
+function AssetPreview({ asset, portalToken, className }: { asset: AssetRecord; portalToken?: string; className?: string }) {
+  const [src, setSrc] = useState("");
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let active = true;
+    let objectUrl = "";
+    if (asset.mediaType !== "image" || !asset.mimeType.startsWith("image/")) return;
+    void fetchAssetBlob(asset, portalToken)
+      .then((blob) => {
+        if (!active) return;
+        objectUrl = URL.createObjectURL(blob);
+        setSrc(objectUrl);
+      })
+      .catch(() => { if (active) setFailed(true); });
+    return () => { active = false; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [asset, portalToken]);
+  if (failed || asset.mediaType !== "image") return <div className={cn("asset-preview-fallback", className)}><FileText size={28} /><span>{asset.originalName}</span></div>;
+  if (!src) return <div className={cn("asset-preview-loading", className)}><Spinner label="Loading image preview" /></div>;
+  return <NextImage unoptimized width={1600} height={1600} className={cn("asset-preview-image", className)} src={src} alt={`${asset.originalName}, ${asset.assetRole?.replaceAll("_", " ") || "project image"}`} />;
 }
 
 async function copyText(value: string) {
@@ -2005,6 +2035,7 @@ function DesignStudio({
   const [tool, setTool] = useState<"select" | "analyze">("select");
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
+  const [analysis, setAnalysis] = useState<{ summary: string; provider: string; model: string; confidenceBps: number; createdAt: string } | null>(null);
   const project = data.projects.find((item) => item.id === projectId);
   const projectAssets = data.assets.filter((item) => item.projectId === projectId);
   const projectApprovals = data.approvals.filter((item) => item.projectId === projectId);
@@ -2012,16 +2043,26 @@ function DesignStudio({
     (item) => item.id === selectedAssetId,
   );
 
+  useEffect(() => {
+    if (!selectedAssetId) return;
+    let active = true;
+    void api<{ analyses: Array<{ summary: string; provider: string; model: string; confidenceBps: number; createdAt: string }> }>(`/api/design-analysis?assetId=${encodeURIComponent(selectedAssetId)}`)
+      .then((result) => { if (active) setAnalysis(result.analyses[0] || null); })
+      .catch(() => { if (active) setAnalysis(null); });
+    return () => { active = false; };
+  }, [selectedAssetId]);
+
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     form.set("projectId", projectId);
     try {
-      await api("/api/files", { method: "POST", body: form });
+      const result = await api<{ id: string }>("/api/files", { method: "POST", body: form });
       formElement.reset();
-      notify("Design file stored and written to the audit trail.");
-      refresh();
+      setSelectedAssetId(result.id);
+      notify("Classified design file stored with version lineage and an audit record.");
+      await refresh();
     } catch (error) {
       notify(error instanceof Error ? error.message : "Upload failed", true);
     }
@@ -2054,22 +2095,20 @@ function DesignStudio({
   }
 
   async function analyzeDesign() {
-    if (!project) return;
+    if (!project || !selectedAsset) {
+      notify("Select a classified design image before running visual analysis.", true);
+      return;
+    }
     setTool("analyze");
     setAnalyzing(true);
     try {
-      const result = await api<{ summary?: string }>("/api/intelligence", {
+      const result = await api<{ analysis: { summary: string; provider: string; model: string; confidenceBps: number; createdAt: string } }>("/api/design-analysis", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          triggerType: "design_review",
-          projectId: project.id,
-        }),
+        body: JSON.stringify({ assetId: selectedAsset.id }),
       });
-      notify(
-        result.summary ||
-          "Design evidence evaluated. Results are available in AI Operations.",
-      );
+      setAnalysis(result.analysis);
+      notify("Version-bound visual analysis recorded in Design Studio and AI Operations.");
       refresh();
     } catch (error) {
       notify(
@@ -2081,15 +2120,24 @@ function DesignStudio({
     }
   }
 
-  async function openAsset(asset: AssetRecord) {
+  function openAsset(asset: AssetRecord) {
     setSelectedAssetId(asset.id);
+    setAnalysis(null);
+  }
+
+  async function saveClassification(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedAsset) return;
+    const form = new FormData(event.currentTarget);
     try {
-      await downloadAsset(asset);
+      await api("/api/files", {
+        method: "PATCH", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: selectedAsset.id, assetRole: form.get("assetRole"), visibility: form.get("visibility"), rightsStatus: form.get("rightsStatus"), consentStatus: form.get("consentStatus"), contentEligible: form.get("contentEligible") === "on" }),
+      });
+      notify("Asset classification and permissions updated.");
+      await refresh();
     } catch (error) {
-      notify(
-        error instanceof Error ? error.message : "Unable to open file",
-        true,
-      );
+      notify(error instanceof Error ? error.message : "Unable to update asset", true);
     }
   }
 
@@ -2142,12 +2190,12 @@ function DesignStudio({
               {projectAssets.map((asset) => (
                 <button
                   className={selectedAssetId === asset.id ? "active" : ""}
-                  onClick={() => void openAsset(asset)}
+                  onClick={() => openAsset(asset)}
                   key={asset.id}
                 >
-                  <span><FileText size={17} /></span>
-                  <div><strong>{asset.originalName}</strong><small>{formatBytes(asset.byteSize)} · {asset.sourceType.replace("_", " ")}</small></div>
-                  <Download size={14} />
+                  <span>{asset.mediaType === "image" ? <ImageIcon size={17} /> : <FileText size={17} />}</span>
+                  <div><strong>{asset.originalName}</strong><small>v{asset.version || 1} · {asset.assetRole?.replaceAll("_", " ") || "unclassified"}</small></div>
+                  <ChevronDown size={14} />
                 </button>
               ))}
             </div>
@@ -2159,27 +2207,37 @@ function DesignStudio({
             <strong>Add a project file</strong>
             <small>Images or documents up to 25 MB</small>
             <input type="file" name="file" required />
+            <label><span>ASSET TYPE</span><select name="assetRole" defaultValue="design_iteration"><option value="artist_reference">Artist reference</option><option value="body_photo">Body placement photo</option><option value="mockup">Mockup</option><option value="design_iteration">Design iteration</option><option value="final_design">Final design</option><option value="stencil">Stencil</option><option value="session_photo">Session photo</option><option value="fresh_tattoo">Fresh tattoo</option><option value="healed_tattoo">Healed tattoo</option><option value="content_asset">Content asset</option><option value="consent_document">Consent document</option><option value="other">Other</option></select></label>
+            <label><span>VERSION OF</span><select name="parentAssetId" defaultValue=""><option value="">New independent asset</option>{projectAssets.filter((asset) => ["mockup", "design_iteration", "final_design", "stencil"].includes(asset.assetRole || "")).map((asset) => <option value={asset.id} key={asset.id}>{asset.originalName} · v{asset.version || 1}</option>)}</select></label>
             <button className="outline-button small" type="submit">Upload</button>
           </form>
         </aside>
         <section className="design-canvas os-panel">
           <header><span>CANVAS</span><small>{project.placement || "Placement not set"}</small></header>
-          <div className="canvas-empty">
-            <div className="canvas-emblem"><span>L</span></div>
-            <p>{selectedAsset?.originalName || project.title}</p>
-            <small>
-              {selectedAsset
-                ? "The selected original has been downloaded for review. Legacy OS preserves the stored source unchanged."
-                : "Select a project file to review it. The stored original remains unchanged."}
-            </small>
+          <div className={cn("canvas-empty", selectedAsset && "has-preview")}>
+            {selectedAsset ? <AssetPreview asset={selectedAsset} className="design-main-preview" /> : <><div className="canvas-emblem"><span>L</span></div><p>{project.title}</p><small>Select a project file to review it. The stored original remains unchanged.</small></>}
           </div>
+          {selectedAsset && <div className="asset-review-controls">
+            <div><strong>{selectedAsset.originalName}</strong><small>Version {selectedAsset.version || 1} · SHA-256 protected original</small></div>
+            <button className="outline-button small" onClick={() => void downloadAsset(selectedAsset)}><Download size={14} /> Download original</button>
+          </div>}
+          {analysis && <article className="design-analysis-result"><span><BrainCircuit size={17} /> AI DESIGN REVIEW</span><p>{analysis.summary}</p><small>{analysis.provider} · {analysis.model} · {Math.round(analysis.confidenceBps / 100)}% bounded confidence · {formatDate(analysis.createdAt, true)}</small></article>}
           <footer>
             <span>PROJECT NOTE</span>
             <p>{project.summary || "Add the creative direction to the project brief."}</p>
           </footer>
         </section>
         <aside className="approval-column os-panel">
-          <PanelTitle eyebrow="CLIENT REVIEW" title="Approvals" />
+          <PanelTitle eyebrow="ASSET CONTROL" title="Classification & approvals" />
+          {selectedAsset && <form className="asset-classification-form" key={selectedAsset.id} onSubmit={saveClassification}>
+            <label><span>TYPE</span><select name="assetRole" defaultValue={selectedAsset.assetRole || "other"}><option value="client_reference">Client reference</option><option value="artist_reference">Artist reference</option><option value="body_photo">Body photo</option><option value="mockup">Mockup</option><option value="design_iteration">Design iteration</option><option value="final_design">Final design</option><option value="stencil">Stencil</option><option value="session_photo">Session photo</option><option value="fresh_tattoo">Fresh tattoo</option><option value="healed_tattoo">Healed tattoo</option><option value="content_asset">Content asset</option><option value="consent_document">Consent document</option><option value="other">Other</option></select></label>
+            <label><span>VISIBILITY</span><select name="visibility" defaultValue={selectedAsset.visibility || "internal"}><option value="internal">Studio only</option><option value="client_shared">Share with client</option><option value="public">Public</option></select></label>
+            <label><span>RIGHTS</span><select name="rightsStatus" defaultValue={selectedAsset.rightsStatus || "unknown"}><option value="unknown">Unknown</option><option value="client_provided">Client provided</option><option value="studio_created">Studio created</option><option value="authorized">Authorized</option><option value="restricted">Restricted</option></select></label>
+            <label><span>CLIENT CONSENT</span><select name="consentStatus" defaultValue={selectedAsset.consentStatus || "not_required"}><option value="not_required">Not required</option><option value="pending">Pending</option><option value="granted">Granted</option><option value="revoked">Revoked</option></select></label>
+            <label className="check-line"><input type="checkbox" name="contentEligible" defaultChecked={selectedAsset.contentEligible} /><span>Eligible for Content Studio</span></label>
+            <button className="outline-button small" type="submit">Save classification</button>
+          </form>}
+          <PanelTitle eyebrow="CLIENT REVIEW" title="Version-bound approvals" />
           {projectApprovals.length ? (
             <div className="approval-stack">
               {projectApprovals.map((approval) => (
@@ -3893,15 +3951,17 @@ function ClientPortal({
             {tab === "approvals" && (
               <section className="client-card">
                 <PanelTitle eyebrow="YOUR DECISIONS" title="Approvals" />
-                {approvals.length ? <div className="portal-approval-list">{approvals.map((approval) => (
-                  <article key={approval.id}>
+                {approvals.length ? <div className="portal-approval-list">{approvals.map((approval) => {
+                  const approvalAsset = files.find((asset) => asset.id === approval.assetId);
+                  return <article key={approval.id}>
                     <span className={cn("approval-status", approval.status)}>{approval.status}</span>
                     <h3>{approval.subject}</h3>
                     <p>{approval.summary}</p>
+                    {approvalAsset && <div className="approval-artifact"><AssetPreview asset={approvalAsset} portalToken={token} /><small>{approvalAsset.originalName} · Version {approval.assetVersion || approvalAsset.version || 1}</small></div>}
                     <small>Requested {formatDate(approval.createdAt, true)}</small>
                     {approval.status === "pending" && <div><button className="gold-button" onClick={() => decide(approval.id, "approved")}><Check size={15} /> Approve</button><button className="outline-button" onClick={() => decide(approval.id, "revision")}><MessageSquareText size={15} /> Request revision</button></div>}
-                  </article>
-                ))}</div> : <EmptyState icon={ShieldCheck} title="Nothing needs approval" body="Designs and other gated decisions will appear here." />}
+                  </article>;
+                })}</div> : <EmptyState icon={ShieldCheck} title="Nothing needs approval" body="Designs and other gated decisions will appear here." />}
               </section>
             )}
 
@@ -3909,8 +3969,8 @@ function ClientPortal({
               <div className="client-files-layout">
                 <section className="client-card">
                   <PanelTitle eyebrow="PROJECT FILES" title="Shared media" />
-                  {files.length ? <div className="asset-list">{files.map((asset) => (
-                    <button onClick={() => void openPortalAsset(asset)} key={asset.id}><span><FileText size={18} /></span><div><strong>{asset.originalName}</strong><small>{formatBytes(asset.byteSize)} · {formatDate(asset.createdAt)}</small></div><Download size={14} /></button>
+                  {files.length ? <div className="portal-media-grid">{files.map((asset) => (
+                    <button onClick={() => void openPortalAsset(asset)} key={asset.id}>{asset.mediaType === "image" ? <AssetPreview asset={asset} portalToken={token} /> : <span className="portal-file-icon"><FileText size={24} /></span>}<div><strong>{asset.originalName}</strong><small>{asset.assetRole?.replaceAll("_", " ") || "project file"} · v{asset.version || 1}</small><small>{formatBytes(asset.byteSize)} · {formatDate(asset.createdAt)}</small></div><Download size={14} /></button>
                   ))}</div> : <EmptyState icon={FileText} title="No files shared yet" body="References and project documents will stay connected here." />}
                 </section>
                 <form className="client-card portal-upload" onSubmit={upload}><Upload size={28} /><h3>Share a reference</h3><p>Upload an image or document up to 25 MB.</p><input type="file" name="file" required /><button className="gold-button" type="submit"><Upload size={15} /> Upload file</button></form>

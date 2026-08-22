@@ -22,6 +22,8 @@ appointments, approvals, analytics, or financial records are inserted.
 - Expiring, revocable, hashed client access links and invitation-bound client
   account creation.
 - Client, project, appointment, message, approval, and private R2 file flows.
+- Authenticated owner/client image previews, tattoo-specific asset controls,
+  design lineage, and immutable version-bound design approvals.
 - Owner-approved Stripe deposits and invoices, client-hosted Checkout, signed
   webhook settlement, refunds, receipts, and an auditable payment ledger.
 - Project lifecycle from consult through design, approval, session, healing,
@@ -54,6 +56,7 @@ the queue.
 - Drizzle migrations
 - Optional Supabase Auth
 - Optional OpenAI-compatible model adapter
+- Optional vision-capable model for consent- and rights-bounded design analysis
 - Optional Instagram professional-account adapter
 - Optional Stripe Checkout and webhook adapter
 
@@ -98,6 +101,7 @@ owner code must be configured only in the hosting environment and never committe
 - [Identity and access](docs/IDENTITY_AND_ACCESS.md)
 - [Supabase account rollout](docs/SUPABASE_ROLLOUT.md)
 - [Stripe alpha rollout](docs/STRIPE_ROLLOUT.md)
+- [Design media and analysis](docs/DESIGN_MEDIA.md)
 - [Intelligence and autonomy](docs/INTELLIGENCE_AND_AUTONOMY.md)
 - [Operations runbook](docs/OPERATIONS_RUNBOOK.md)
 - [Deployment and sharing](docs/DEPLOYMENT.md)

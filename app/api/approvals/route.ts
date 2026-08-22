@@ -6,6 +6,7 @@ import { captureAutomationSignal } from "../../../lib/automation-engine";
 
 const DEFAULT_WORKSPACE_ID = "legacy-lines";
 const decisions = new Set(["approved", "revision", "rejected"]);
+const clientApprovalRoles = new Set(["mockup", "design_iteration", "final_design", "stencil"]);
 
 export async function POST(request: Request) {
   try {
@@ -62,6 +63,18 @@ export async function POST(request: Request) {
         return jsonError(
           "Select the exact design version before requesting client approval",
         );
+      }
+      if (clientFacing && asset && !clientApprovalRoles.has(asset.assetRole)) {
+        return jsonError("Only a classified mockup, design version, final design, or stencil can be sent for client approval");
+      }
+      if (clientFacing && asset) {
+        const pendingForVersion = await db.select({ id: approvals.id }).from(approvals).where(and(
+          eq(approvals.workspaceId, DEFAULT_WORKSPACE_ID),
+          eq(approvals.assetId, asset.id),
+          eq(approvals.assetSha256, asset.sha256),
+          eq(approvals.status, "pending"),
+        )).get();
+        if (pendingForVersion) return Response.json({ approvalId: pendingForVersion.id, assetId: asset.id, assetVersion: asset.version, status: "pending", idempotent: true });
       }
       const approvalId = makeId("approval");
       const payloadHash = asset

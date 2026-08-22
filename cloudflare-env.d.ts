@@ -11,6 +11,7 @@ declare module "cloudflare:workers" {
     AI_BASE_URL?: string;
     AI_API_KEY?: string;
     AI_MODEL?: string;
+    AI_VISION_MODEL?: string;
     INSTAGRAM_CLIENT_ID?: string;
     INSTAGRAM_CLIENT_SECRET?: string;
     INSTAGRAM_REDIRECT_URI?: string;

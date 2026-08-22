@@ -50,6 +50,11 @@ authorization boundary for the deployed application.
 - `GET|POST /api/files` uploads project media to R2 or retrieves an authorized
   asset. Uploads are limited to 25 MB, reject executable/active-content
   formats, and receive a SHA-256 integrity hash.
+- `PATCH /api/files` lets a verified owner change an asset's role, visibility,
+  rights, consent, and publishing eligibility without mutating the original.
+- `GET|POST /api/design-analysis` returns version-bound analysis history or
+  runs an explicit, rights-bounded visual analysis through the configured
+  vision-capable model adapter.
 - `POST /api/payments/checkout` creates or reuses a Stripe-hosted Checkout
   Session only for an approved request belonging to the authenticated client.
 - `POST /api/payments/webhook` verifies Stripe's signature, deduplicates the

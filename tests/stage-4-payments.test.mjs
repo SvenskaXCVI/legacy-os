@@ -69,12 +69,10 @@ test("Stripe credentials remain server-only placeholders", async () => {
   assert.doesNotMatch(stripe, /(?:sk|rk)_(?:test|live)_[A-Za-z0-9]{8,}/);
 });
 
-test("Stage 4 version and payment runbook are published", async () => {
+test("Stage 4 payment runbook remains published after later stages", async () => {
   const version = await read("lib/version.ts");
   const pkg = JSON.parse(await read("package.json"));
   const runbook = await read("docs/STRIPE_ROLLOUT.md");
-  assert.equal(pkg.version, "0.6.0-alpha.4");
-  assert.match(version, /0\.6\.0-alpha\.4/);
-  assert.match(version, /Stage 4 · Payments/);
+  assert.match(version, new RegExp(pkg.version.replaceAll(".", "\\.")));
   assert.match(runbook, /signed webhook is the source of truth/i);
 });

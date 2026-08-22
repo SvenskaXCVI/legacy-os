@@ -50,6 +50,13 @@
       "when": 1787361922471,
       "tag": "0006_fine_madame_web",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1787362879082,
+      "tag": "0007_cooing_patch",
+      "breakpoints": true
     }
   ]
 }
