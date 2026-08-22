@@ -511,24 +511,29 @@ const navGroups: Array<{
   items: Array<{ id: OwnerView; label: string; icon: LucideIcon }>;
 }> = [
   {
-    label: "COMMAND CENTER",
+    label: "WORKSPACE",
     items: [
       { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
-      { id: "projects", label: "Projects", icon: FolderKanban },
       { id: "clients", label: "Clients", icon: UsersRound },
+      { id: "projects", label: "Projects", icon: FolderKanban },
       { id: "calendar", label: "Calendar", icon: CalendarDays },
       { id: "inbox", label: "Inbox", icon: Inbox },
-      { id: "knowledge", label: "Knowledge", icon: BookOpen },
-      { id: "content", label: "Content", icon: ImageIcon },
-      { id: "finances", label: "Finances", icon: CircleDollarSign },
-      { id: "analytics", label: "Analytics", icon: BarChart3 },
-      { id: "chief", label: "AI Chief of Staff", icon: BrainCircuit },
     ],
   },
   {
-    label: "RESOURCES",
+    label: "CREATE",
     items: [
       { id: "design", label: "Design Studio", icon: Brush },
+      { id: "knowledge", label: "Knowledge", icon: BookOpen },
+      { id: "content", label: "Content", icon: ImageIcon },
+    ],
+  },
+  {
+    label: "BUSINESS & AI",
+    items: [
+      { id: "finances", label: "Finances", icon: CircleDollarSign },
+      { id: "analytics", label: "Analytics", icon: BarChart3 },
+      { id: "chief", label: "AI Chief of Staff", icon: BrainCircuit },
       { id: "operations", label: "AI Operations", icon: Activity },
     ],
   },
@@ -2023,7 +2028,14 @@ function ClientsView({
   const projectIds = new Set(clientProjects.map((project) => project.id));
   const clientMessages = data.messages.filter((message) => message.clientId === selectedClient?.id);
   const clientAppointments = data.appointments.filter((appointment) => appointment.clientId === selectedClient?.id);
-  const clientAssets = data.assets.filter((asset) => asset.clientId === selectedClient?.id);
+  const clientAssets = data.assets.filter(
+    (asset) =>
+      asset.clientId === selectedClient?.id ||
+      Boolean(asset.projectId && projectIds.has(asset.projectId)),
+  );
+  const clientImageAssets = clientAssets
+    .filter((asset) => asset.mediaType === "image" && asset.mimeType.startsWith("image/"))
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
   const clientApprovals = data.approvals.filter((approval) => approval.projectId && projectIds.has(approval.projectId));
   const clientPayments = data.paymentRequests.filter((payment) => payment.clientId === selectedClient?.id);
   const clientSessions = data.tattooSessions.filter((session) => session.clientId === selectedClient?.id);
@@ -2038,6 +2050,17 @@ function ClientsView({
     ...clientApprovals.map((item) => ({ id: item.id, at: item.createdAt, type: "Approval", title: item.subject, detail: item.status })),
     ...clientSessions.map((item) => ({ id: item.id, at: item.createdAt, type: "Session", title: `Tattoo session ${item.sessionNumber}`, detail: item.status })),
   ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+  function openClientWorkspace(clientId: string) {
+    setSelectedId(clientId);
+    setWorkspaceTab("overview");
+    window.setTimeout(() => {
+      document.getElementById("selected-client-workspace")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+  }
 
   async function clientAction(action: "archive" | "restore") {
     if (!selectedClient) return;
@@ -2129,7 +2152,7 @@ function ClientsView({
                 (project) => project.clientId === client.id,
               ).length;
               return (
-                <div className="table-row" key={client.id}>
+                <div className={cn("table-row", selectedId === client.id && "selected-row")} key={client.id}>
                   <span className="client-cell">
                     <i>{fullName(client).slice(0, 2).toUpperCase()}</i>
                     <span><strong>{fullName(client)}</strong><small>Added {formatDate(client.createdAt)}</small></span>
@@ -2138,7 +2161,7 @@ function ClientsView({
                   <span>{count}</span>
                   <span><b className="status-dot" /> {client.status}</span>
                   <span>
-                    <button className="text-button" onClick={() => setSelectedId(client.id)}>
+                    <button className="text-button" onClick={() => openClientWorkspace(client.id)}>
                       Open workspace
                     </button>
                     <button className="outline-button small" onClick={() => onInvite(client)}>
@@ -2151,7 +2174,7 @@ function ClientsView({
           </div>
         </section>
         {selectedClient && (
-          <section className="os-panel client-workspace-panel">
+          <section id="selected-client-workspace" className="os-panel client-workspace-panel">
             <div className="client-workspace-hero">
               <div className="client-workspace-identity"><span>{fullName(selectedClient).slice(0, 2).toUpperCase()}</span><div><p className="eyebrow gold">OWNER CLIENT WORKSPACE</p><h2>{fullName(selectedClient)}</h2><small>{selectedClient.status} · {selectedClient.preferredChannel || "channel not set"}</small></div></div>
               <div className="client-workspace-actions"><button className="outline-button" onClick={() => onInvite(selectedClient)}><Link2 size={14} /> Client access</button>{selectedClient.status === "archived" ? <button className="gold-button" disabled={saving} onClick={() => void clientAction("restore")}>Restore client</button> : <button className="text-button danger-text" disabled={saving} onClick={() => void clientAction("archive")}>Archive client</button>}</div>
@@ -2165,12 +2188,31 @@ function ClientsView({
             <div className="filter-tabs client-workspace-tabs">
               {(["overview", "projects", "timeline", "financials", "privacy"] as const).map((tab) => <button key={tab} className={workspaceTab === tab ? "active" : ""} onClick={() => setWorkspaceTab(tab)}>{tab}</button>)}
             </div>
-            {workspaceTab === "overview" && <div className="client-grid">
-              <article className="client-card"><h3>Contact and identity</h3><p>{selectedClient.email || "No email saved"}</p><p>{selectedClient.phone || "No phone saved"}</p><small>Preferred channel: {selectedClient.preferredChannel || "not set"}</small><div className="tag-row">{selectedClient.instagramHandle && <span>@{selectedClient.instagramHandle} · Instagram</span>}{selectedClient.tiktokHandle && <span>@{selectedClient.tiktokHandle} · TikTok</span>}</div></article>
-              <article className="client-card owner-private-card"><h3><LockKeyhole size={16} /> Private studio notes</h3><p>{selectedClient.notes || "No private notes saved."}</p><small>Never returned by the client portal API.</small></article>
-              <article className="client-card"><h3>Relationship activity</h3><p>{clientMessages.length} messages</p><p>{clientAppointments.length} appointments</p><p>{clientAssets.length} files</p><p>{clientSessions.length} tattoo sessions</p></article>
-              <article className="client-card"><h3>Open attention</h3><p>{clientApprovals.filter((item) => item.status === "pending").length} approvals waiting</p><p>{clientHealing.filter((item) => ["submitted", "needs_attention"].includes(item.status)).length} healing reviews</p><p>{data.projectCandidates.filter((candidate) => candidate.clientId === selectedClient.id && ["pending_review", "needs_details"].includes(candidate.status)).length} intake requests</p></article>
-            </div>}
+            {workspaceTab === "overview" && <>
+              <section className="client-media-showcase">
+                <header>
+                  <div><p className="eyebrow gold">CLIENT MEDIA</p><h3>Recent uploads</h3><small>{clientImageAssets.length ? `${clientImageAssets.length} image${clientImageAssets.length === 1 ? "" : "s"} connected to this client` : "Images uploaded to this client will appear here automatically."}</small></div>
+                  <button className="text-button" onClick={() => onView("design")}>Open Design Studio <ArrowRight size={13} /></button>
+                </header>
+                {clientImageAssets.length ? <div className="client-media-layout">
+                  <button className="client-media-feature" onClick={() => void downloadAsset(clientImageAssets[0])} aria-label={`Download newest upload, ${clientImageAssets[0].originalName}`}>
+                    <AssetPreview asset={clientImageAssets[0]} />
+                    <span className="newest-upload-badge">Newest upload</span>
+                    <span className="client-media-caption"><strong>{clientImageAssets[0].originalName}</strong><small>{data.projects.find((project) => project.id === clientImageAssets[0].projectId)?.title || "Client upload"} · {formatDate(clientImageAssets[0].createdAt, true)}</small></span>
+                    <Download size={17} />
+                  </button>
+                  {clientImageAssets.length > 1 && <div className="client-media-strip" aria-label="Earlier client uploads">
+                    {clientImageAssets.slice(1).map((asset) => <button key={asset.id} onClick={() => void downloadAsset(asset)} aria-label={`Download ${asset.originalName}`}><AssetPreview asset={asset} /><span><strong>{asset.originalName}</strong><small>{formatDate(asset.createdAt)}</small></span><Download size={14} /></button>)}
+                  </div>}
+                </div> : <div className="client-media-empty"><ImageIcon size={24} /><div><strong>No client images uploaded yet</strong><small>Upload references, body photos, designs, session photos, or healed results in Design Studio.</small></div></div>}
+              </section>
+              <div className="client-grid">
+                <article className="client-card"><h3>Contact and identity</h3><p>{selectedClient.email || "No email saved"}</p><p>{selectedClient.phone || "No phone saved"}</p><small>Preferred channel: {selectedClient.preferredChannel || "not set"}</small><div className="tag-row">{selectedClient.instagramHandle && <span>@{selectedClient.instagramHandle} · Instagram</span>}{selectedClient.tiktokHandle && <span>@{selectedClient.tiktokHandle} · TikTok</span>}</div></article>
+                <article className="client-card owner-private-card"><h3><LockKeyhole size={16} /> Private studio notes</h3><p>{selectedClient.notes || "No private notes saved."}</p><small>Never returned by the client portal API.</small></article>
+                <article className="client-card"><h3>Relationship activity</h3><p>{clientMessages.length} messages</p><p>{clientAppointments.length} appointments</p><p>{clientAssets.length} files</p><p>{clientSessions.length} tattoo sessions</p></article>
+                <article className="client-card"><h3>Open attention</h3><p>{clientApprovals.filter((item) => item.status === "pending").length} approvals waiting</p><p>{clientHealing.filter((item) => ["submitted", "needs_attention"].includes(item.status)).length} healing reviews</p><p>{data.projectCandidates.filter((candidate) => candidate.clientId === selectedClient.id && ["pending_review", "needs_details"].includes(candidate.status)).length} intake requests</p></article>
+              </div>
+            </>}
             {workspaceTab === "projects" && <div className="relationship-project-list">
               {clientProjects.length ? clientProjects.map((project) => <article className={cn(project.archivedAt && "archived-record", project.isTest && "test-record")} key={project.id}><div><span className="phase-pill">{project.lifecyclePhase}</span><h3>{project.title}</h3><p>{project.placement || "Placement not set"} · {project.status}</p><small>{project.isTest ? "Test data · excluded from intelligence" : project.archivedAt ? "Archived · excluded from operations" : project.nextAction || "No next action"}</small></div><div className="relationship-project-actions">{project.archivedAt ? <button className="outline-button" disabled={saving} onClick={() => void projectCleanup(project, "restore")}>Restore</button> : <button className="text-button danger-text" disabled={saving} onClick={() => void projectCleanup(project, "archive")}>Archive</button>}<button className="text-button" disabled={saving} onClick={() => void projectCleanup(project, project.isTest ? "mark_real" : "mark_test")}>{project.isTest ? "Mark real" : "Mark test"}</button>{!project.archivedAt && clientProjects.filter((item) => item.id !== project.id && !item.archivedAt).length > 0 && <select aria-label={`Mark ${project.title} as duplicate of`} defaultValue="" onChange={(event) => { const canonical = event.target.value; if (canonical && window.confirm(`Archive ${project.title} as a duplicate of the selected project?`)) void projectCleanup(project, "archive", canonical); event.target.value = ""; }}><option value="">Archive as duplicate…</option>{clientProjects.filter((item) => item.id !== project.id && !item.archivedAt).map((item) => <option value={item.id} key={item.id}>{item.title}</option>)}</select>}</div></article>) : <EmptyState icon={FolderKanban} title="No projects connected" body="Approved project requests will become part of this relationship workspace." />}
             </div>}
