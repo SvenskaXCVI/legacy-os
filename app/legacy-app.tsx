@@ -5058,7 +5058,7 @@ export function LegacyApp({
           {view === "finances" && <FinanceView data={data} refresh={load} notify={notify} />}
           {view === "settings" && <SettingsView data={data} notify={notify} refresh={load} onView={(nextView) => navigate({ view: nextView })} personalization={personalization} onPersonalization={updatePersonalization} />}
         </div>
-        <footer className="owner-footer"><span>LEGACY OS</span><p>Built for creators. Designed to last.</p><span className="daylight-credit"><NextImage src="/daylight-forge.png" alt="Powered by Daylight Forge" width={180} height={48} /></span><span className="release-version">v{LEGACY_OS_VERSION} · {LEGACY_OS_RELEASE}</span><span><i /> CORE SYSTEMS OPERATIONAL</span></footer>
+        <footer className="owner-footer"><span>LEGACY OS</span><p>Built for creators. Designed to last.</p><span className="daylight-credit" role="img" aria-label="Powered by Daylight Forge"><span className="daylight-credit-mark" aria-hidden="true" /></span><span className="release-version">v{LEGACY_OS_VERSION} · {LEGACY_OS_RELEASE}</span><span><i /> CORE SYSTEMS OPERATIONAL</span></footer>
       </main>
 
       {modal === "client" && <ClientForm onClose={() => setModal(null)} onSaved={load} notify={notify} />}

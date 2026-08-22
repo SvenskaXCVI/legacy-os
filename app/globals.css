@@ -6181,7 +6181,7 @@ html[data-theme="light"] .outline-button:hover,
 html[data-theme="light"] .filter-tabs button.active,
 html[data-theme="light"] .settings-tabs button.active,
 html[data-theme="light"] .client-header nav button.active { color: var(--paper); background: var(--panel-2); }
-html[data-theme="light"] .daylight-credit img { filter: invert(1) grayscale(.15); }
+html[data-theme="light"] .daylight-credit-mark { filter: invert(1) grayscale(.15); }
 
 /* Marked dashboard, project, message, knowledge, intelligence, and security areas. */
 .panel-title button { min-height: 30px; padding: 6px 9px; font-size: .72rem; }
@@ -6252,8 +6252,8 @@ html[data-theme="light"] .daylight-credit img { filter: invert(1) grayscale(.15)
 
 /* Appearance controls */
 .personalization-grid { align-items: stretch; }
-.personalization-card { min-height: 310px; }
-.personalization-intro { max-width: 62ch; margin: 12px 0 18px; color: var(--muted); font-size: .78rem; line-height: 1.6; }
+.personalization-card { min-height: 310px; padding-bottom: 24px; }
+.personalization-intro { max-width: 62ch; margin: 16px 20px 18px; color: var(--muted); font-size: .78rem; line-height: 1.6; }
 .theme-choice-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .theme-choice-grid > button {
   display: grid;
@@ -6277,6 +6277,8 @@ html[data-theme="light"] .daylight-credit img { filter: invert(1) grayscale(.15)
 .theme-preview { display: grid; place-items: center; width: 48px; height: 48px; border: 1px solid var(--line); border-radius: 10px; }
 .dark-preview { background: #090e10; color: #eee9e1; }
 .light-preview { background: #f4f1ea; color: #1d2421; }
+.theme-choice-grid,
+.accent-choice-grid { margin-right: 20px; margin-left: 20px; }
 .accent-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .accent-choice-grid > button {
   display: grid;
@@ -6302,7 +6304,225 @@ html[data-theme="light"] .daylight-credit img { filter: invert(1) grayscale(.15)
 .owner-footer { grid-template-columns: auto minmax(150px, 1fr) auto auto auto; }
 .daylight-credit { display: grid; place-items: center; padding: 0 12px; opacity: .48; transition: opacity .2s ease; }
 .daylight-credit:hover { opacity: .76; }
-.daylight-credit img { width: 112px; height: auto; object-fit: contain; }
+.daylight-credit-mark { display: block; width: 132px; height: 32px; background: url("/daylight-forge.png") center / contain no-repeat; }
+
+/* Stage 13 — complete light-mode surface and contrast system */
+html[data-theme="light"] {
+  --light-surface: #fffefa;
+  --light-surface-soft: #f7f5ef;
+  --light-surface-muted: #eeece5;
+  --light-ink: #17201d;
+  --light-muted: #59645f;
+}
+
+html[data-theme="light"] .portal-launch,
+html[data-theme="light"] .owner-profile:hover,
+html[data-theme="light"] .owner-profile[aria-expanded="true"],
+html[data-theme="light"] .radio-card,
+html[data-theme="light"] .notification-settings > button,
+html[data-theme="light"] .role-definition,
+html[data-theme="light"] .account-security-facts p,
+html[data-theme="light"] .module-records article,
+html[data-theme="light"] .analytics-tabs button,
+html[data-theme="light"] .analytics-record-list > article,
+html[data-theme="light"] .conversation-list > button,
+html[data-theme="light"] .asset-list button,
+html[data-theme="light"] .portal-approval-list article,
+html[data-theme="light"] .lifecycle-record-list > article,
+html[data-theme="light"] .search-results > button {
+  border-color: var(--line);
+  background: var(--light-surface-soft);
+  color: var(--light-ink);
+}
+
+html[data-theme="light"] .record-card,
+html[data-theme="light"] .record-card.active,
+html[data-theme="light"] .detail-box,
+html[data-theme="light"] .project-brief,
+html[data-theme="light"] .message-bubble,
+html[data-theme="light"] .message-bubble.owner,
+html[data-theme="light"] .asset-list a,
+html[data-theme="light"] .approval-stack article,
+html[data-theme="light"] .candidate-status-list > article,
+html[data-theme="light"] .tag-row span,
+html[data-theme="light"] .client-appointment,
+html[data-theme="light"] .quick-client-actions > button,
+html[data-theme="light"] .consent-scope-grid article,
+html[data-theme="light"] .role-switch,
+html[data-theme="light"] .auth-mode-switch,
+html[data-theme="light"] .auth-recovery-heading,
+html[data-theme="light"] .access-field > div,
+html[data-theme="light"] .provider-row button {
+  border-color: var(--line);
+  background: var(--light-surface-soft);
+  color: var(--light-ink);
+}
+
+html[data-theme="light"] .record-card.active,
+html[data-theme="light"] .conversation-list > button.active {
+  border-color: var(--line-strong);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--gold) 10%, var(--light-surface)), var(--light-surface));
+}
+
+html[data-theme="light"] .table-row.table-head {
+  background: var(--light-surface-muted);
+  color: var(--light-muted);
+}
+
+html[data-theme="light"] .table-row { color: var(--light-muted); }
+html[data-theme="light"] .table-row strong,
+html[data-theme="light"] .message-bubble p,
+html[data-theme="light"] .candidate-status-list h3,
+html[data-theme="light"] .client-appointment strong,
+html[data-theme="light"] .quick-client-actions strong,
+html[data-theme="light"] .consent-scope-grid strong,
+html[data-theme="light"] .auth-recovery-heading strong { color: var(--light-ink); }
+
+html[data-theme="light"] .message-bubble small,
+html[data-theme="light"] .candidate-status-list > article > p,
+html[data-theme="light"] .candidate-response p,
+html[data-theme="light"] .client-appointment small,
+html[data-theme="light"] .quick-client-actions small,
+html[data-theme="light"] .consent-scope-grid p,
+html[data-theme="light"] .auth-recovery-heading p { color: var(--light-muted); }
+
+html[data-theme="light"] select { color-scheme: light; }
+
+html[data-theme="light"] .portal-launch:hover,
+html[data-theme="light"] .notification-settings > button:hover,
+html[data-theme="light"] .analytics-tabs button:hover,
+html[data-theme="light"] .analytics-record-list > article:hover,
+html[data-theme="light"] .conversation-list > button:hover,
+html[data-theme="light"] .asset-list button:hover,
+html[data-theme="light"] .asset-list button.active,
+html[data-theme="light"] .search-results > button:hover {
+  border-color: var(--line-strong);
+  background: color-mix(in srgb, var(--gold) 7%, var(--light-surface));
+}
+
+html[data-theme="light"] .portal-launch strong,
+html[data-theme="light"] .radio-card strong,
+html[data-theme="light"] .notification-settings strong,
+html[data-theme="light"] .module-records strong,
+html[data-theme="light"] .analytics-record-list strong,
+html[data-theme="light"] .analytics-record-list p,
+html[data-theme="light"] .asset-list strong,
+html[data-theme="light"] .role-definition strong,
+html[data-theme="light"] .account-security-facts span {
+  color: var(--light-ink);
+}
+
+html[data-theme="light"] .portal-launch small,
+html[data-theme="light"] .radio-card small,
+html[data-theme="light"] .notification-settings small,
+html[data-theme="light"] .module-records p,
+html[data-theme="light"] .module-records small,
+html[data-theme="light"] .analytics-record-list small,
+html[data-theme="light"] .asset-list small,
+html[data-theme="light"] .role-definition small,
+html[data-theme="light"] .account-security-facts strong {
+  color: var(--light-muted);
+}
+
+html[data-theme="light"] .operations-banner,
+html[data-theme="light"] .chief-hero-card {
+  background:
+    radial-gradient(circle at 12% 50%, color-mix(in srgb, var(--gold) 12%, transparent), transparent 34%),
+    linear-gradient(120deg, var(--light-surface), var(--light-surface-soft));
+  color: var(--light-ink);
+  box-shadow: 0 12px 30px rgba(30, 40, 35, .08);
+}
+
+html[data-theme="light"] .operations-banner h2,
+html[data-theme="light"] .chief-hero-card h2,
+html[data-theme="light"] .chief-hero-card aside strong,
+html[data-theme="light"] .chief-hero-card aside span {
+  color: var(--light-ink);
+}
+
+html[data-theme="light"] .operations-banner > div:first-child > p:last-child,
+html[data-theme="light"] .chief-hero-card > div:nth-child(2) > p:not(.eyebrow),
+html[data-theme="light"] .chief-hero-card aside small {
+  color: var(--light-muted);
+}
+
+html[data-theme="light"] .capture-chip {
+  border-color: rgba(55, 145, 85, .28);
+  background: rgba(55, 145, 85, .07);
+}
+
+html[data-theme="light"] .pattern-grid article {
+  border-color: var(--line);
+  background: var(--light-surface-soft);
+  box-shadow: 0 7px 18px rgba(30, 40, 35, .05);
+}
+
+html[data-theme="light"] .pattern-grid h3,
+html[data-theme="light"] .pattern-grid p { color: var(--light-ink); }
+html[data-theme="light"] .pattern-grid small { color: var(--light-muted); }
+html[data-theme="light"] .pattern-grid footer { color: color-mix(in srgb, var(--gold) 76%, var(--light-ink)); }
+html[data-theme="light"] .intelligence-policy-strip,
+html[data-theme="light"] .learning-integrity-panel { background: var(--light-surface-soft); }
+html[data-theme="light"] .intelligence-policy-strip span,
+html[data-theme="light"] .learning-integrity-panel > div > p:last-child,
+html[data-theme="light"] .learning-integrity-metrics span,
+html[data-theme="light"] .learning-footer span { color: var(--light-muted); }
+
+html[data-theme="light"] .analytics-tabs button.active {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 9%, var(--light-surface));
+  color: color-mix(in srgb, var(--gold) 82%, var(--light-ink));
+}
+
+html[data-theme="light"] .design-toolbar,
+html[data-theme="light"] .design-canvas > footer {
+  border-color: var(--line);
+  background: var(--light-surface-soft);
+  color: var(--light-ink);
+}
+
+html[data-theme="light"] .design-toolbar label span,
+html[data-theme="light"] .design-canvas > footer p,
+html[data-theme="light"] .design-canvas > footer small { color: var(--light-muted); }
+
+html[data-theme="light"] .canvas-empty,
+html[data-theme="light"] .canvas-empty.has-preview {
+  background:
+    radial-gradient(circle at 50% 50%, color-mix(in srgb, var(--gold) 10%, transparent), transparent 30%),
+    linear-gradient(rgba(25,35,31,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(25,35,31,.04) 1px, transparent 1px),
+    var(--light-surface-muted);
+  background-size: auto, 26px 26px, 26px 26px, auto;
+  color: var(--light-ink);
+}
+
+html[data-theme="light"] .canvas-empty p,
+html[data-theme="light"] .canvas-empty small { color: var(--light-muted); }
+
+html[data-theme="light"] .client-media-showcase {
+  border-color: var(--line);
+  background: var(--light-surface-soft);
+}
+
+html[data-theme="light"] .client-media-feature { background: var(--light-surface-muted); }
+html[data-theme="light"] .client-media-showcase > header h3 { color: var(--light-ink); }
+html[data-theme="light"] .client-media-caption strong { color: #f7f5ef; }
+html[data-theme="light"] .client-media-caption small { color: #d4d9d5; }
+
+html[data-theme="light"] .global-search > label,
+html[data-theme="light"] .notification-button {
+  border-color: var(--line);
+  background: var(--light-surface-soft);
+  color: var(--light-ink);
+}
+
+.save-settings {
+  width: auto;
+  min-height: 44px;
+  align-self: end;
+  padding-right: 20px;
+  padding-left: 20px;
+}
 
 @media (max-width: 1120px) {
   .project-rows article { grid-template-columns: 38px minmax(145px, 1.3fr) 80px minmax(100px, .8fr) minmax(130px, 1fr) 20px; }
