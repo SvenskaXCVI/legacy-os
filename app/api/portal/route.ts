@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import { getDb } from "../../../db";
 import {
   appointments,
@@ -7,6 +7,7 @@ import {
   auditEvents,
   clientMessages,
   clients,
+  notifications,
   portalInvitations,
   projectCandidates,
   projects,
@@ -258,7 +259,7 @@ export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as {
       token?: string;
-      action?: "message" | "approval" | "project_intake";
+      action?: "message" | "approval" | "project_intake" | "mark_messages_read";
       projectId?: string;
       body?: string;
       approvalId?: string;
@@ -441,6 +442,43 @@ export async function POST(request: Request) {
       return Response.json({ id: messageId, status: "sent" }, { status: 201 });
     }
 
+    if (payload.action === "mark_messages_read") {
+      if (payload.projectId) {
+        const project = await db
+          .select({ id: projects.id })
+          .from(projects)
+          .where(
+            and(
+              eq(projects.id, payload.projectId),
+              eq(projects.clientId, access.clientId),
+              eq(projects.workspaceId, access.workspaceId),
+            ),
+          )
+          .get();
+        if (!project) return jsonError("Project not found", 404);
+      }
+      await db
+        .update(clientMessages)
+        .set({ readAt: now })
+        .where(
+          and(
+            eq(clientMessages.workspaceId, access.workspaceId),
+            eq(clientMessages.clientId, access.clientId),
+            eq(clientMessages.senderType, "owner"),
+            isNull(clientMessages.readAt),
+            ...(payload.projectId
+              ? [
+                  or(
+                    eq(clientMessages.projectId, payload.projectId),
+                    isNull(clientMessages.projectId),
+                  ),
+                ]
+              : []),
+          ),
+        );
+      return Response.json({ status: "read", readAt: now });
+    }
+
     if (payload.action === "approval") {
       if (
         !payload.approvalId ||
@@ -453,6 +491,9 @@ export async function POST(request: Request) {
           id: approvals.id,
           projectId: approvals.projectId,
           clientId: projects.clientId,
+          audience: approvals.audience,
+          status: approvals.status,
+          decidedAt: approvals.decidedAt,
         })
         .from(approvals)
         .leftJoin(projects, eq(approvals.projectId, projects.id))
@@ -463,8 +504,25 @@ export async function POST(request: Request) {
           ),
         )
         .get();
-      if (!approval || approval.clientId !== access.clientId) {
+      if (
+        !approval ||
+        approval.clientId !== access.clientId ||
+        approval.audience !== "client"
+      ) {
         return jsonError("Approval not found", 404);
+      }
+      if (approval.status !== "pending") {
+        if (approval.status === payload.decision) {
+          return Response.json({
+            status: approval.status,
+            decidedAt: approval.decidedAt,
+            idempotent: true,
+          });
+        }
+        return jsonError("This approval already has a final decision", 409);
+      }
+      if (payload.decision === "revision" && !payload.reason?.trim()) {
+        return jsonError("Please describe what should be revised");
       }
       await db.batch([
         db
@@ -490,6 +548,21 @@ export async function POST(request: Request) {
           metadataJson: "{}",
           occurredAt: now,
         }),
+        db
+          .update(notifications)
+          .set({ status: "dismissed", readAt: now, dismissedAt: now })
+          .where(
+            and(
+              eq(notifications.workspaceId, access.workspaceId),
+              or(
+                eq(notifications.dedupeKey, `approval-overdue:${approval.id}`),
+                eq(
+                  notifications.dedupeKey,
+                  `automation:approval_requested:${approval.projectId || "workspace"}`,
+                ),
+              ),
+            ),
+          ),
       ]);
       await captureAutomationSignal(
         {

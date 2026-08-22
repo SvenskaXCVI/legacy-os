@@ -1857,7 +1857,7 @@ button:disabled {
 .conversation-list > button {
   display: grid;
   width: 100%;
-  grid-template-columns: 38px 1fr;
+  grid-template-columns: 38px 1fr auto;
   align-items: center;
   gap: 9px;
   border: 0;
@@ -1866,6 +1866,19 @@ button:disabled {
   padding: 11px 13px;
   text-align: left;
   cursor: pointer;
+}
+
+.conversation-unread {
+  display: grid;
+  min-width: 19px;
+  height: 19px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--gold-deep);
+  color: #080b0b;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 700;
 }
 
 .conversation-list > button.active {
@@ -4077,6 +4090,46 @@ select {
   display: flex;
   gap: 7px;
   margin-top: 14px;
+}
+
+.approval-decision-reason {
+  min-height: 0 !important;
+  border-left: 2px solid var(--gold-deep);
+  padding-left: 9px;
+}
+
+.revision-request-form {
+  display: grid;
+  gap: 9px;
+  margin-top: 13px;
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+
+.revision-request-form label,
+.revision-request-form label span {
+  display: grid;
+  gap: 6px;
+}
+
+.revision-request-form label span {
+  color: var(--gold);
+  font-family: var(--display);
+  font-size: 7px;
+  letter-spacing: 1px;
+}
+
+.revision-request-form textarea {
+  width: 100%;
+  min-height: 84px;
+  resize: vertical;
+}
+
+.portal-approval-list .revision-request-form > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+  margin-top: 0;
 }
 
 .portal-notice {

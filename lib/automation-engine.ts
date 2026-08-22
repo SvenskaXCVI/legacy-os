@@ -235,7 +235,21 @@ async function notification(
       status: "unread",
       createdAt: new Date().toISOString(),
     })
-    .onConflictDoNothing();
+    .onConflictDoUpdate({
+      target: [notifications.workspaceId, notifications.dedupeKey],
+      set: {
+        projectId: input.projectId ?? null,
+        severity: input.severity,
+        category: input.category,
+        title: input.title,
+        body: input.body,
+        actionUrl: input.actionUrl ?? null,
+        status: "unread",
+        readAt: null,
+        dismissedAt: null,
+        createdAt: new Date().toISOString(),
+      },
+    });
 }
 
 async function materializeWorkflowEvent(
@@ -244,6 +258,7 @@ async function materializeWorkflowEvent(
   db: Db,
 ) {
   const eventType = String(payload.eventType || "workflow_event");
+  const sourceId = payload.sourceId ? String(payload.sourceId) : null;
   const projectId = payload.projectId ? String(payload.projectId) : null;
   const clientId = payload.clientId ? String(payload.clientId) : null;
   const project = projectId
@@ -340,8 +355,22 @@ async function materializeWorkflowEvent(
       category: "automation",
       title: template.title,
       body: template.body,
-      dedupeKey: `automation:${eventType}:${projectId || clientId || "workspace"}`,
-      actionUrl: projectId ? `projects:${projectId}` : clientId ? `clients:${clientId}` : null,
+      dedupeKey:
+        eventType === "client_message_received"
+          ? `communication:client:${projectId || clientId || "workspace"}`
+          : eventType === "approval_decided"
+            ? `approval:decision:${sourceId || projectId || "workspace"}`
+            : `automation:${eventType}:${projectId || clientId || "workspace"}`,
+      actionUrl:
+        eventType === "client_message_received"
+          ? `inbox:${clientId || ""}`
+          : eventType === "approval_decided" || eventType === "approval_requested"
+            ? `design:${projectId || ""}`
+            : projectId
+              ? `projects:${projectId}`
+              : clientId
+                ? `clients:${clientId}`
+                : null,
     },
     db,
   );
@@ -440,7 +469,7 @@ async function createOperationalNotifications(workspaceId: string, db: Db) {
         title: "Approval waiting more than 24 hours",
         body: approval.subject,
         dedupeKey: `approval-overdue:${approval.id}`,
-        actionUrl: "approvals",
+        actionUrl: `design:${approval.projectId || ""}`,
       },
       db,
     );
@@ -456,7 +485,7 @@ async function createOperationalNotifications(workspaceId: string, db: Db) {
         title: "Appointment within 24 hours",
         body: `${appointment.appointmentType} · ${appointment.startsAt}`,
         dedupeKey: `appointment-24h:${appointment.id}`,
-        actionUrl: "calendar",
+        actionUrl: `calendar:${appointment.id}`,
       },
       db,
     );

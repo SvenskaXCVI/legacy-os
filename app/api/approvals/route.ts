@@ -1,6 +1,6 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, or } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { approvals, assets, auditEvents, projects } from "../../../db/schema";
+import { approvals, assets, auditEvents, notifications, projects } from "../../../db/schema";
 import { jsonError, makeId, requireOwner, routeError, sha256 } from "../_lib";
 import { captureAutomationSignal } from "../../../lib/automation-engine";
 
@@ -196,6 +196,20 @@ export async function POST(request: Request) {
     if (!existing) {
       return Response.json({ error: "Approval not found" }, { status: 404 });
     }
+    if (existing.status !== "pending") {
+      if (existing.status === payload.decision) {
+        return Response.json({
+          approvalId: existing.id,
+          decision: existing.status,
+          decidedAt: existing.decidedAt,
+          idempotent: true,
+        });
+      }
+      return jsonError("This approval already has a final decision", 409);
+    }
+    if (payload.decision === "revision" && !payload.reason?.trim()) {
+      return jsonError("Describe the requested revision before recording it");
+    }
 
     await db.batch([
       db
@@ -203,7 +217,7 @@ export async function POST(request: Request) {
         .set({
           status: payload.decision,
           decisionBy: actor,
-          decisionReason: payload.reason ?? null,
+          decisionReason: payload.reason?.trim() || null,
           decidedAt: now,
           updatedAt: now,
         })
@@ -228,7 +242,22 @@ export async function POST(request: Request) {
           category: payload.category,
           subject: payload.subject,
         }),
-      }),
+        }),
+      db
+        .update(notifications)
+        .set({ status: "dismissed", readAt: now, dismissedAt: now })
+        .where(
+          and(
+            eq(notifications.workspaceId, DEFAULT_WORKSPACE_ID),
+            or(
+              eq(notifications.dedupeKey, `approval-overdue:${existing.id}`),
+              eq(
+                notifications.dedupeKey,
+                `automation:approval_requested:${existing.projectId || "workspace"}`,
+              ),
+            ),
+          ),
+        ),
     ]);
     await captureAutomationSignal(
       {

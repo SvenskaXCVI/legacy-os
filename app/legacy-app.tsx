@@ -74,6 +74,8 @@ type OwnerView =
   | "operations"
   | "settings";
 
+type NavigationTarget = { view: OwnerView; id?: string };
+
 type ClientRecord = {
   id: string;
   firstName: string;
@@ -252,6 +254,7 @@ type MessageRecord = {
   senderType: string;
   body: string;
   status: string;
+  readAt: string | null;
   createdAt: string;
 };
 
@@ -303,6 +306,7 @@ type AuditRecord = {
 
 type NotificationRecord = {
   id: string;
+  projectId: string | null;
   severity: string;
   category: string;
   title: string;
@@ -991,14 +995,14 @@ function OwnerHeader({
   view,
   onMenu,
   onNew,
-  onView,
+  onNavigate,
   data,
   refresh,
 }: {
   view: OwnerView;
   onMenu: () => void;
   onNew: () => void;
-  onView: (view: OwnerView) => void;
+  onNavigate: (target: NavigationTarget) => void;
   data: WorkspaceData;
   refresh: () => void;
 }) {
@@ -1011,6 +1015,7 @@ function OwnerHeader({
   const results = [
     ...data.clients.map((client) => ({
       id: client.id,
+      targetId: client.id,
       label: fullName(client),
       detail: client.email || "Client record",
       view: "clients" as OwnerView,
@@ -1018,6 +1023,7 @@ function OwnerHeader({
     })),
     ...data.projects.map((project) => ({
       id: project.id,
+      targetId: project.id,
       label: project.title,
       detail: `${projectClient(project)} · ${project.lifecyclePhase}`,
       view: "projects" as OwnerView,
@@ -1025,6 +1031,7 @@ function OwnerHeader({
     })),
     ...data.assets.map((asset) => ({
       id: asset.id,
+      targetId: asset.projectId || undefined,
       label: asset.originalName,
       detail: `${asset.sourceType.replaceAll("_", " ")} · ${formatBytes(asset.byteSize)}`,
       view: "design" as OwnerView,
@@ -1038,7 +1045,7 @@ function OwnerHeader({
         .includes(normalized),
   );
   const persistedNotifications = data.notifications.map((item) => {
-    const destination = item.actionUrl?.split(":")[0];
+    const [destination, targetId] = item.actionUrl?.split(":") || [];
     const destinationMap: Record<string, OwnerView> = {
       approvals: "design",
       calendar: "calendar",
@@ -1051,10 +1058,11 @@ function OwnerHeader({
       title: item.title,
       detail: item.body,
       view: destinationMap[destination || ""] || ("chief" as OwnerView),
+      targetId: targetId || item.projectId || item.id,
       persistent: true,
     };
   });
-  const notifications = [
+  const notificationCandidates = [
     ...persistedNotifications,
     ...data.approvals
       .filter((item) => item.status === "pending")
@@ -1063,17 +1071,19 @@ function OwnerHeader({
         title: item.subject,
         detail: "Approval is waiting",
         view: "design" as OwnerView,
+        targetId: item.projectId || undefined,
         persistent: false,
       })),
     ...data.messages
       .filter(
-        (item) => item.senderType === "client" && !item.status.includes("read"),
+        (item) => item.senderType === "client" && !item.readAt,
       )
       .map((item) => ({
         id: item.id,
         title: "New client message",
         detail: item.body,
         view: "inbox" as OwnerView,
+        targetId: item.clientId,
         persistent: false,
       })),
     ...data.appointments
@@ -1088,9 +1098,20 @@ function OwnerHeader({
         title: item.appointmentType,
         detail: formatDate(item.startsAt, true),
         view: "calendar" as OwnerView,
+        targetId: item.id,
         persistent: false,
       })),
   ];
+  const notifications = notificationCandidates.filter(
+    (item, index, all) =>
+      index ===
+      all.findIndex(
+        (candidate) =>
+          candidate.view === item.view &&
+          candidate.targetId === item.targetId &&
+          (candidate.persistent || !item.persistent),
+      ),
+  );
 
   useEffect(() => {
     function handleShortcut(event: KeyboardEvent) {
@@ -1170,7 +1191,7 @@ function OwnerHeader({
                           }),
                         }).then(refresh);
                       }
-                      onView(item.view);
+                      onNavigate({ view: item.view, id: item.targetId });
                       setNotificationsOpen(false);
                     }}
                   >
@@ -1224,7 +1245,7 @@ function OwnerHeader({
                   <button
                     key={`${item.type}-${item.id}`}
                     onClick={() => {
-                      onView(item.view);
+                      onNavigate({ view: item.view, id: item.targetId });
                       setSearchOpen(false);
                       setQuery("");
                     }}
@@ -1340,7 +1361,7 @@ function Dashboard({
   );
   const pending = data.approvals.filter((item) => item.status === "pending" && (!item.projectId || activeProjects.some((project) => project.id === item.projectId)));
   const unread = data.messages.filter(
-    (item) => item.senderType === "client" && !item.status.includes("read") && data.clients.some((client) => client.id === item.clientId && !client.archivedAt),
+    (item) => item.senderType === "client" && !item.readAt && data.clients.some((client) => client.id === item.clientId && !client.archivedAt),
   );
 
   return (
@@ -1573,15 +1594,17 @@ function ProjectsView({
   onCreate,
   refresh,
   notify,
+  targetId,
 }: {
   data: WorkspaceData;
   onCreate: () => void;
   refresh: () => void;
   notify: (message: string, error?: boolean) => void;
+  targetId?: string;
 }) {
-  const [filter, setFilter] = useState<"all" | "active" | "complete" | "test" | "archived">("active");
+  const [filter, setFilter] = useState<"all" | "active" | "complete" | "test" | "archived">(targetId ? "all" : "active");
   const [selected, setSelected] = useState<string | null>(
-    data.projects[0]?.id ?? null,
+    targetId ?? data.projects[0]?.id ?? null,
   );
   const [candidateResponses, setCandidateResponses] = useState<Record<string, string>>({});
   const [reviewingCandidate, setReviewingCandidate] = useState<string | null>(null);
@@ -1855,6 +1878,7 @@ function ClientsView({
   refresh,
   notify,
   onView,
+  targetId,
 }: {
   data: WorkspaceData;
   onCreate: () => void;
@@ -1862,10 +1886,11 @@ function ClientsView({
   refresh: () => Promise<void>;
   notify: (message: string, error?: boolean) => void;
   onView: (view: OwnerView) => void;
+  targetId?: string;
 }) {
-  const [filter, setFilter] = useState<"all" | "active" | "archived">("active");
+  const [filter, setFilter] = useState<"all" | "active" | "archived">(targetId ? "all" : "active");
   const [selectedId, setSelectedId] = useState<string | null>(
-    data.clients[0]?.id ?? null,
+    targetId ?? data.clients[0]?.id ?? null,
   );
   const [workspaceTab, setWorkspaceTab] = useState<"overview" | "projects" | "timeline" | "financials" | "privacy">("overview");
   const [saving, setSaving] = useState(false);
@@ -1876,6 +1901,7 @@ function ClientsView({
     return client.status !== "archived";
   });
   const selectedClient = data.clients.find((client) => client.id === selectedId);
+
   const clientProjects = data.projects.filter((project) => project.clientId === selectedClient?.id);
   const projectIds = new Set(clientProjects.map((project) => project.id));
   const clientMessages = data.messages.filter((message) => message.clientId === selectedClient?.id);
@@ -2106,15 +2132,45 @@ function InboxView({
   data,
   onSent,
   notify,
+  targetId,
 }: {
   data: WorkspaceData;
   onSent: () => void;
   notify: (message: string, error?: boolean) => void;
+  targetId?: string;
 }) {
-  const [clientId, setClientId] = useState(data.clients[0]?.id || "");
+  const [clientId, setClientId] = useState(targetId || data.clients[0]?.id || "");
   const messages = data.messages.filter(
     (message) => !clientId || message.clientId === clientId,
   );
+
+  useEffect(() => {
+    if (
+      !clientId ||
+      !data.messages.some(
+        (message) =>
+          message.clientId === clientId &&
+          message.senderType === "client" &&
+          !message.readAt,
+      )
+    ) {
+      return;
+    }
+    void api("/api/messages", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ clientId }),
+    })
+      .then(onSent)
+      .catch((readError) =>
+        notify(
+          readError instanceof Error
+            ? readError.message
+            : "Unable to update message state",
+          true,
+        ),
+      );
+  }, [clientId, data.messages, notify, onSent]);
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formElement = event.currentTarget;
@@ -2142,12 +2198,21 @@ function InboxView({
         {data.clients.length === 0 ? (
           <EmptyState icon={UsersRound} title="No clients" body="Add a client to start a secure conversation." />
         ) : (
-          data.clients.map((client) => (
-            <button className={cn(clientId === client.id && "active")} key={client.id} onClick={() => setClientId(client.id)}>
-              <span>{client.firstName.slice(0, 1)}{client.lastName.slice(0, 1)}</span>
-              <div><strong>{fullName(client)}</strong><small>{client.email || "Client portal"}</small></div>
-            </button>
-          ))
+          data.clients.map((client) => {
+            const unreadCount = data.messages.filter(
+              (message) =>
+                message.clientId === client.id &&
+                message.senderType === "client" &&
+                !message.readAt,
+            ).length;
+            return (
+              <button className={cn(clientId === client.id && "active")} key={client.id} onClick={() => setClientId(client.id)}>
+                <span>{client.firstName.slice(0, 1)}{client.lastName.slice(0, 1)}</span>
+                <div><strong>{fullName(client)}</strong><small>{client.email || "Client portal"}</small></div>
+                {unreadCount > 0 && <i className="conversation-unread">{unreadCount}</i>}
+              </button>
+            );
+          })
         )}
       </aside>
       <section className="conversation-panel os-panel">
@@ -2163,7 +2228,7 @@ function InboxView({
               ) : (
                 [...messages].reverse().map((message) => (
                   <article className={cn("message-bubble", message.senderType === "owner" && "owner")} key={message.id}>
-                    <small>{message.senderType === "owner" ? "Studio" : "Client"} · {formatDate(message.createdAt, true)}</small>
+                    <small>{message.senderType === "owner" ? "Studio" : "Client"} · {formatDate(message.createdAt, true)}{message.senderType === "owner" && message.readAt ? " · Read by client" : ""}</small>
                     <p>{message.body}</p>
                   </article>
                 ))
@@ -2186,12 +2251,14 @@ function DesignStudio({
   data,
   refresh,
   notify,
+  targetId,
 }: {
   data: WorkspaceData;
   refresh: () => void;
   notify: (message: string, error?: boolean) => void;
+  targetId?: string;
 }) {
-  const [projectId, setProjectId] = useState(data.projects[0]?.id || "");
+  const [projectId, setProjectId] = useState(targetId || data.projects[0]?.id || "");
   const [tool, setTool] = useState<"select" | "analyze">("select");
   const [selectedAssetId, setSelectedAssetId] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
@@ -2405,6 +2472,7 @@ function DesignStudio({
                   <span className={cn("approval-status", approval.status)}>{approval.status}</span>
                   <strong>{approval.subject}</strong>
                   <p>{approval.summary}</p>
+                  {approval.decisionReason && <p className="approval-decision-reason"><strong>{approval.status === "revision" ? "Requested changes" : "Decision note"}:</strong> {approval.decisionReason}</p>}
                   <small>{formatDate(approval.createdAt, true)}</small>
                 </article>
               ))}
@@ -3761,6 +3829,9 @@ function ClientPortal({
   const [submittingIntake, setSubmittingIntake] = useState(false);
   const [payingId, setPayingId] = useState("");
   const [lifecycle, setLifecycle] = useState<PortalLifecycleData | null>(null);
+  const [revisionApprovalId, setRevisionApprovalId] = useState("");
+  const [revisionReason, setRevisionReason] = useState("");
+  const [decidingApprovalId, setDecidingApprovalId] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -3847,10 +3918,45 @@ function ClientPortal({
     return () => window.clearTimeout(handle);
   }, [loadLifecycle, tab]);
   const project = data?.projects.find((item) => item.id === projectId) || data?.projects[0];
-  const messages = data?.messages.filter((item) => !project || !item.projectId || item.projectId === project.id) || [];
+  const messages = useMemo(
+    () =>
+      data?.messages.filter(
+        (item) => !project || !item.projectId || item.projectId === project.id,
+      ) || [],
+    [data?.messages, project],
+  );
   const approvals = data?.approvals.filter((item) => !project || item.projectId === project.id) || [];
   const files = data?.assets.filter((item) => !project || item.projectId === project.id) || [];
   const payments = data?.paymentRequests.filter((item) => !project || item.projectId === project.id) || [];
+
+  useEffect(() => {
+    if (
+      tab !== "messages" ||
+      !data ||
+      !messages.some(
+        (message) => message.senderType === "owner" && !message.readAt,
+      )
+    ) {
+      return;
+    }
+    void api("/api/portal", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        token,
+        action: "mark_messages_read",
+        projectId: project?.id,
+      }),
+    })
+      .then(load)
+      .catch((readError) =>
+        setNotice(
+          readError instanceof Error
+            ? readError.message
+            : "Unable to update message state",
+        ),
+      );
+  }, [data, load, messages, project?.id, tab, token]);
 
   async function submitProjectIntake(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3904,17 +4010,33 @@ function ClientPortal({
     }
   }
 
-  async function decide(approvalId: string, decision: "approved" | "revision") {
+  async function decide(
+    approvalId: string,
+    decision: "approved" | "revision",
+    reason?: string,
+  ) {
+    if (decidingApprovalId) return;
+    setDecidingApprovalId(approvalId);
     try {
       await api("/api/portal", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ token, action: "approval", approvalId, decision }),
+        body: JSON.stringify({
+          token,
+          action: "approval",
+          approvalId,
+          decision,
+          reason,
+        }),
       });
       setNotice(decision === "approved" ? "Approval recorded." : "Revision request recorded.");
+      setRevisionApprovalId("");
+      setRevisionReason("");
       await load();
     } catch (decisionError) {
       setNotice(decisionError instanceof Error ? decisionError.message : "Unable to record decision");
+    } finally {
+      setDecidingApprovalId("");
     }
   }
 
@@ -4236,7 +4358,7 @@ function ClientPortal({
                 <PanelTitle eyebrow="SECURE CONVERSATION" title="Messages with your artist" />
                 <div className="message-thread">
                   {messages.length ? messages.map((message) => (
-                    <article className={cn("message-bubble", message.senderType === "client" && "owner")} key={message.id}><small>{message.senderType === "client" ? "You" : "Studio"} · {formatDate(message.createdAt, true)}</small><p>{message.body}</p></article>
+                    <article className={cn("message-bubble", message.senderType === "client" && "owner")} key={message.id}><small>{message.senderType === "client" ? "You" : "Studio"} · {formatDate(message.createdAt, true)}{message.senderType === "client" && message.readAt ? " · Read by studio" : ""}</small><p>{message.body}</p></article>
                   )) : <EmptyState icon={MessageSquareText} title="No messages yet" body="Start a direct, project-connected conversation." />}
                 </div>
                 <form className="message-composer" onSubmit={sendMessage}><textarea name="body" required placeholder="Write a message to your artist..." /><button className="gold-button"><Send size={16} /> Send</button></form>
@@ -4254,7 +4376,9 @@ function ClientPortal({
                     <p>{approval.summary}</p>
                     {approvalAsset && <div className="approval-artifact"><AssetPreview asset={approvalAsset} portalToken={token} /><small>{approvalAsset.originalName} · Version {approval.assetVersion || approvalAsset.version || 1}</small></div>}
                     <small>Requested {formatDate(approval.createdAt, true)}</small>
-                    {approval.status === "pending" && <div><button className="gold-button" onClick={() => decide(approval.id, "approved")}><Check size={15} /> Approve</button><button className="outline-button" onClick={() => decide(approval.id, "revision")}><MessageSquareText size={15} /> Request revision</button></div>}
+                    {approval.decisionReason && <p className="approval-decision-reason"><strong>{approval.status === "revision" ? "Requested changes" : "Decision note"}:</strong> {approval.decisionReason}</p>}
+                    {approval.status === "pending" && revisionApprovalId !== approval.id && <div><button className="gold-button" disabled={Boolean(decidingApprovalId)} onClick={() => void decide(approval.id, "approved")}><Check size={15} /> {decidingApprovalId === approval.id ? "Recording…" : "Approve"}</button><button className="outline-button" disabled={Boolean(decidingApprovalId)} onClick={() => { setRevisionApprovalId(approval.id); setRevisionReason(""); }}><MessageSquareText size={15} /> Request revision</button></div>}
+                    {approval.status === "pending" && revisionApprovalId === approval.id && <form className="revision-request-form" onSubmit={(event) => { event.preventDefault(); void decide(approval.id, "revision", revisionReason.trim()); }}><label><span>WHAT SHOULD CHANGE? *</span><textarea required minLength={3} value={revisionReason} onChange={(event) => setRevisionReason(event.target.value)} placeholder="Describe the exact changes you would like the artist to review." /></label><div><button className="text-button" type="button" onClick={() => { setRevisionApprovalId(""); setRevisionReason(""); }}>Cancel</button><button className="gold-button" disabled={Boolean(decidingApprovalId) || revisionReason.trim().length < 3}><MessageSquareText size={15} /> {decidingApprovalId === approval.id ? "Recording…" : "Send revision request"}</button></div></form>}
                   </article>;
                 })}</div> : <EmptyState icon={ShieldCheck} title="Nothing needs approval" body="Designs and other gated decisions will appear here." />}
               </section>
@@ -4395,6 +4519,9 @@ export function LegacyApp({
   const [mode, setMode] = useState<"owner" | "portal">(initialMode);
   const [portalToken, setPortalToken] = useState("");
   const [view, setView] = useState<OwnerView>("dashboard");
+  const [navigationTarget, setNavigationTarget] = useState<NavigationTarget>({
+    view: "dashboard",
+  });
   const [data, setData] = useState<WorkspaceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -4457,6 +4584,11 @@ export function LegacyApp({
   }
 
   const firstClient = data?.clients[0];
+  const navigate = useCallback((target: NavigationTarget) => {
+    setNavigationTarget(target);
+    setView(target.view);
+  }, []);
+
   function openNew() {
     if (view === "clients") setModal("client");
     else if (view === "calendar") setModal("appointment");
@@ -4509,7 +4641,7 @@ export function LegacyApp({
     <div className="owner-shell">
       <OwnerSidebar
         view={view}
-        onView={setView}
+        onView={(nextView) => navigate({ view: nextView })}
         owner={data.owner}
         workspace={data.workspace}
         open={menuOpen}
@@ -4521,18 +4653,18 @@ export function LegacyApp({
         <OwnerHeader
           view={view}
           data={data}
-          onView={setView}
+          onNavigate={navigate}
           onMenu={() => setMenuOpen(true)}
           onNew={openNew}
           refresh={load}
         />
         <div className="owner-content">
-          {view === "dashboard" && <Dashboard data={data} firstName={actualFirstName} briefing={briefing} generating={generating} onGenerate={generateBriefing} onClient={() => setModal("client")} onProject={() => setModal("project")} onAppointment={() => setModal("appointment")} onView={setView} />}
-          {view === "projects" && <ProjectsView data={data} onCreate={() => setModal("project")} refresh={load} notify={notify} />}
-          {view === "clients" && <ClientsView data={data} onCreate={() => setModal("client")} onInvite={setInviteClient} refresh={load} notify={notify} onView={setView} />}
+          {view === "dashboard" && <Dashboard data={data} firstName={actualFirstName} briefing={briefing} generating={generating} onGenerate={generateBriefing} onClient={() => setModal("client")} onProject={() => setModal("project")} onAppointment={() => setModal("appointment")} onView={(nextView) => navigate({ view: nextView })} />}
+          {view === "projects" && <ProjectsView key={navigationTarget.view === "projects" ? navigationTarget.id || "projects" : "projects"} data={data} onCreate={() => setModal("project")} refresh={load} notify={notify} targetId={navigationTarget.view === "projects" ? navigationTarget.id : undefined} />}
+          {view === "clients" && <ClientsView key={navigationTarget.view === "clients" ? navigationTarget.id || "clients" : "clients"} data={data} onCreate={() => setModal("client")} onInvite={setInviteClient} refresh={load} notify={notify} onView={(nextView) => navigate({ view: nextView })} targetId={navigationTarget.view === "clients" ? navigationTarget.id : undefined} />}
           {view === "calendar" && <CalendarView data={data} onCreate={() => setModal("appointment")} />}
-          {view === "inbox" && <InboxView data={data} onSent={load} notify={notify} />}
-          {view === "design" && <DesignStudio data={data} refresh={load} notify={notify} />}
+          {view === "inbox" && <InboxView key={navigationTarget.view === "inbox" ? navigationTarget.id || "inbox" : "inbox"} data={data} onSent={load} notify={notify} targetId={navigationTarget.view === "inbox" ? navigationTarget.id : undefined} />}
+          {view === "design" && <DesignStudio key={navigationTarget.view === "design" ? navigationTarget.id || "design" : "design"} data={data} refresh={load} notify={notify} targetId={navigationTarget.view === "design" ? navigationTarget.id : undefined} />}
           {view === "chief" && <ChiefView data={data} briefing={briefing} generating={generating} onGenerate={generateBriefing} />}
           {view === "operations" && <OperationsView data={data} refresh={load} notify={notify} />}
           {view === "analytics" && <AnalyticsView data={data} />}
@@ -4540,7 +4672,7 @@ export function LegacyApp({
             <ModuleView key={view} type={view} data={data} />
           )}
           {view === "finances" && <FinanceView data={data} refresh={load} notify={notify} />}
-          {view === "settings" && <SettingsView data={data} notify={notify} refresh={load} onView={setView} />}
+          {view === "settings" && <SettingsView data={data} notify={notify} refresh={load} onView={(nextView) => navigate({ view: nextView })} />}
         </div>
         <footer className="owner-footer"><span>LEGACY OS</span><p>Built for creators. Designed to last.</p><span className="release-version">v{LEGACY_OS_VERSION} · {LEGACY_OS_RELEASE}</span><span><i /> CORE SYSTEMS OPERATIONAL</span></footer>
       </main>
