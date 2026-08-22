@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { getDb } from "../../../db";
 import {
   automationJobs,
@@ -36,7 +36,12 @@ export async function GET(request: Request) {
       db
         .select()
         .from(patterns)
-        .where(eq(patterns.workspaceId, WORKSPACE_ID))
+        .where(
+          and(
+            eq(patterns.workspaceId, WORKSPACE_ID),
+            inArray(patterns.status, ["active", "candidate"]),
+          ),
+        )
         .orderBy(desc(patterns.confidenceBps)),
       db
         .select()
@@ -126,4 +131,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

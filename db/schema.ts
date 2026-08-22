@@ -893,6 +893,7 @@ export const patterns = sqliteTable(
     confidenceBps: integer("confidence_bps").notNull().default(0),
     significanceBps: integer("significance_bps").notNull().default(0),
     evidenceJson: text("evidence_json").notNull().default("[]"),
+    evidenceHash: text("evidence_hash"),
     firstSeenAt: text("first_seen_at").notNull(),
     lastSeenAt: text("last_seen_at").notNull(),
     lastEvaluatedAt: text("last_evaluated_at").notNull(),
@@ -1001,6 +1002,12 @@ export const learningCycles = sqliteTable(
       .notNull()
       .default(0),
     outcomesMeasured: integer("outcomes_measured").notNull().default(0),
+    eligibleObservations: integer("eligible_observations").notNull().default(0),
+    newEvidenceCount: integer("new_evidence_count").notNull().default(0),
+    evidenceFingerprint: text("evidence_fingerprint"),
+    knowledgeChanged: integer("knowledge_changed", { mode: "boolean" }).notNull().default(false),
+    changeSetJson: text("change_set_json").notNull().default("{}"),
+    priorCycleId: text("prior_cycle_id"),
     summary: text("summary"),
     startedAt: text("started_at"),
     completedAt: text("completed_at"),
@@ -1012,6 +1019,7 @@ export const learningCycles = sqliteTable(
       table.status,
     ),
     index("learning_cycles_project_idx").on(table.projectId),
+    uniqueIndex("learning_cycles_workspace_evidence_uq").on(table.workspaceId, table.evidenceFingerprint),
   ],
 );
 

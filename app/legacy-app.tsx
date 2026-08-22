@@ -405,6 +405,8 @@ type Briefing = {
     id: string;
     title: string;
     detail: string;
+    reason?: string;
+    evidence?: string;
   }>;
   confidence: number;
   generatedAt: string;
@@ -455,6 +457,11 @@ type IntelligenceData = {
     id: string;
     status: string;
     summary: string | null;
+    eligibleObservations: number;
+    newEvidenceCount: number;
+    knowledgeChanged: boolean;
+    changeSetJson: string;
+    completedAt?: string | null;
     createdAt: string;
   }>;
   consents: Array<{ id: string; status: string }>;
@@ -631,6 +638,27 @@ function projectTags(project: ProjectRecord) {
   } catch {
     return [];
   }
+}
+
+function canonicalKnowledgeTag(value: string) {
+  const normalized = value.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+  const aliases: Record<string, string> = {
+    "black and gray": "Black & Grey",
+    "black & gray": "Black & Grey",
+    "black and grey": "Black & Grey",
+    "black grey": "Black & Grey",
+    "black gray": "Black & Grey",
+    "black and grey realism": "Black & Grey Realism",
+    "black gray realism": "Black & Grey Realism",
+    "black and gray realism": "Black & Grey Realism",
+    fineline: "Fine Line",
+    "fine line": "Fine Line",
+    florals: "Floral",
+    realistic: "Realism",
+    religion: "Religious",
+    spirituality: "Spiritual",
+  };
+  return aliases[normalized] || value.trim();
 }
 
 let activeApiAccessToken: string | null = null;
@@ -2433,15 +2461,13 @@ function ChiefView({
     setIntelligenceError("");
     setIntelligenceNotice("");
     try {
-      await api("/api/intelligence", {
+      const result = await api<{ status: string; summary: string; knowledgeChanged: boolean; newEvidenceCount: number }>("/api/intelligence", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ triggerType: "owner_requested" }),
       });
       await loadIntelligence();
-      setIntelligenceNotice(
-        "Learning cycle completed. New evidence, patterns, recommendations, and outcomes are reflected below.",
-      );
+      setIntelligenceNotice(result.summary);
     } catch (learnError) {
       setIntelligenceError(
         learnError instanceof Error
@@ -2510,7 +2536,7 @@ function ChiefView({
               {briefing.priorities.map((priority, index) => (
                 <article key={priority.id}>
                   <span>{index + 1}</span>
-                  <div><strong>{priority.title}</strong><p>{priority.detail}</p></div>
+                  <div><strong>{priority.title}</strong><p>{priority.detail}</p>{priority.reason && <small>{priority.reason}</small>}{priority.evidence && <small className="priority-evidence">Evidence: {priority.evidence}</small>}</div>
                   <ShieldCheck size={18} />
                 </article>
               ))}
@@ -2560,7 +2586,7 @@ function ChiefView({
                 <p>{pattern.description}</p>
                 <small>{pattern.whyItMatters}</small>
                 <footer>
-                  {pattern.distinctProjects} projects · {pattern.distinctClients} clients · v{pattern.version}
+                  {pattern.supportCount} observations · {pattern.distinctProjects} completed projects · {pattern.distinctClients} clients · evidence v{pattern.version}
                 </footer>
               </article>
             ))}
@@ -2572,6 +2598,10 @@ function ChiefView({
             body="Legacy OS continuously captures real workflow signals. A pattern is promoted only after it crosses the project, client, effect, and confidence thresholds above."
           />
         )}
+        <div className="learning-integrity-panel">
+          <div><p className="eyebrow">LATEST EVIDENCE EVALUATION</p><h3>{intelligence?.learningCycles[0]?.knowledgeChanged ? "Knowledge changed" : "No unsupported learning claimed"}</h3><p>{intelligence?.learningCycles[0]?.summary || "The first learning cycle will record exactly which eligible evidence changed."}</p></div>
+          <div className="learning-integrity-metrics"><span><strong>{intelligence?.learningCycles[0]?.newEvidenceCount ?? 0}</strong> new evidence</span><span><strong>{intelligence?.learningCycles[0]?.eligibleObservations ?? 0}</strong> eligible observations</span><span><strong>{intelligence?.learningCycles[0]?.knowledgeChanged ? "Yes" : "No"}</strong> knowledge changed</span></div>
+        </div>
         <div className="learning-footer">
           <div>
             <strong>{intelligence?.recommendations.length ?? 0}</strong>
@@ -2881,9 +2911,10 @@ function ModuleView({
       if (activeTab === "Techniques") {
         const tags = new Map<string, number>();
         operationalProjects.forEach((project) =>
-          projectTags(project).forEach((tag) =>
-            tags.set(tag, (tags.get(tag) || 0) + 1),
-          ),
+          projectTags(project).forEach((tag) => {
+            const canonicalTag = canonicalKnowledgeTag(tag);
+            tags.set(canonicalTag, (tags.get(canonicalTag) || 0) + 1);
+          }),
         );
         return [...tags.entries()].map(([tag, count]) => ({
           id: tag,

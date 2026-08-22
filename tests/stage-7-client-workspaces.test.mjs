@@ -48,10 +48,10 @@ test("creator-facing analytics, finance, and knowledge use operational projects"
   assert.match(ui, /Test and archived records never contribute to analytics, briefings, or learning/);
 });
 
-test("Stage 7 release identity is centralized", async () => {
+test("Stage 7 release documentation remains present after later stages", async () => {
   const version = await read("lib/version.ts");
   const pkg = JSON.parse(await read("package.json"));
-  assert.equal(pkg.version, "0.7.0-alpha.7");
-  assert.match(version, /0\.7\.0-alpha\.7/);
-  assert.match(version, /Stage 7 · Client Workspaces/);
+  assert.match(pkg.version, /^0\.7\.0-alpha\.\d+$/);
+  assert.match(version, new RegExp(pkg.version.replaceAll(".", "\\.")));
+  assert.match(await read("docs/CLIENT_WORKSPACES.md"), /Stage 7/);
 });
