@@ -102,7 +102,7 @@ export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as {
     code?: unknown;
   } | null;
-  const code = typeof payload?.code === "string" ? payload.code.trim() : "";
+  const code = typeof payload?.code === "string" ? payload.code : "";
   if (!code || !(await verifyOwnerAccessCode(code))) {
     recordFailure(key);
     await audit(request, "denied");

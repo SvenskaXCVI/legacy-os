@@ -12,14 +12,17 @@ test("owner access accepts safe opaque-origin mobile webviews", async () => {
   assert.match(route, /fetchSite === "none"/);
 });
 
-test("owner code input is normalized without weakening the stored secret", async () => {
-  const [route, shell] = await Promise.all([
-    read("app/api/auth/owner-access/route.ts"),
+test("owner code input removes invisible mobile characters without changing case", async () => {
+  const [authLibrary, shell] = await Promise.all([
+    read("app/api/_lib.ts"),
     read("app/access-shell.tsx"),
   ]);
 
-  assert.match(route, /payload\.code\.trim\(\)/);
-  assert.match(shell, /ownerAccessCode\.trim\(\)/);
+  assert.match(authLibrary, /normalizeOwnerAccessCode/);
+  assert.match(authLibrary, /normalize\("NFKC"\)/);
+  assert.match(authLibrary, /\\u200B-\\u200D/);
+  assert.match(authLibrary, /sha256\(normalizeOwnerAccessCode\(code\)\)/);
+  assert.match(shell, /normalizedOwnerCode/);
   assert.match(shell, /autoCapitalize="none"/);
   assert.match(shell, /autoCorrect="off"/);
   assert.match(shell, /spellCheck=\{false\}/);

@@ -507,10 +507,16 @@ function ownerCodeHash() {
   return String(env.OWNER_ACCESS_CODE_HASH || "").trim().toLowerCase();
 }
 
+export function normalizeOwnerAccessCode(code: string) {
+  return code
+    .normalize("NFKC")
+    .replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, "");
+}
+
 export async function verifyOwnerAccessCode(code: string) {
   const expected = ownerCodeHash();
   if (!expected || !/^[a-f0-9]{64}$/.test(expected)) return false;
-  return constantTimeEqual(await sha256(code), expected);
+  return constantTimeEqual(await sha256(normalizeOwnerAccessCode(code)), expected);
 }
 
 function encodeBase64Url(value: string | ArrayBuffer) {

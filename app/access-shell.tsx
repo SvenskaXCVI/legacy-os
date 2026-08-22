@@ -440,13 +440,16 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
     setError("");
     setNotice("");
     try {
+      const normalizedOwnerCode = ownerAccessCode
+        .normalize("NFKC")
+        .replace(/[\s\u200B-\u200D\u2060\uFEFF]/g, "");
       await json<{ authenticated: boolean }>(
         await fetch("/api/auth/owner-access", {
           method: "POST",
           headers: { "content-type": "application/json" },
           credentials: "same-origin",
           cache: "no-store",
-          body: JSON.stringify({ code: ownerAccessCode.trim() }),
+          body: JSON.stringify({ code: normalizedOwnerCode }),
         }),
       );
       setOwnerAccessCode("");
