@@ -168,6 +168,67 @@ type AppointmentRecord = {
   notes: string | null;
 };
 
+type TattooSessionRecord = {
+  id: string;
+  projectId: string;
+  clientId: string;
+  appointmentId: string | null;
+  sessionNumber: number;
+  status: string;
+  startedAt: string | null;
+  endedAt: string | null;
+  designAssetId: string | null;
+  stencilAssetId: string | null;
+  placementSnapshot: string | null;
+  needleSetup: string | null;
+  inkSetup: string | null;
+  techniqueNotes: string | null;
+  clientVisibleSummary: string | null;
+  durationMinutes: number | null;
+  createdAt: string;
+};
+
+type HealingCheckinRecord = {
+  id: string;
+  projectId: string;
+  clientId?: string;
+  sessionId: string;
+  checkpointDay: number;
+  scheduledFor: string;
+  status: string;
+  clientNotes: string | null;
+  studioNotes?: string | null;
+  progressRating: number | null;
+  concernFlag: boolean;
+  ownerResponse: string | null;
+  submittedAt: string | null;
+  reviewedAt: string | null;
+};
+
+type ContentCandidateRecord = {
+  id: string;
+  projectId: string;
+  clientId: string;
+  sessionId: string | null;
+  sourceAssetId: string;
+  title: string;
+  format: string;
+  status: string;
+  captionDraft: string | null;
+  rightsStatus: string;
+  consentStatus: string;
+  createdAt: string;
+};
+
+type MediaConsentRecord = {
+  id: string;
+  clientId: string;
+  status: string;
+  scopesJson: string;
+  grantedAt: string;
+  revokedAt: string | null;
+};
+
 type ApprovalRecord = {
   id: string;
   projectId: string | null;
@@ -298,6 +359,16 @@ type WorkspaceData = {
   auditEvents: AuditRecord[];
   notifications: NotificationRecord[];
   paymentRequests: PaymentRecord[];
+  tattooSessions: TattooSessionRecord[];
+  healingCheckins: HealingCheckinRecord[];
+  contentCandidates: ContentCandidateRecord[];
+  mediaConsent: MediaConsentRecord[];
+};
+
+type PortalLifecycleData = {
+  sessions: Array<Pick<TattooSessionRecord, "id" | "projectId" | "sessionNumber" | "status" | "startedAt" | "endedAt" | "clientVisibleSummary" | "durationMinutes">>;
+  healingCheckins: HealingCheckinRecord[];
+  mediaConsent: MediaConsentRecord | null;
 };
 
 type PortalData = {
@@ -2479,11 +2550,45 @@ function ChiefView({
   );
 }
 
-function OperationsView({ data }: { data: WorkspaceData }) {
+function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refresh: () => Promise<void>; notify: (message: string, error?: boolean) => void }) {
+  const [saving, setSaving] = useState(false);
   const succeeded = data.aiRuns.filter((run) => run.status === "succeeded").length;
   const successRate = data.aiRuns.length
     ? Math.round((succeeded / data.aiRuns.length) * 100)
     : 0;
+
+  async function lifecycleAction(payload: Record<string, unknown>, success: string) {
+    setSaving(true);
+    try {
+      await api("/api/lifecycle", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      notify(success);
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Lifecycle action failed", true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createSession(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    await lifecycleAction({ action: "create_session", ...values, sessionNumber: Number(values.sessionNumber || 1), requestKey: crypto.randomUUID() }, "Tattoo session planned and added to the automation timeline.");
+    form.reset();
+  }
+
+  async function createContentCandidate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    const asset = data.assets.find((item) => item.id === values.sourceAssetId);
+    if (!asset?.projectId) return notify("Choose an eligible project asset.", true);
+    await lifecycleAction({ action: "create_content_candidate", ...values, projectId: asset.projectId, requestKey: crypto.randomUUID() }, "Content draft created and held for owner approval.");
+    form.reset();
+  }
+
+  const eligibleAssets = data.assets.filter((asset) => asset.contentEligible && asset.projectId);
   return (
     <section className="page-stack">
       <div className="operations-banner">
@@ -2499,6 +2604,53 @@ function OperationsView({ data }: { data: WorkspaceData }) {
         <StatCard icon={Gauge} label="SUCCESS RATE" value={`${successRate}%`} detail={data.aiRuns.length ? "Calculated from completed runs" : "Waiting for first run"} />
         <StatCard icon={Clock3} label="LAST RUN" value={data.aiRuns[0] ? formatDate(data.aiRuns[0].createdAt, true) : "None"} detail="Most recent automation event" />
         <StatCard icon={Activity} label="AUDIT EVENTS" value={data.auditEvents.length} detail="Recent owner, client, and system actions" />
+      </section>
+      <div className="operations-grid lifecycle-operations-grid">
+        <section className="os-panel lifecycle-control-panel">
+          <PanelTitle eyebrow="TATTOO SESSION CONTROL" title="Plan and complete real sessions" />
+          <form className="modal-form" onSubmit={createSession}>
+            <div className="field-row">
+              <label><span>PROJECT</span><select name="projectId" required defaultValue=""><option value="" disabled>Select project</option>{data.projects.map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label>
+              <label><span>SESSION NUMBER</span><input name="sessionNumber" type="number" min="1" defaultValue="1" required /></label>
+            </div>
+            <div className="field-row">
+              <label><span>START TIME</span><input name="startedAt" type="datetime-local" /></label>
+              <label><span>CLIENT SUMMARY</span><input name="clientVisibleSummary" placeholder="What the client may see" /></label>
+            </div>
+            <label><span>PRIVATE TECHNIQUE NOTES</span><textarea name="techniqueNotes" rows={2} placeholder="Owner-only setup and execution notes" /></label>
+            <button className="gold-button wide" disabled={saving || !data.projects.length}><CalendarDays size={15} /> Plan tattoo session</button>
+          </form>
+          <div className="lifecycle-record-list">
+            {data.tattooSessions.length ? data.tattooSessions.map((session) => {
+              const project = data.projects.find((item) => item.id === session.projectId);
+              return <article key={session.id}><div><strong>{project?.title || "Project"} · Session {session.sessionNumber}</strong><small>{session.status} · {formatDate(session.startedAt, true)}</small><p>{session.clientVisibleSummary || "No client-facing summary yet."}</p></div>{session.status !== "completed" && <button className="outline-button" disabled={saving} onClick={() => void lifecycleAction({ action: "complete_session", sessionId: session.id, endedAt: new Date().toISOString() }, "Session completed; day 3, 7, 14, and 30 healing check-ins were scheduled.")}><CheckCircle2 size={14} /> Complete</button>}</article>;
+            }) : <EmptyState icon={CalendarDays} title="No tattoo sessions yet" body="Plan the first session after the design and client approval are ready." />}
+          </div>
+        </section>
+        <section className="os-panel lifecycle-control-panel">
+          <PanelTitle eyebrow="HEALING REVIEW" title="Client follow-ups requiring attention" />
+          <div className="lifecycle-record-list">
+            {data.healingCheckins.filter((item) => ["submitted", "needs_attention"].includes(item.status)).map((checkin) => {
+              const project = data.projects.find((item) => item.id === checkin.projectId);
+              return <article key={checkin.id}><div><strong>{project?.title || "Project"} · Day {checkin.checkpointDay}</strong><small>{checkin.status} · rating {checkin.progressRating || "—"}/5</small><p>{checkin.clientNotes || "No client notes."}</p></div><button className="outline-button" disabled={saving} onClick={() => { const response = window.prompt("Response visible to the client"); if (response?.trim()) void lifecycleAction({ action: "review_healing", healingCheckinId: checkin.id, ownerResponse: response }, "Healing check-in reviewed and outcome evidence captured."); }}><MessageSquareText size={14} /> Review</button></article>;
+            })}
+            {!data.healingCheckins.some((item) => ["submitted", "needs_attention"].includes(item.status)) && <EmptyState icon={HeartHandshake} title="No healing reviews waiting" body="Submitted client check-ins appear here; flagged concerns are prioritized without making medical diagnoses." />}
+          </div>
+        </section>
+      </div>
+      <section className="os-panel lifecycle-content-panel">
+        <PanelTitle eyebrow="CONTENT SAFETY GATE" title="Draft from eligible media, then approve manually" />
+        <form className="modal-form lifecycle-content-form" onSubmit={createContentCandidate}>
+          <label><span>ELIGIBLE SOURCE</span><select name="sourceAssetId" required defaultValue=""><option value="" disabled>Select rights-cleared media</option>{eligibleAssets.map((asset) => <option key={asset.id} value={asset.id}>{asset.originalName}</option>)}</select></label>
+          <label><span>FORMAT</span><select name="format" defaultValue="portfolio"><option value="portfolio">Portfolio</option><option value="post">Post</option><option value="reel">Reel</option><option value="story">Story</option></select></label>
+          <label><span>TITLE</span><input name="title" required placeholder="Finished tattoo feature" /></label>
+          <label><span>CAPTION DRAFT</span><input name="captionDraft" placeholder="Draft only—publishing is never automatic" /></label>
+          <button className="gold-button" disabled={saving || !eligibleAssets.length}><Sparkles size={15} /> Create approval-gated draft</button>
+        </form>
+        <div className="lifecycle-record-list content-candidate-list">
+          {data.contentCandidates.map((candidate) => <article key={candidate.id}><div><strong>{candidate.title}</strong><small>{candidate.format} · {candidate.status.replaceAll("_", " ")}</small><p>{candidate.captionDraft || "No caption drafted."}</p></div>{candidate.status === "approval_required" && <button className="outline-button" disabled={saving} onClick={() => void lifecycleAction({ action: "approve_content_candidate", contentCandidateId: candidate.id }, "Content draft approved. No publishing action was performed.")}><ShieldCheck size={14} /> Approve draft</button>}</article>)}
+          {!data.contentCandidates.length && <EmptyState icon={FileText} title="No content candidates" body="Only rights-cleared, client-consented assets can become drafts. Publication remains a separate approval-gated action." />}
+        </div>
       </section>
       <div className="operations-grid">
         <section className="os-panel table-panel">
@@ -3502,7 +3654,7 @@ function ClientPortal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<
-    "overview" | "intake" | "messages" | "approvals" | "files" | "payments" | "privacy"
+    "overview" | "intake" | "messages" | "approvals" | "files" | "payments" | "healing" | "privacy"
   >("overview");
   const [projectId, setProjectId] = useState("");
   const [notice, setNotice] = useState("");
@@ -3510,6 +3662,7 @@ function ClientPortal({
   const [intakeKey, setIntakeKey] = useState(() => crypto.randomUUID());
   const [submittingIntake, setSubmittingIntake] = useState(false);
   const [payingId, setPayingId] = useState("");
+  const [lifecycle, setLifecycle] = useState<PortalLifecycleData | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -3581,6 +3734,20 @@ function ClientPortal({
     const handle = window.setTimeout(() => void loadSocial(), 0);
     return () => window.clearTimeout(handle);
   }, [loadSocial, tab]);
+
+  const loadLifecycle = useCallback(async () => {
+    try {
+      setLifecycle(await api<PortalLifecycleData>(`/api/portal/lifecycle?token=${encodeURIComponent(token)}`));
+    } catch (lifecycleError) {
+      setNotice(lifecycleError instanceof Error ? lifecycleError.message : "Unable to load healing timeline");
+    }
+  }, [token]);
+
+  useEffect(() => {
+    if (tab !== "healing") return;
+    const handle = window.setTimeout(() => void loadLifecycle(), 0);
+    return () => window.clearTimeout(handle);
+  }, [loadLifecycle, tab]);
   const project = data?.projects.find((item) => item.id === projectId) || data?.projects[0];
   const messages = data?.messages.filter((item) => !project || !item.projectId || item.projectId === project.id) || [];
   const approvals = data?.approvals.filter((item) => !project || item.projectId === project.id) || [];
@@ -3695,6 +3862,30 @@ function ClientPortal({
     } catch (checkoutError) {
       setNotice(checkoutError instanceof Error ? checkoutError.message : "Unable to open secure checkout");
       setPayingId("");
+    }
+  }
+
+  async function submitHealingCheckin(event: FormEvent<HTMLFormElement>, healingCheckinId: string) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    try {
+      await api("/api/portal/lifecycle", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, action: "submit_healing_checkin", healingCheckinId, clientNotes: values.clientNotes, progressRating: Number(values.progressRating), concernFlag: values.concernFlag === "on" }) });
+      form.reset();
+      setNotice("Healing check-in sent securely to your artist.");
+      await loadLifecycle();
+    } catch (healingError) {
+      setNotice(healingError instanceof Error ? healingError.message : "Unable to submit healing check-in");
+    }
+  }
+
+  async function updateMediaConsent(action: "grant_media_consent" | "revoke_media_consent") {
+    try {
+      await api("/api/portal/lifecycle", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ token, action }) });
+      setNotice(action === "grant_media_consent" ? "Tattoo media permission granted. You can revoke it at any time." : "Tattoo media permission revoked. Future content drafting is blocked.");
+      await loadLifecycle();
+    } catch (consentError) {
+      setNotice(consentError instanceof Error ? consentError.message : "Unable to update media permission");
     }
   }
 
@@ -3813,6 +4004,11 @@ function ClientPortal({
       title: "No payment requests yet",
       body: "Approved deposits and invoices will appear here when your artist connects them to a project.",
     },
+    healing: {
+      icon: HeartHandshake,
+      title: "Healing support will appear here",
+      body: "After a tattoo session, your studio can schedule private check-ins for days 3, 7, 14, and 30.",
+    },
     privacy: {
       icon: LockKeyhole,
       title: "Your privacy boundary is active",
@@ -3826,7 +4022,7 @@ function ClientPortal({
       <header className="client-header">
         <Brand />
         <nav>
-          {(["overview", "intake", "messages", "approvals", "files", "payments", "privacy"] as const).map((item) => (
+          {(["overview", "intake", "messages", "approvals", "files", "payments", "healing", "privacy"] as const).map((item) => (
             <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>{item === "intake" ? "new project" : item}</button>
           ))}
         </nav>
@@ -3931,6 +4127,7 @@ function ClientPortal({
                   <button onClick={() => setTab("files")}><Upload size={20} /><span><strong>Share reference</strong><small>Upload an image or document</small></span><ArrowRight size={15} /></button>
                   <button onClick={() => setTab("approvals")}><ShieldCheck size={20} /><span><strong>Review approvals</strong><small>{approvals.filter((item) => item.status === "pending").length} waiting</small></span><ArrowRight size={15} /></button>
                   <button onClick={() => setTab("payments")}><CreditCard size={20} /><span><strong>Payments</strong><small>{payments.filter((item) => ["approved", "open"].includes(item.status)).length} ready</small></span><ArrowRight size={15} /></button>
+                  <button onClick={() => setTab("healing")}><HeartHandshake size={20} /><span><strong>Healing check-ins</strong><small>{lifecycle?.healingCheckins.filter((item) => item.status === "due").length || 0} scheduled</small></span><ArrowRight size={15} /></button>
                   <button onClick={() => setTab("intake")}><Sparkles size={20} /><span><strong>Plan another project</strong><small>Send a structured request</small></span><ArrowRight size={15} /></button>
                 </section>
               </div>
@@ -3986,6 +4183,31 @@ function ClientPortal({
                   return <article key={payment.id}><div><span className={cn("status-badge", payment.status)}>{payment.status.replaceAll("_", " ")}</span><h3>{payment.title}</h3><p>{payment.description || `${payment.kind} for ${project?.title || "your project"}`}</p><small>{payment.dueAt ? `Due ${formatDate(payment.dueAt)}` : `Created ${formatDate(payment.createdAt)}`}</small></div><div className="payment-amount"><strong>{formatMoney(payment.amountCents)}</strong>{payment.status === "paid" && <small>{formatMoney(balance)} paid</small>}{payment.amountRefundedCents > 0 && <small>{formatMoney(payment.amountRefundedCents)} refunded</small>}{["approved", "open"].includes(payment.status) && <button className="gold-button" disabled={payingId === payment.id} onClick={() => void openCheckout(payment)}><LockKeyhole size={14} /> {payingId === payment.id ? "Opening..." : "Pay securely"}</button>}</div></article>;
                 })}</div> : <EmptyState icon={CreditCard} title="No payment requests" body="Your artist has not issued a deposit or invoice for this project." />}
               </section>
+            )}
+
+            {tab === "healing" && (
+              <div className="client-healing-layout">
+                <section className="client-card">
+                  <PanelTitle eyebrow="PRIVATE FOLLOW-UP" title="Healing check-ins" />
+                  <div className="healing-safety"><ShieldCheck size={20} /><p><strong>This is studio follow-up, not medical diagnosis.</strong> If you have urgent or serious health concerns, contact a qualified medical professional.</p></div>
+                  {lifecycle?.healingCheckins.filter((item) => item.projectId === project.id).length ? <div className="healing-checkin-list">{lifecycle.healingCheckins.filter((item) => item.projectId === project.id).map((checkin) => <article key={checkin.id}>
+                    <div className="healing-checkin-heading"><div><span className={cn("status-badge", checkin.status)}>{checkin.status.replaceAll("_", " ")}</span><h3>Day {checkin.checkpointDay} check-in</h3><small>Scheduled {formatDate(checkin.scheduledFor, true)}</small></div>{checkin.progressRating && <strong>{checkin.progressRating}/5</strong>}</div>
+                    {checkin.ownerResponse && <div className="candidate-response"><MessageSquareText size={15} /><p><strong>Studio response</strong>{checkin.ownerResponse}</p></div>}
+                    {["due", "submitted", "needs_attention"].includes(checkin.status) && !checkin.reviewedAt && <form className="modal-form" onSubmit={(event) => void submitHealingCheckin(event, checkin.id)}>
+                      <label><span>HOW IS IT PROGRESSING?</span><select name="progressRating" required defaultValue=""><option value="" disabled>Select 1–5</option>{[1,2,3,4,5].map((rating) => <option value={rating} key={rating}>{rating} / 5</option>)}</select></label>
+                      <label><span>PRIVATE NOTES FOR YOUR ARTIST</span><textarea name="clientNotes" rows={3} required defaultValue={checkin.clientNotes || ""} placeholder="Describe how the tattoo looks and feels today..." /></label>
+                      <label className="consent-checkbox"><input name="concernFlag" type="checkbox" defaultChecked={checkin.concernFlag} /><span>Please prioritize this for artist review</span></label>
+                      <button className="gold-button"><Send size={15} /> Submit secure check-in</button>
+                    </form>}
+                  </article>)}</div> : <EmptyState icon={HeartHandshake} title="No check-ins scheduled" body="Your artist will schedule follow-ups after a completed tattoo session." />}
+                </section>
+                <section className="client-card media-consent-panel">
+                  <PanelTitle eyebrow="OPTIONAL MEDIA RELEASE" title="Tattoo photo permission" />
+                  <p>Your project media stays private unless you explicitly allow portfolio and studio marketing use. Permission does not authorize automatic publishing; the owner still approves every draft.</p>
+                  <ul><li>Portfolio display</li><li>Social content drafts</li><li>Studio marketing</li></ul>
+                  {lifecycle?.mediaConsent?.status === "granted" ? <div className="consent-actions"><span><CheckCircle2 size={16} /> Permission granted</span><button className="text-button" onClick={() => void updateMediaConsent("revoke_media_consent")}>Revoke permission</button></div> : <button className="gold-button" onClick={() => void updateMediaConsent("grant_media_consent")}><ShieldCheck size={15} /> Grant optional media permission</button>}
+                </section>
+              </div>
             )}
 
             {tab === "privacy" && (
@@ -4214,7 +4436,7 @@ export function LegacyApp({
           {view === "inbox" && <InboxView data={data} onSent={load} notify={notify} />}
           {view === "design" && <DesignStudio data={data} refresh={load} notify={notify} />}
           {view === "chief" && <ChiefView data={data} briefing={briefing} generating={generating} onGenerate={generateBriefing} />}
-          {view === "operations" && <OperationsView data={data} />}
+          {view === "operations" && <OperationsView data={data} refresh={load} notify={notify} />}
           {view === "analytics" && <AnalyticsView data={data} />}
           {(view === "knowledge" || view === "content") && (
             <ModuleView key={view} type={view} data={data} />

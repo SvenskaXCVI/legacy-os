@@ -75,10 +75,9 @@ test("Stage 5 migration is additive and preserves existing media", async () => {
   database.close();
 });
 
-test("Stage 5 release identity is centralized", async () => {
+test("release identity remains centralized after Stage 5", async () => {
   const version = await read("lib/version.ts");
   const pkg = JSON.parse(await read("package.json"));
-  assert.equal(pkg.version, "0.7.0-alpha.5");
-  assert.match(version, /0\.7\.0-alpha\.5/);
-  assert.match(version, /Stage 5 · Design Media/);
+  assert.match(version, new RegExp(`LEGACY_OS_VERSION = ["']${pkg.version.replaceAll(".", "\\.")}["']`));
+  assert.match(await read("docs/DESIGN_MEDIA.md"), /Stage 5/);
 });

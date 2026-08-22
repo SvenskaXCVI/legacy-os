@@ -697,6 +697,97 @@ export const appointments = sqliteTable(
   ],
 );
 
+export const tattooSessions = sqliteTable(
+  "tattoo_sessions",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    projectId: text("project_id").notNull().references(() => projects.id),
+    clientId: text("client_id").notNull().references(() => clients.id),
+    appointmentId: text("appointment_id").references(() => appointments.id),
+    sessionNumber: integer("session_number").notNull().default(1),
+    status: text("status").notNull().default("planned"),
+    startedAt: text("started_at"),
+    endedAt: text("ended_at"),
+    designAssetId: text("design_asset_id").references(() => assets.id),
+    stencilAssetId: text("stencil_asset_id").references(() => assets.id),
+    placementSnapshot: text("placement_snapshot"),
+    needleSetup: text("needle_setup"),
+    inkSetup: text("ink_setup"),
+    techniqueNotes: text("technique_notes"),
+    clientVisibleSummary: text("client_visible_summary"),
+    durationMinutes: integer("duration_minutes"),
+    requestKey: text("request_key"),
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("tattoo_sessions_workspace_request_key_uq").on(table.workspaceId, table.requestKey),
+    index("tattoo_sessions_project_number_idx").on(table.projectId, table.sessionNumber),
+    index("tattoo_sessions_client_status_idx").on(table.clientId, table.status),
+  ],
+);
+
+export const healingCheckins = sqliteTable(
+  "healing_checkins",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    projectId: text("project_id").notNull().references(() => projects.id),
+    clientId: text("client_id").notNull().references(() => clients.id),
+    sessionId: text("session_id").notNull().references(() => tattooSessions.id),
+    checkpointDay: integer("checkpoint_day").notNull(),
+    scheduledFor: text("scheduled_for").notNull(),
+    status: text("status").notNull().default("due"),
+    clientNotes: text("client_notes"),
+    studioNotes: text("studio_notes"),
+    progressRating: integer("progress_rating"),
+    concernFlag: integer("concern_flag", { mode: "boolean" }).notNull().default(false),
+    ownerResponse: text("owner_response"),
+    submittedAt: text("submitted_at"),
+    reviewedAt: text("reviewed_at"),
+    requestKey: text("request_key"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("healing_checkins_workspace_request_key_uq").on(table.workspaceId, table.requestKey),
+    index("healing_checkins_project_schedule_idx").on(table.projectId, table.scheduledFor),
+    index("healing_checkins_client_status_idx").on(table.clientId, table.status),
+  ],
+);
+
+export const contentCandidates = sqliteTable(
+  "content_candidates",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    projectId: text("project_id").notNull().references(() => projects.id),
+    clientId: text("client_id").notNull().references(() => clients.id),
+    sessionId: text("session_id").references(() => tattooSessions.id),
+    sourceAssetId: text("source_asset_id").notNull().references(() => assets.id),
+    title: text("title").notNull(),
+    format: text("format").notNull().default("portfolio"),
+    status: text("status").notNull().default("draft"),
+    captionDraft: text("caption_draft"),
+    evidenceJson: text("evidence_json").notNull().default("[]"),
+    rightsStatus: text("rights_status").notNull(),
+    consentStatus: text("consent_status").notNull(),
+    createdByType: text("created_by_type").notNull().default("agent"),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    requestKey: text("request_key"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("content_candidates_workspace_request_key_uq").on(table.workspaceId, table.requestKey),
+    index("content_candidates_project_status_idx").on(table.projectId, table.status),
+    index("content_candidates_asset_idx").on(table.sourceAssetId),
+  ],
+);
+
 export const clientMessages = sqliteTable(
   "client_messages",
   {

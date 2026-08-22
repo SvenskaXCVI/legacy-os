@@ -8,10 +8,14 @@ import {
   auditEvents,
   clientMessages,
   clients,
+  consentGrants,
+  contentCandidates,
+  healingCheckins,
   notifications,
   paymentRequests,
   projectCandidates,
   projects,
+  tattooSessions,
   users,
   workspaces,
 } from "../../../db/schema";
@@ -76,6 +80,10 @@ export async function GET(request: Request) {
       auditRows,
       notificationRows,
       paymentRows,
+      sessionRows,
+      healingRows,
+      contentCandidateRows,
+      mediaConsentRows,
     ] = await Promise.all([
       db
         .select()
@@ -199,6 +207,10 @@ export async function GET(request: Request) {
         .from(paymentRequests)
         .where(eq(paymentRequests.workspaceId, WORKSPACE_ID))
         .orderBy(desc(paymentRequests.createdAt)),
+      db.select().from(tattooSessions).where(eq(tattooSessions.workspaceId, WORKSPACE_ID)).orderBy(desc(tattooSessions.createdAt)),
+      db.select().from(healingCheckins).where(eq(healingCheckins.workspaceId, WORKSPACE_ID)).orderBy(desc(healingCheckins.scheduledFor)),
+      db.select().from(contentCandidates).where(eq(contentCandidates.workspaceId, WORKSPACE_ID)).orderBy(desc(contentCandidates.createdAt)),
+      db.select().from(consentGrants).where(and(eq(consentGrants.workspaceId, WORKSPACE_ID), eq(consentGrants.consentType, "tattoo_media_use"))).orderBy(desc(consentGrants.createdAt)),
     ]);
 
     return Response.json({
@@ -215,6 +227,10 @@ export async function GET(request: Request) {
       auditEvents: auditRows,
       notifications: notificationRows,
       paymentRequests: paymentRows,
+      tattooSessions: sessionRows,
+      healingCheckins: healingRows,
+      contentCandidates: contentCandidateRows,
+      mediaConsent: mediaConsentRows,
     });
   } catch (error) {
     return routeError(error, "Unable to load workspace");
