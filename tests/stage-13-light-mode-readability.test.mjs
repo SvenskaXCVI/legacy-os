@@ -44,7 +44,8 @@ test("Stage 13 is versioned and contains no data migration", async () => {
   const version = await read("lib/version.ts");
   const pkg = JSON.parse(await read("package.json"));
   const notes = await read("docs/LIGHT_MODE_READABILITY.md");
-  assert.equal(pkg.version, "0.7.0-alpha.13");
-  assert.match(version, /Stage 13 · Light Mode Readability/);
+  assert.match(pkg.version, /^0\.7\.0-alpha\.\d+$/);
+  assert.match(version, /LEGACY_OS_RELEASE/);
+  assert.match(notes, /Stage 13/);
   assert.match(notes, /no database migration/i);
 });

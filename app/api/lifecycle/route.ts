@@ -139,7 +139,7 @@ export async function POST(request: Request) {
       const project = await db.select().from(projects).where(and(eq(projects.id, payload.projectId), eq(projects.workspaceId, WORKSPACE_ID))).get();
       if (!project?.clientId) return jsonError("Project not found", 404);
       const asset = await db.select().from(assets).where(and(eq(assets.id, payload.sourceAssetId), eq(assets.projectId, project.id), eq(assets.workspaceId, WORKSPACE_ID))).get();
-      if (!asset || !asset.contentEligible || asset.consentStatus !== "granted" || !["owned", "licensed", "client_permission"].includes(asset.rightsStatus)) return jsonError("This asset is not eligible for content use", 409);
+      if (!asset || !asset.contentEligible || asset.consentStatus !== "granted" || !["studio_created", "authorized"].includes(asset.rightsStatus)) return jsonError("This asset is not eligible for content use", 409);
       const consent = await db.select().from(consentGrants).where(and(eq(consentGrants.clientId, project.clientId), eq(consentGrants.consentType, "tattoo_media_use"), eq(consentGrants.status, "granted"))).get();
       if (!consent) return jsonError("The client must grant tattoo media consent before content can be drafted", 409);
       const requestKey = payload.requestKey?.trim() || `content:${project.id}:${asset.id}:${payload.format || "portfolio"}`;

@@ -15,6 +15,11 @@ import {
 } from "../../../db/schema";
 import { actorFrom, makeId, requireOwner, routeError, WORKSPACE_ID } from "../_lib";
 import { syncSocialConnections } from "../../../lib/social-sync";
+import {
+  buildMemoryContext,
+  consolidateCaptureMemory,
+  MEMORY_CONTEXT_POLICY_VERSION,
+} from "../../../lib/memory-engine";
 
 export async function POST(request: Request) {
   try {
@@ -79,6 +84,17 @@ export async function POST(request: Request) {
       (item) =>
         operationalProjectIds.has(item.projectId) &&
         ["approved", "open", "failed"].includes(item.status),
+    );
+    await consolidateCaptureMemory(WORKSPACE_ID, db);
+    const memoryContext = await buildMemoryContext(
+      {
+        workspaceId: WORKSPACE_ID,
+        projectIds: projectRows.map((item) => item.id),
+        clientIds: clientRows.map((item) => item.id),
+        maxItems: 20,
+        maxCharacters: 8_000,
+      },
+      db,
     );
     const priorities = [
       ...healingAttention.map((item) => ({
@@ -169,7 +185,7 @@ export async function POST(request: Request) {
         provider: "Legacy OS",
         model: "policy-planner-v1",
         promptVersion: "briefing-v1",
-        contextPolicyVersion: "workspace-metadata-v1",
+        contextPolicyVersion: MEMORY_CONTEXT_POLICY_VERSION,
         approvalPolicyVersion: "human-final-v1",
         riskLevel: "low",
         contentCapture: "metadata_only",
@@ -184,6 +200,9 @@ export async function POST(request: Request) {
           healingAttention: healingAttention.length,
           openPayments: openPayments.length,
           socialSync,
+          memoryIds: memoryContext.memoryIds,
+          memoryAvailable: memoryContext.available,
+          memoryOmitted: memoryContext.omitted,
         }),
         confidenceBps: 10000,
         status: "succeeded",
@@ -240,6 +259,19 @@ export async function POST(request: Request) {
       priorities,
       confidence: 100,
       generatedAt: completedAt.toISOString(),
+      memoryContext: {
+        policyVersion: memoryContext.policyVersion,
+        included: memoryContext.items.length,
+        available: memoryContext.available,
+        omitted: memoryContext.omitted,
+        highlights: memoryContext.items.slice(0, 5).map((item) => ({
+          id: item.id,
+          title: item.title,
+          scopeType: item.scopeType,
+          confidenceBps: item.confidenceBps,
+          verificationStatus: item.verificationStatus,
+        })),
+      },
     });
   } catch (error) {
     return routeError(error, "Unable to generate briefing");

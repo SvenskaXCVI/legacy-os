@@ -614,6 +614,616 @@ export const auditEvents = sqliteTable(
   ],
 );
 
+export const captureEvents = sqliteTable(
+  "capture_events",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    projectId: text("project_id").references(() => projects.id),
+    clientId: text("client_id").references(() => clients.id),
+    actorType: text("actor_type").notNull(),
+    actorId: text("actor_id"),
+    channel: text("channel").notNull(),
+    eventType: text("event_type").notNull(),
+    sourceType: text("source_type").notNull(),
+    sourceId: text("source_id"),
+    title: text("title").notNull(),
+    summary: text("summary"),
+    contentPolicy: text("content_policy").notNull().default("metadata_only"),
+    contentHash: text("content_hash"),
+    metadataJson: text("metadata_json").notNull().default("{}"),
+    consentGrantId: text("consent_grant_id"),
+    correlationId: text("correlation_id"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: text("status").notNull().default("normalized"),
+    occurredAt: text("occurred_at").notNull(),
+    capturedAt: timestamp("captured_at"),
+  },
+  (table) => [
+    uniqueIndex("capture_events_workspace_idempotency_uq").on(
+      table.workspaceId,
+      table.idempotencyKey,
+    ),
+    index("capture_events_workspace_occurred_idx").on(
+      table.workspaceId,
+      table.occurredAt,
+    ),
+    index("capture_events_project_idx").on(table.projectId),
+    index("capture_events_client_idx").on(table.clientId),
+    index("capture_events_status_idx").on(table.workspaceId, table.status),
+  ],
+);
+
+export const realtimeEvents = sqliteTable(
+  "realtime_events",
+  {
+    sequence: integer("sequence").primaryKey({ autoIncrement: true }),
+    id: text("id").notNull().unique(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    audience: text("audience").notNull(),
+    clientId: text("client_id").references(() => clients.id),
+    projectId: text("project_id").references(() => projects.id),
+    eventType: text("event_type").notNull(),
+    entityType: text("entity_type").notNull(),
+    entityId: text("entity_id"),
+    title: text("title").notNull(),
+    changedFieldsJson: text("changed_fields_json").notNull().default("[]"),
+    correlationId: text("correlation_id"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    createdAt: timestamp("created_at"),
+  },
+  (table) => [
+    uniqueIndex("realtime_events_workspace_idempotency_uq").on(table.workspaceId, table.idempotencyKey),
+    index("realtime_events_owner_cursor_idx").on(table.workspaceId, table.audience, table.sequence),
+    index("realtime_events_client_cursor_idx").on(table.workspaceId, table.clientId, table.audience, table.sequence),
+  ],
+);
+
+export const memoryRecords = sqliteTable(
+  "memory_records",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    projectId: text("project_id").references(() => projects.id),
+    clientId: text("client_id").references(() => clients.id),
+    scopeType: text("scope_type").notNull(),
+    scopeKey: text("scope_key").notNull(),
+    memoryKey: text("memory_key").notNull(),
+    memoryType: text("memory_type").notNull(),
+    title: text("title").notNull(),
+    content: text("content").notNull(),
+    contentHash: text("content_hash").notNull(),
+    sourceCaptureIdsJson: text("source_capture_ids_json").notNull().default("[]"),
+    confidenceBps: integer("confidence_bps").notNull().default(7000),
+    sensitivity: text("sensitivity").notNull().default("internal"),
+    verificationStatus: text("verification_status").notNull().default("system_derived"),
+    status: text("status").notNull().default("active"),
+    version: integer("version").notNull().default(1),
+    supersedesMemoryId: text("supersedes_memory_id"),
+    validFrom: text("valid_from").notNull(),
+    validTo: text("valid_to"),
+    lastReinforcedAt: text("last_reinforced_at").notNull(),
+    createdBy: text("created_by").notNull(),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("memory_records_scope_key_version_uq").on(
+      table.workspaceId,
+      table.scopeKey,
+      table.memoryKey,
+      table.version,
+    ),
+    index("memory_records_scope_status_idx").on(
+      table.workspaceId,
+      table.scopeKey,
+      table.status,
+    ),
+    index("memory_records_project_idx").on(table.projectId, table.status),
+    index("memory_records_client_idx").on(table.clientId, table.status),
+    index("memory_records_confidence_idx").on(
+      table.workspaceId,
+      table.status,
+      table.confidenceBps,
+    ),
+  ],
+);
+
+export const agentDefinitions = sqliteTable(
+  "agent_definitions",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    agentKey: text("agent_key").notNull(),
+    displayName: text("display_name").notNull(),
+    role: text("role").notNull(),
+    purpose: text("purpose").notNull(),
+    capabilitiesJson: text("capabilities_json").notNull().default("[]"),
+    allowedScopesJson: text("allowed_scopes_json").notNull().default("[]"),
+    autonomyPolicy: text("autonomy_policy").notNull().default("internal_only"),
+    status: text("status").notNull().default("active"),
+    policyVersion: text("policy_version").notNull(),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("agent_definitions_workspace_key_uq").on(
+      table.workspaceId,
+      table.agentKey,
+    ),
+    index("agent_definitions_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+    ),
+  ],
+);
+
+export const toolDefinitions = sqliteTable(
+  "tool_definitions",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    toolKey: text("tool_key").notNull(),
+    displayName: text("display_name").notNull(),
+    description: text("description").notNull(),
+    inputSchemaJson: text("input_schema_json").notNull().default("{}"),
+    outputSchemaJson: text("output_schema_json").notNull().default("{}"),
+    sideEffectClass: text("side_effect_class").notNull(),
+    approvalClass: text("approval_class").notNull(),
+    retryPolicyJson: text("retry_policy_json").notNull().default("{}"),
+    auditBehaviorJson: text("audit_behavior_json").notNull().default("{}"),
+    allowedAgentsJson: text("allowed_agents_json").notNull().default("[]"),
+    connectorKey: text("connector_key"),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    status: text("status").notNull().default("active"),
+    version: integer("version").notNull().default(1),
+    policyVersion: text("policy_version").notNull(),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("tool_definitions_workspace_key_uq").on(table.workspaceId, table.toolKey),
+    index("tool_definitions_workspace_authority_idx").on(table.workspaceId, table.approvalClass, table.status),
+  ],
+);
+
+export const agentTasks = sqliteTable(
+  "agent_tasks",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    agentKey: text("agent_key").notNull(),
+    parentTaskId: text("parent_task_id"),
+    parentRunId: text("parent_run_id").references(() => aiRuns.id),
+    projectId: text("project_id").references(() => projects.id),
+    clientId: text("client_id").references(() => clients.id),
+    requestedByType: text("requested_by_type").notNull(),
+    requestedById: text("requested_by_id"),
+    taskType: text("task_type").notNull(),
+    toolKey: text("tool_key").notNull().default("analyze_internal"),
+    title: text("title").notNull(),
+    instructionSummary: text("instruction_summary").notNull(),
+    scopeJson: text("scope_json").notNull().default("{}"),
+    actionPayloadJson: text("action_payload_json").notNull().default("{}"),
+    evidenceJson: text("evidence_json").notNull().default("[]"),
+    contextMemoryIdsJson: text("context_memory_ids_json").notNull().default("[]"),
+    riskLevel: text("risk_level").notNull().default("low"),
+    reversibility: text("reversibility").notNull().default("reversible"),
+    autonomyLevel: text("autonomy_level").notNull().default("internal_auto"),
+    approvalRequired: integer("approval_required", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    approvalId: text("approval_id").references(() => approvals.id),
+    status: text("status").notNull().default("queued"),
+    priority: integer("priority").notNull().default(50),
+    attempts: integer("attempts").notNull().default(0),
+    maxAttempts: integer("max_attempts").notNull().default(3),
+    correlationId: text("correlation_id").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    resultSummary: text("result_summary"),
+    errorSummary: text("error_summary"),
+    scheduledFor: text("scheduled_for").notNull(),
+    startedAt: text("started_at"),
+    completedAt: text("completed_at"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("agent_tasks_workspace_idempotency_uq").on(
+      table.workspaceId,
+      table.idempotencyKey,
+    ),
+    index("agent_tasks_queue_idx").on(
+      table.workspaceId,
+      table.status,
+      table.priority,
+      table.scheduledFor,
+    ),
+    index("agent_tasks_agent_status_idx").on(table.agentKey, table.status),
+    index("agent_tasks_project_idx").on(table.projectId, table.status),
+    index("agent_tasks_client_idx").on(table.clientId, table.status),
+    index("agent_tasks_approval_idx").on(table.approvalId),
+    index("agent_tasks_parent_run_idx").on(table.parentRunId, table.createdAt),
+  ],
+);
+
+export const authorityDecisions = sqliteTable(
+  "authority_decisions",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    toolKey: text("tool_key").notNull(),
+    taskId: text("task_id").references(() => agentTasks.id),
+    approvalId: text("approval_id").references(() => approvals.id),
+    actorType: text("actor_type").notNull(),
+    actorId: text("actor_id"),
+    authorityClass: text("authority_class").notNull(),
+    decision: text("decision").notNull(),
+    reason: text("reason").notNull(),
+    inputHash: text("input_hash").notNull(),
+    correlationId: text("correlation_id").notNull(),
+    policyVersion: text("policy_version").notNull(),
+    evaluatedAt: timestamp("evaluated_at"),
+    resolvedAt: text("resolved_at"),
+  },
+  (table) => [
+    uniqueIndex("authority_decisions_workspace_task_uq").on(table.workspaceId, table.taskId),
+    index("authority_decisions_workspace_decision_idx").on(table.workspaceId, table.decision, table.evaluatedAt),
+    index("authority_decisions_tool_idx").on(table.toolKey, table.evaluatedAt),
+    index("authority_decisions_approval_idx").on(table.approvalId),
+  ],
+);
+
+export const chiefManagerRuns = sqliteTable(
+  "chief_manager_runs",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    aiRunId: text("ai_run_id").notNull().references(() => aiRuns.id),
+    projectId: text("project_id").references(() => projects.id),
+    clientId: text("client_id").references(() => clients.id),
+    requestedBy: text("requested_by").notNull(),
+    objective: text("objective").notNull(),
+    mode: text("mode").notNull().default("command"),
+    status: text("status").notNull().default("planning"),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    planVersion: text("plan_version").notNull(),
+    contextPolicyVersion: text("context_policy_version").notNull(),
+    authorityPolicyVersion: text("authority_policy_version").notNull(),
+    planJson: text("plan_json").notNull().default("{}"),
+    contextRefsJson: text("context_refs_json").notNull().default("[]"),
+    evidenceJson: text("evidence_json").notNull().default("[]"),
+    summary: text("summary"),
+    nextAction: text("next_action"),
+    confidenceBps: integer("confidence_bps"),
+    correlationId: text("correlation_id").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    startedAt: text("started_at").notNull(),
+    completedAt: text("completed_at"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("chief_manager_runs_workspace_idempotency_uq").on(table.workspaceId, table.idempotencyKey),
+    uniqueIndex("chief_manager_runs_ai_run_uq").on(table.aiRunId),
+    index("chief_manager_runs_workspace_status_idx").on(table.workspaceId, table.status, table.createdAt),
+    index("chief_manager_runs_project_idx").on(table.projectId, table.createdAt),
+  ],
+);
+
+export const chiefManagerSteps = sqliteTable(
+  "chief_manager_steps",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    managerRunId: text("manager_run_id").notNull().references(() => chiefManagerRuns.id),
+    sequence: integer("sequence").notNull(),
+    agentKey: text("agent_key").notNull(),
+    title: text("title").notNull(),
+    purpose: text("purpose").notNull(),
+    toolKey: text("tool_key").notNull(),
+    taskId: text("task_id").references(() => agentTasks.id),
+    approvalId: text("approval_id").references(() => approvals.id),
+    status: text("status").notNull().default("planned"),
+    evidenceJson: text("evidence_json").notNull().default("[]"),
+    resultSummary: text("result_summary"),
+    errorSummary: text("error_summary"),
+    startedAt: text("started_at"),
+    completedAt: text("completed_at"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("chief_manager_steps_run_sequence_uq").on(table.managerRunId, table.sequence),
+    index("chief_manager_steps_workspace_status_idx").on(table.workspaceId, table.status, table.createdAt),
+    index("chief_manager_steps_task_idx").on(table.taskId),
+    index("chief_manager_steps_approval_idx").on(table.approvalId),
+  ],
+);
+
+export const specialistEvaluations = sqliteTable(
+  "specialist_evaluations",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    taskId: text("task_id").notNull().references(() => agentTasks.id),
+    aiRunId: text("ai_run_id").notNull().references(() => aiRuns.id),
+    agentKey: text("agent_key").notNull(),
+    domain: text("domain").notNull(),
+    capabilityKey: text("capability_key").notNull(),
+    projectId: text("project_id").references(() => projects.id),
+    clientId: text("client_id").references(() => clients.id),
+    status: text("status").notNull().default("completed"),
+    provider: text("provider").notNull(),
+    model: text("model").notNull(),
+    policyVersion: text("policy_version").notNull(),
+    summary: text("summary").notNull(),
+    factsJson: text("facts_json").notNull().default("{}"),
+    findingsJson: text("findings_json").notNull().default("[]"),
+    recommendationsJson: text("recommendations_json").notNull().default("[]"),
+    evidenceJson: text("evidence_json").notNull().default("[]"),
+    limitationsJson: text("limitations_json").notNull().default("[]"),
+    confidenceBps: integer("confidence_bps").notNull().default(0),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    createdAt: timestamp("created_at"),
+  },
+  (table) => [
+    uniqueIndex("specialist_evaluations_task_uq").on(table.taskId),
+    uniqueIndex("specialist_evaluations_ai_run_uq").on(table.aiRunId),
+    index("specialist_evaluations_workspace_domain_idx").on(table.workspaceId, table.domain, table.createdAt),
+    index("specialist_evaluations_project_idx").on(table.projectId, table.createdAt),
+    index("specialist_evaluations_client_idx").on(table.clientId, table.createdAt),
+  ],
+);
+
+export const agentHandoffs = sqliteTable(
+  "agent_handoffs",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    taskId: text("task_id")
+      .notNull()
+      .references(() => agentTasks.id),
+    fromAgentKey: text("from_agent_key").notNull(),
+    toAgentKey: text("to_agent_key").notNull(),
+    reason: text("reason").notNull(),
+    contractVersion: text("contract_version").notNull(),
+    inputRefsJson: text("input_refs_json").notNull().default("[]"),
+    outputRefsJson: text("output_refs_json").notNull().default("[]"),
+    status: text("status").notNull().default("accepted"),
+    occurredAt: timestamp("occurred_at"),
+  },
+  (table) => [
+    index("agent_handoffs_task_idx").on(table.taskId, table.occurredAt),
+    index("agent_handoffs_workspace_agent_idx").on(
+      table.workspaceId,
+      table.toAgentKey,
+      table.occurredAt,
+    ),
+  ],
+);
+
+export const connectorDefinitions = sqliteTable(
+  "connector_definitions",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    connectorKey: text("connector_key").notNull(),
+    displayName: text("display_name").notNull(),
+    category: text("category").notNull(),
+    description: text("description").notNull(),
+    capabilitiesJson: text("capabilities_json").notNull().default("[]"),
+    credentialState: text("credential_state").notNull().default("not_required"),
+    status: text("status").notNull().default("available"),
+    healthStatus: text("health_status").notNull().default("unknown"),
+    lastCheckedAt: text("last_checked_at"),
+    lastSuccessAt: text("last_success_at"),
+    lastErrorSummary: text("last_error_summary"),
+    policyVersion: text("policy_version").notNull(),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("connector_definitions_workspace_key_uq").on(table.workspaceId, table.connectorKey),
+    index("connector_definitions_workspace_status_idx").on(table.workspaceId, table.status, table.healthStatus),
+  ],
+);
+
+export const connectorExecutions = sqliteTable(
+  "connector_executions",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    connectorKey: text("connector_key").notNull(),
+    taskId: text("task_id").references(() => agentTasks.id),
+    approvalId: text("approval_id").references(() => approvals.id),
+    actorType: text("actor_type").notNull(),
+    actorId: text("actor_id"),
+    actionType: text("action_type").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    requestHash: text("request_hash").notNull(),
+    requestRedactedJson: text("request_redacted_json").notNull().default("{}"),
+    externalReference: text("external_reference"),
+    resultSummary: text("result_summary"),
+    status: text("status").notNull().default("queued"),
+    attempts: integer("attempts").notNull().default(0),
+    errorCode: text("error_code"),
+    errorSummary: text("error_summary"),
+    startedAt: text("started_at"),
+    completedAt: text("completed_at"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("connector_executions_workspace_idempotency_uq").on(table.workspaceId, table.idempotencyKey),
+    index("connector_executions_workspace_status_idx").on(table.workspaceId, table.status, table.createdAt),
+    index("connector_executions_task_idx").on(table.taskId, table.createdAt),
+    index("connector_executions_connector_idx").on(table.connectorKey, table.createdAt),
+  ],
+);
+
+export const connectorAccounts = sqliteTable(
+  "connector_accounts",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    connectorKey: text("connector_key").notNull(),
+    provider: text("provider").notNull(),
+    providerAccountId: text("provider_account_id"),
+    accountEmail: text("account_email"),
+    displayName: text("display_name"),
+    encryptedCredentialJson: text("encrypted_credential_json").notNull(),
+    grantedScopesJson: text("granted_scopes_json").notNull().default("[]"),
+    tokenExpiresAt: text("token_expires_at"),
+    status: text("status").notNull().default("connected"),
+    lastRefreshedAt: text("last_refreshed_at"),
+    lastValidatedAt: text("last_validated_at"),
+    lastErrorSummary: text("last_error_summary"),
+    connectedBy: text("connected_by"),
+    connectedAt: text("connected_at").notNull(),
+    revokedAt: text("revoked_at"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("connector_accounts_workspace_key_uq").on(table.workspaceId, table.connectorKey),
+    index("connector_accounts_workspace_status_idx").on(table.workspaceId, table.status, table.updatedAt),
+    index("connector_accounts_provider_account_idx").on(table.provider, table.providerAccountId),
+  ],
+);
+
+export const connectorOauthStates = sqliteTable(
+  "connector_oauth_states",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    connectorKey: text("connector_key").notNull(),
+    nonceHash: text("nonce_hash").notNull(),
+    requestedBy: text("requested_by"),
+    expiresAt: text("expires_at").notNull(),
+    consumedAt: text("consumed_at"),
+    createdAt: timestamp("created_at"),
+  },
+  (table) => [
+    uniqueIndex("connector_oauth_states_nonce_uq").on(table.nonceHash),
+    index("connector_oauth_states_workspace_expiry_idx").on(table.workspaceId, table.expiresAt),
+  ],
+);
+
+export const automationPlaybooks = sqliteTable(
+  "automation_playbooks",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    playbookKey: text("playbook_key").notNull(),
+    displayName: text("display_name").notNull(),
+    description: text("description").notNull(),
+    triggerEventsJson: text("trigger_events_json").notNull().default("[]"),
+    stepsJson: text("steps_json").notNull().default("[]"),
+    autonomyMode: text("autonomy_mode").notNull().default("safe_auto"),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    status: text("status").notNull().default("active"),
+    version: integer("version").notNull().default(1),
+    policyVersion: text("policy_version").notNull(),
+    lastTriggeredAt: text("last_triggered_at"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("automation_playbooks_workspace_key_uq").on(table.workspaceId, table.playbookKey),
+    index("automation_playbooks_workspace_enabled_idx").on(table.workspaceId, table.enabled, table.status),
+  ],
+);
+
+export const automationPlaybookRuns = sqliteTable(
+  "automation_playbook_runs",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    playbookKey: text("playbook_key").notNull(),
+    sourceCaptureId: text("source_capture_id").references(() => captureEvents.id),
+    sourceEventType: text("source_event_type").notNull(),
+    projectId: text("project_id").references(() => projects.id),
+    clientId: text("client_id").references(() => clients.id),
+    correlationId: text("correlation_id").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    status: text("status").notNull().default("running"),
+    totalSteps: integer("total_steps").notNull().default(0),
+    completedSteps: integer("completed_steps").notNull().default(0),
+    heldSteps: integer("held_steps").notNull().default(0),
+    failedSteps: integer("failed_steps").notNull().default(0),
+    summary: text("summary"),
+    errorSummary: text("error_summary"),
+    startedAt: text("started_at").notNull(),
+    completedAt: text("completed_at"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("automation_playbook_runs_workspace_idempotency_uq").on(table.workspaceId, table.idempotencyKey),
+    index("automation_playbook_runs_workspace_status_idx").on(table.workspaceId, table.status, table.createdAt),
+    index("automation_playbook_runs_project_idx").on(table.projectId, table.createdAt),
+    index("automation_playbook_runs_source_idx").on(table.sourceCaptureId),
+  ],
+);
+
+export const automationPlaybookSteps = sqliteTable(
+  "automation_playbook_steps",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    runId: text("run_id")
+      .notNull()
+      .references(() => automationPlaybookRuns.id),
+    sequence: integer("sequence").notNull(),
+    stepKey: text("step_key").notNull(),
+    title: text("title").notNull(),
+    agentKey: text("agent_key").notNull(),
+    taskId: text("task_id").references(() => agentTasks.id),
+    actionType: text("action_type").notNull(),
+    approvalRequired: integer("approval_required", { mode: "boolean" }).notNull().default(false),
+    status: text("status").notNull().default("queued"),
+    resultSummary: text("result_summary"),
+    errorSummary: text("error_summary"),
+    scheduledFor: text("scheduled_for").notNull(),
+    startedAt: text("started_at"),
+    completedAt: text("completed_at"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("automation_playbook_steps_run_sequence_uq").on(table.runId, table.sequence),
+    index("automation_playbook_steps_workspace_status_idx").on(table.workspaceId, table.status, table.scheduledFor),
+    index("automation_playbook_steps_task_idx").on(table.taskId),
+  ],
+);
+
 export const notifications = sqliteTable(
   "notifications",
   {
@@ -697,6 +1307,132 @@ export const appointments = sqliteTable(
   ],
 );
 
+export const schedulingProfiles = sqliteTable(
+  "scheduling_profiles",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    defaultPrepMinutes: integer("default_prep_minutes").notNull().default(60),
+    defaultTravelMinutes: integer("default_travel_minutes").notNull().default(0),
+    defaultBufferBeforeMinutes: integer("default_buffer_before_minutes").notNull().default(30),
+    defaultBufferAfterMinutes: integer("default_buffer_after_minutes").notNull().default(30),
+    maximumTattooMinutesPerDay: integer("maximum_tattoo_minutes_per_day").notNull().default(480),
+    maximumHighEnergySessionsPerDay: integer("maximum_high_energy_sessions_per_day").notNull().default(1),
+    minimumBookableMinutes: integer("minimum_bookable_minutes").notNull().default(120),
+    weeklyRevenueTargetCents: integer("weekly_revenue_target_cents").notNull().default(0),
+    policyVersion: text("policy_version").notNull(),
+    updatedBy: text("updated_by"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [uniqueIndex("scheduling_profiles_workspace_uq").on(table.workspaceId)],
+);
+
+export const projectScheduleRequirements = sqliteTable(
+  "project_schedule_requirements",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    projectId: text("project_id").notNull().references(() => projects.id),
+    estimatedSessionMinutes: integer("estimated_session_minutes").notNull(),
+    prepMinutes: integer("prep_minutes"),
+    travelMinutes: integer("travel_minutes"),
+    bufferBeforeMinutes: integer("buffer_before_minutes"),
+    bufferAfterMinutes: integer("buffer_after_minutes"),
+    energyDemand: text("energy_demand").notNull().default("high"),
+    minimumRevenueCents: integer("minimum_revenue_cents").notNull().default(0),
+    earliestStart: text("earliest_start"),
+    latestEnd: text("latest_end"),
+    location: text("location"),
+    notes: text("notes"),
+    status: text("status").notNull().default("active"),
+    updatedBy: text("updated_by"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("project_schedule_requirements_project_uq").on(table.projectId),
+    index("project_schedule_requirements_workspace_status_idx").on(table.workspaceId, table.status),
+  ],
+);
+
+export const availabilityWindows = sqliteTable(
+  "availability_windows",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    title: text("title").notNull(),
+    startsAt: text("starts_at").notNull(),
+    endsAt: text("ends_at").notNull(),
+    windowType: text("window_type").notNull().default("tattoo"),
+    status: text("status").notNull().default("open"),
+    energyCapacity: text("energy_capacity").notNull().default("high"),
+    location: text("location"),
+    notes: text("notes"),
+    source: text("source").notNull().default("owner"),
+    createdBy: text("created_by"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    index("availability_windows_workspace_status_start_idx").on(table.workspaceId, table.status, table.startsAt),
+  ],
+);
+
+export const scheduleEvaluationRuns = sqliteTable(
+  "schedule_evaluation_runs",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    status: text("status").notNull().default("completed"),
+    windowsEvaluated: integer("windows_evaluated").notNull().default(0),
+    projectsEvaluated: integer("projects_evaluated").notNull().default(0),
+    readyProjects: integer("ready_projects").notNull().default(0),
+    opportunitiesCreated: integer("opportunities_created").notNull().default(0),
+    conflictsDetected: integer("conflicts_detected").notNull().default(0),
+    projectedRevenueCents: integer("projected_revenue_cents").notNull().default(0),
+    summary: text("summary").notNull(),
+    policyVersion: text("policy_version").notNull(),
+    evidenceJson: text("evidence_json").notNull().default("[]"),
+    initiatedBy: text("initiated_by"),
+    createdAt: timestamp("created_at"),
+    completedAt: text("completed_at").notNull(),
+  },
+  (table) => [index("schedule_evaluation_runs_workspace_created_idx").on(table.workspaceId, table.createdAt)],
+);
+
+export const scheduleOpportunities = sqliteTable(
+  "schedule_opportunities",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    runId: text("run_id").notNull().references(() => scheduleEvaluationRuns.id),
+    windowId: text("window_id").notNull().references(() => availabilityWindows.id),
+    projectId: text("project_id").notNull().references(() => projects.id),
+    clientId: text("client_id").notNull().references(() => clients.id),
+    suggestedStartsAt: text("suggested_starts_at").notNull(),
+    suggestedEndsAt: text("suggested_ends_at").notNull(),
+    reservedFrom: text("reserved_from").notNull(),
+    reservedUntil: text("reserved_until").notNull(),
+    readinessBps: integer("readiness_bps").notNull(),
+    fitBps: integer("fit_bps").notNull(),
+    projectedRevenueCents: integer("projected_revenue_cents").notNull().default(0),
+    energyDemand: text("energy_demand").notNull(),
+    rationale: text("rationale").notNull(),
+    evidenceJson: text("evidence_json").notNull().default("[]"),
+    status: text("status").notNull().default("proposed"),
+    approvalRequired: integer("approval_required", { mode: "boolean" }).notNull().default(true),
+    taskId: text("task_id").references(() => agentTasks.id),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("schedule_opportunities_run_window_project_uq").on(table.runId, table.windowId, table.projectId),
+    index("schedule_opportunities_workspace_status_idx").on(table.workspaceId, table.status, table.suggestedStartsAt),
+    index("schedule_opportunities_run_idx").on(table.runId),
+  ],
+);
+
 export const tattooSessions = sqliteTable(
   "tattoo_sessions",
   {
@@ -755,6 +1491,93 @@ export const healingCheckins = sqliteTable(
     uniqueIndex("healing_checkins_workspace_request_key_uq").on(table.workspaceId, table.requestKey),
     index("healing_checkins_project_schedule_idx").on(table.projectId, table.scheduledFor),
     index("healing_checkins_client_status_idx").on(table.clientId, table.status),
+  ],
+);
+
+export const sessionCraftRecords = sqliteTable(
+  "session_craft_records",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    sessionId: text("session_id").notNull().references(() => tattooSessions.id),
+    projectId: text("project_id").notNull().references(() => projects.id),
+    clientId: text("client_id").notNull().references(() => clients.id),
+    machineName: text("machine_name"),
+    machineType: text("machine_type"),
+    needleGroupingsJson: text("needle_groupings_json").notNull().default("[]"),
+    inkWashJson: text("ink_wash_json").notNull().default("[]"),
+    voltageMinMv: integer("voltage_min_mv"),
+    voltageMaxMv: integer("voltage_max_mv"),
+    techniquesJson: text("techniques_json").notNull().default("[]"),
+    bodyArea: text("body_area"),
+    skinResponse: text("skin_response"),
+    clientResponse: text("client_response"),
+    freshOutcomeRating: integer("fresh_outcome_rating"),
+    ownerAssessment: text("owner_assessment"),
+    freshAssetIdsJson: text("fresh_asset_ids_json").notNull().default("[]"),
+    completenessBps: integer("completeness_bps").notNull().default(0),
+    recordedBy: text("recorded_by"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("session_craft_records_session_uq").on(table.sessionId),
+    index("session_craft_records_workspace_quality_idx").on(table.workspaceId, table.completenessBps),
+    index("session_craft_records_project_idx").on(table.projectId),
+  ],
+);
+
+export const healingAssessments = sqliteTable(
+  "healing_assessments",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    checkinId: text("checkin_id").notNull().references(() => healingCheckins.id),
+    sessionId: text("session_id").notNull().references(() => tattooSessions.id),
+    projectId: text("project_id").notNull().references(() => projects.id),
+    clientId: text("client_id").notNull().references(() => clients.id),
+    healingPhase: text("healing_phase").notNull(),
+    retentionRating: integer("retention_rating"),
+    saturationRating: integer("saturation_rating"),
+    lineQualityRating: integer("line_quality_rating"),
+    smoothnessRating: integer("smoothness_rating"),
+    healedOutcomeRating: integer("healed_outcome_rating").notNull(),
+    touchupRequired: integer("touchup_required", { mode: "boolean" }).notNull().default(false),
+    ownerAssessment: text("owner_assessment").notNull(),
+    clientFeedbackSummary: text("client_feedback_summary"),
+    photoAssetIdsJson: text("photo_asset_ids_json").notNull().default("[]"),
+    assessedBy: text("assessed_by"),
+    assessedAt: text("assessed_at").notNull(),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("healing_assessments_checkin_uq").on(table.checkinId),
+    index("healing_assessments_workspace_phase_idx").on(table.workspaceId, table.healingPhase),
+    index("healing_assessments_session_idx").on(table.sessionId),
+    index("healing_assessments_project_idx").on(table.projectId),
+  ],
+);
+
+export const craftAnalysisRuns = sqliteTable(
+  "craft_analysis_runs",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    status: text("status").notNull().default("completed"),
+    eligibleSessions: integer("eligible_sessions").notNull().default(0),
+    combinationsEvaluated: integer("combinations_evaluated").notNull().default(0),
+    candidatePatterns: integer("candidate_patterns").notNull().default(0),
+    promotedPatterns: integer("promoted_patterns").notNull().default(0),
+    summary: text("summary").notNull(),
+    policyVersion: text("policy_version").notNull(),
+    evidenceJson: text("evidence_json").notNull().default("[]"),
+    initiatedBy: text("initiated_by"),
+    createdAt: timestamp("created_at"),
+    completedAt: text("completed_at").notNull(),
+  },
+  (table) => [
+    index("craft_analysis_runs_workspace_created_idx").on(table.workspaceId, table.createdAt),
   ],
 );
 
@@ -1034,13 +1857,18 @@ export const automationJobs = sqliteTable(
     entityType: text("entity_type"),
     entityId: text("entity_id"),
     payloadJson: text("payload_json").notNull().default("{}"),
+    idempotencyKey: text("idempotency_key"),
     status: text("status").notNull().default("queued"),
     priority: integer("priority").notNull().default(50),
     runAfter: text("run_after").notNull(),
     attempts: integer("attempts").notNull().default(0),
     maxAttempts: integer("max_attempts").notNull().default(5),
     lockedAt: text("locked_at"),
+    leaseOwner: text("lease_owner"),
+    leaseExpiresAt: text("lease_expires_at"),
     completedAt: text("completed_at"),
+    deadLetteredAt: text("dead_lettered_at"),
+    replayOfJobId: text("replay_of_job_id"),
     lastError: text("last_error"),
     createdAt: timestamp("created_at"),
     updatedAt: timestamp("updated_at"),
@@ -1053,6 +1881,76 @@ export const automationJobs = sqliteTable(
       table.priority,
     ),
     index("automation_jobs_entity_idx").on(table.entityType, table.entityId),
+    uniqueIndex("automation_jobs_workspace_idempotency_uq").on(table.workspaceId, table.idempotencyKey),
+    index("automation_jobs_lease_idx").on(table.workspaceId, table.status, table.leaseExpiresAt),
+  ],
+);
+
+export const automationSchedules = sqliteTable(
+  "automation_schedules",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    scheduleKey: text("schedule_key").notNull(),
+    displayName: text("display_name").notNull(),
+    handlerKey: text("handler_key").notNull(),
+    intervalMinutes: integer("interval_minutes").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    nextRunAt: text("next_run_at").notNull(),
+    lastRunAt: text("last_run_at"),
+    lastOutcome: text("last_outcome"),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("automation_schedules_workspace_key_uq").on(table.workspaceId, table.scheduleKey),
+    index("automation_schedules_due_idx").on(table.workspaceId, table.enabled, table.nextRunAt),
+  ],
+);
+
+export const automationWorkerRuns = sqliteTable(
+  "automation_worker_runs",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    workerId: text("worker_id").notNull(),
+    triggerType: text("trigger_type").notNull(),
+    status: text("status").notNull().default("running"),
+    schedulesProcessed: integer("schedules_processed").notNull().default(0),
+    jobsProcessed: integer("jobs_processed").notNull().default(0),
+    jobsSucceeded: integer("jobs_succeeded").notNull().default(0),
+    jobsFailed: integer("jobs_failed").notNull().default(0),
+    leasesRecovered: integer("leases_recovered").notNull().default(0),
+    playbookStepsProcessed: integer("playbook_steps_processed").notNull().default(0),
+    errorSummary: text("error_summary"),
+    startedAt: text("started_at").notNull(),
+    completedAt: text("completed_at"),
+    createdAt: timestamp("created_at"),
+  },
+  (table) => [index("automation_worker_runs_workspace_started_idx").on(table.workspaceId, table.startedAt)],
+);
+
+export const automationDeadLetters = sqliteTable(
+  "automation_dead_letters",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    jobId: text("job_id").notNull().references(() => automationJobs.id),
+    jobType: text("job_type").notNull(),
+    entityType: text("entity_type"),
+    entityId: text("entity_id"),
+    payloadRedactedJson: text("payload_redacted_json").notNull().default("{}"),
+    errorSummary: text("error_summary").notNull(),
+    attempts: integer("attempts").notNull(),
+    status: text("status").notNull().default("open"),
+    replayJobId: text("replay_job_id"),
+    replayedAt: text("replayed_at"),
+    createdAt: timestamp("created_at"),
+  },
+  (table) => [
+    uniqueIndex("automation_dead_letters_job_uq").on(table.jobId),
+    index("automation_dead_letters_workspace_status_idx").on(table.workspaceId, table.status, table.createdAt),
   ],
 );
 

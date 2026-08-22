@@ -7,8 +7,8 @@ import {
 } from "../../../db/schema";
 import {
   automationSnapshot,
-  runAutomationSweep,
 } from "../../../lib/automation-engine";
+import { alwaysOnRuntimeSnapshot, runAlwaysOnWorker } from "../../../lib/worker-engine";
 import {
   actorFrom,
   jsonError,
@@ -21,7 +21,7 @@ import {
 export async function GET(request: Request) {
   try {
     await requireOwner(request);
-    return Response.json(await automationSnapshot(WORKSPACE_ID));
+    return Response.json({ ...(await automationSnapshot(WORKSPACE_ID)), ...(await alwaysOnRuntimeSnapshot(WORKSPACE_ID)) });
   } catch (error) {
     return routeError(error, "Unable to load automations");
   }
@@ -36,11 +36,8 @@ export async function POST(request: Request) {
       notificationStatus?: "read" | "dismissed";
     };
     if (payload.action === "run") {
-      const result = await runAutomationSweep(
-        WORKSPACE_ID,
-        "owner_requested",
-      );
-      return Response.json({ result, snapshot: await automationSnapshot(WORKSPACE_ID) });
+      const result = await runAlwaysOnWorker(WORKSPACE_ID, "owner_requested");
+      return Response.json({ result, snapshot: { ...(await automationSnapshot(WORKSPACE_ID)), ...(await alwaysOnRuntimeSnapshot(WORKSPACE_ID)) } });
     }
 
     const db = getDb();
@@ -66,7 +63,7 @@ export async function POST(request: Request) {
           occurredAt: now,
         }),
       ]);
-      return Response.json(await automationSnapshot(WORKSPACE_ID));
+      return Response.json({ ...(await automationSnapshot(WORKSPACE_ID)), ...(await alwaysOnRuntimeSnapshot(WORKSPACE_ID)) });
     }
 
     if (
@@ -88,7 +85,7 @@ export async function POST(request: Request) {
             eq(notifications.workspaceId, WORKSPACE_ID),
           ),
         );
-      return Response.json(await automationSnapshot(WORKSPACE_ID));
+      return Response.json({ ...(await automationSnapshot(WORKSPACE_ID)), ...(await alwaysOnRuntimeSnapshot(WORKSPACE_ID)) });
     }
 
     return jsonError("A valid automation action is required");

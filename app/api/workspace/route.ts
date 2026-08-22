@@ -2,21 +2,35 @@ import { and, desc, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
 import {
   aiRuns,
+  agentDefinitions,
+  agentHandoffs,
+  agentTasks,
   appointments,
   approvals,
+  authorityDecisions,
   assets,
   auditEvents,
+  captureEvents,
+  chiefManagerRuns,
+  chiefManagerSteps,
   clientMessages,
   clients,
   consentGrants,
+  connectorAccounts,
+  connectorDefinitions,
+  connectorExecutions,
   contentCandidates,
   healingCheckins,
   knowledgeItems,
+  memoryRecords,
   notifications,
+  outcomes,
   paymentRequests,
   projectCandidates,
   projects,
+  specialistEvaluations,
   tattooSessions,
+  toolDefinitions,
   users,
   workspaces,
 } from "../../../db/schema";
@@ -29,6 +43,15 @@ import {
   WORKSPACE_ID,
 } from "../_lib";
 import { runAutomationSweepIfDue } from "../../../lib/automation-engine";
+import { buildTattooJourney } from "../../../lib/tattoo-journey";
+import { backfillAuditCaptureEvents } from "../../../lib/capture-engine";
+import { consolidateCaptureMemory } from "../../../lib/memory-engine";
+import { ensureAgentRegistry } from "../../../lib/agent-engine";
+import { ensureConnectorRegistry } from "../../../lib/connector-engine";
+import { listPlaybookOperations } from "../../../lib/playbook-engine";
+import { ensureToolRegistry } from "../../../lib/tool-authority-engine";
+import { listCraftIntelligence } from "../../../lib/craft-intelligence";
+import { listSchedulingIntelligence } from "../../../lib/scheduling-intelligence";
 
 export async function GET(request: Request) {
   try {
@@ -67,6 +90,21 @@ export async function GET(request: Request) {
       db,
     ).catch(() => null);
 
+    const existingAuditRows = await db
+      .select()
+      .from(auditEvents)
+      .where(eq(auditEvents.workspaceId, WORKSPACE_ID))
+      .orderBy(desc(auditEvents.occurredAt))
+      .limit(100);
+    await backfillAuditCaptureEvents(WORKSPACE_ID, existingAuditRows, db);
+    await consolidateCaptureMemory(WORKSPACE_ID, db);
+    await ensureAgentRegistry(WORKSPACE_ID, db);
+    await ensureConnectorRegistry(WORKSPACE_ID, db);
+    await ensureToolRegistry(WORKSPACE_ID, db);
+    const playbookOperations = await listPlaybookOperations(WORKSPACE_ID, db);
+    const craftIntelligence = await listCraftIntelligence(WORKSPACE_ID, db);
+    const schedulingIntelligence = await listSchedulingIntelligence(WORKSPACE_ID, db);
+
     const [
       workspace,
       owner,
@@ -79,13 +117,26 @@ export async function GET(request: Request) {
       assetRows,
       knowledgeRows,
       runRows,
-      auditRows,
       notificationRows,
       paymentRows,
       sessionRows,
       healingRows,
       contentCandidateRows,
       mediaConsentRows,
+      outcomeRows,
+      captureRows,
+      memoryRows,
+      agentRows,
+      agentTaskRows,
+      agentHandoffRows,
+      connectorRows,
+      connectorAccountRows,
+      connectorExecutionRows,
+      toolDefinitionRows,
+      authorityDecisionRows,
+      chiefManagerRunRows,
+      chiefManagerStepRows,
+      specialistEvaluationRows,
     ] = await Promise.all([
       db
         .select()
@@ -189,12 +240,6 @@ export async function GET(request: Request) {
         .limit(50),
       db
         .select()
-        .from(auditEvents)
-        .where(eq(auditEvents.workspaceId, WORKSPACE_ID))
-        .orderBy(desc(auditEvents.occurredAt))
-        .limit(50),
-      db
-        .select()
         .from(notifications)
         .where(
           and(
@@ -231,7 +276,38 @@ export async function GET(request: Request) {
       db.select().from(healingCheckins).where(eq(healingCheckins.workspaceId, WORKSPACE_ID)).orderBy(desc(healingCheckins.scheduledFor)),
       db.select().from(contentCandidates).where(eq(contentCandidates.workspaceId, WORKSPACE_ID)).orderBy(desc(contentCandidates.createdAt)),
       db.select().from(consentGrants).where(and(eq(consentGrants.workspaceId, WORKSPACE_ID), eq(consentGrants.consentType, "tattoo_media_use"))).orderBy(desc(consentGrants.createdAt)),
+      db.select().from(outcomes).where(eq(outcomes.workspaceId, WORKSPACE_ID)).orderBy(desc(outcomes.createdAt)),
+      db.select().from(captureEvents).where(eq(captureEvents.workspaceId, WORKSPACE_ID)).orderBy(desc(captureEvents.occurredAt)).limit(100),
+      db.select().from(memoryRecords).where(eq(memoryRecords.workspaceId, WORKSPACE_ID)).orderBy(desc(memoryRecords.updatedAt)).limit(200),
+      db.select().from(agentDefinitions).where(eq(agentDefinitions.workspaceId, WORKSPACE_ID)).orderBy(agentDefinitions.displayName),
+      db.select().from(agentTasks).where(eq(agentTasks.workspaceId, WORKSPACE_ID)).orderBy(desc(agentTasks.createdAt)).limit(100),
+      db.select().from(agentHandoffs).where(eq(agentHandoffs.workspaceId, WORKSPACE_ID)).orderBy(desc(agentHandoffs.occurredAt)).limit(100),
+      db.select().from(connectorDefinitions).where(eq(connectorDefinitions.workspaceId, WORKSPACE_ID)).orderBy(connectorDefinitions.displayName),
+      db.select({ id: connectorAccounts.id, connectorKey: connectorAccounts.connectorKey, provider: connectorAccounts.provider, accountEmail: connectorAccounts.accountEmail, displayName: connectorAccounts.displayName, grantedScopesJson: connectorAccounts.grantedScopesJson, tokenExpiresAt: connectorAccounts.tokenExpiresAt, status: connectorAccounts.status, lastValidatedAt: connectorAccounts.lastValidatedAt, lastErrorSummary: connectorAccounts.lastErrorSummary, connectedAt: connectorAccounts.connectedAt, revokedAt: connectorAccounts.revokedAt }).from(connectorAccounts).where(eq(connectorAccounts.workspaceId, WORKSPACE_ID)),
+      db.select().from(connectorExecutions).where(eq(connectorExecutions.workspaceId, WORKSPACE_ID)).orderBy(desc(connectorExecutions.createdAt)).limit(100),
+      db.select().from(toolDefinitions).where(eq(toolDefinitions.workspaceId, WORKSPACE_ID)).orderBy(toolDefinitions.approvalClass, toolDefinitions.displayName),
+      db.select().from(authorityDecisions).where(eq(authorityDecisions.workspaceId, WORKSPACE_ID)).orderBy(desc(authorityDecisions.evaluatedAt)).limit(100),
+      db.select().from(chiefManagerRuns).where(eq(chiefManagerRuns.workspaceId, WORKSPACE_ID)).orderBy(desc(chiefManagerRuns.createdAt)).limit(30),
+      db.select().from(chiefManagerSteps).where(eq(chiefManagerSteps.workspaceId, WORKSPACE_ID)).orderBy(desc(chiefManagerSteps.createdAt)).limit(150),
+      db.select().from(specialistEvaluations).where(eq(specialistEvaluations.workspaceId, WORKSPACE_ID)).orderBy(desc(specialistEvaluations.createdAt)).limit(100),
     ]);
+
+    const projectJourneys = projectRows.map((project) =>
+      buildTattooJourney({
+        project,
+        candidates: candidateRows,
+        assets: assetRows,
+        approvals: approvalRows,
+        payments: paymentRows,
+        appointments: appointmentRows,
+        sessions: sessionRows,
+        healing: healingRows,
+        content: contentCandidateRows,
+        consent: mediaConsentRows,
+        outcomes: outcomeRows,
+        knowledge: knowledgeRows,
+      }),
+    );
 
     return Response.json({
       workspace,
@@ -245,13 +321,33 @@ export async function GET(request: Request) {
       assets: assetRows,
       knowledgeItems: knowledgeRows,
       aiRuns: runRows,
-      auditEvents: auditRows,
+      auditEvents: existingAuditRows.slice(0, 50),
       notifications: notificationRows,
       paymentRequests: paymentRows,
       tattooSessions: sessionRows,
       healingCheckins: healingRows,
       contentCandidates: contentCandidateRows,
       mediaConsent: mediaConsentRows,
+      outcomes: outcomeRows,
+      projectJourneys,
+      captureEvents: captureRows,
+      memoryRecords: memoryRows,
+      agentDefinitions: agentRows,
+      agentTasks: agentTaskRows,
+      agentHandoffs: agentHandoffRows,
+      connectorDefinitions: connectorRows,
+      connectorAccounts: connectorAccountRows,
+      connectorExecutions: connectorExecutionRows,
+      toolDefinitions: toolDefinitionRows,
+      authorityDecisions: authorityDecisionRows,
+      chiefManagerRuns: chiefManagerRunRows,
+      chiefManagerSteps: chiefManagerStepRows,
+      specialistEvaluations: specialistEvaluationRows,
+      craftIntelligence,
+      schedulingIntelligence,
+      automationPlaybooks: playbookOperations.playbooks,
+      automationPlaybookRuns: playbookOperations.runs,
+      automationPlaybookSteps: playbookOperations.steps,
     });
   } catch (error) {
     return routeError(error, "Unable to load workspace");

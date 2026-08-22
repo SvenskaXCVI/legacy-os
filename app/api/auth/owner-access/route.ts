@@ -16,6 +16,12 @@ const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 8;
 const attempts = new Map<string, { count: number; resetsAt: number }>();
 
+const privateNoStoreHeaders = {
+  "cache-control": "private, no-store, max-age=0",
+  pragma: "no-cache",
+  vary: "Cookie",
+};
+
 function requestKey(request: Request) {
   return (
     request.headers.get("cf-connecting-ip") ||
@@ -82,21 +88,37 @@ async function audit(request: Request, outcome: "success" | "denied") {
 }
 
 export async function GET(request: Request) {
-  return Response.json({
-    configured: authConfiguration().ownerAccessCode,
-    authenticated: await hasValidOwnerSession(request),
-  });
+  return Response.json(
+    {
+      configured: authConfiguration().ownerAccessCode,
+      authenticated: await hasValidOwnerSession(request),
+    },
+    { headers: privateNoStoreHeaders },
+  );
 }
 
 export async function POST(request: Request) {
   if (!sameOrigin(request)) {
-    return Response.json({ error: "Unable to verify owner access" }, { status: 403 });
+    return Response.json(
+      { error: "Unable to verify owner access" },
+      { status: 403, headers: privateNoStoreHeaders },
+    );
+  }
+  const configuration = authConfiguration();
+  if (!configuration.ownerAccessCode) {
+    return Response.json(
+      { error: "Owner access is not configured for this deployment" },
+      { status: 503, headers: privateNoStoreHeaders },
+    );
   }
   const key = requestKey(request);
   if (isRateLimited(key)) {
     return Response.json(
       { error: "Too many attempts. Try again later." },
-      { status: 429, headers: { "retry-after": "900" } },
+      {
+        status: 429,
+        headers: { ...privateNoStoreHeaders, "retry-after": "900" },
+      },
     );
   }
   const payload = (await request.json().catch(() => null)) as {
@@ -106,23 +128,39 @@ export async function POST(request: Request) {
   if (!code || !(await verifyOwnerAccessCode(code))) {
     recordFailure(key);
     await audit(request, "denied");
-    return Response.json({ error: "Unable to verify owner access" }, { status: 403 });
+    return Response.json(
+      { error: "Unable to verify owner access" },
+      { status: 403, headers: privateNoStoreHeaders },
+    );
   }
   attempts.delete(key);
   await audit(request, "success");
   const token = await createOwnerSessionToken();
   return Response.json(
     { authenticated: true },
-    { headers: { "set-cookie": ownerSessionCookie(token) } },
+    {
+      headers: {
+        ...privateNoStoreHeaders,
+        "set-cookie": ownerSessionCookie(token),
+      },
+    },
   );
 }
 
 export async function DELETE(request: Request) {
   if (!sameOrigin(request)) {
-    return Response.json({ error: "Unable to sign out" }, { status: 403 });
+    return Response.json(
+      { error: "Unable to sign out" },
+      { status: 403, headers: privateNoStoreHeaders },
+    );
   }
   return Response.json(
     { authenticated: false },
-    { headers: { "set-cookie": clearOwnerSessionCookie() } },
+    {
+      headers: {
+        ...privateNoStoreHeaders,
+        "set-cookie": clearOwnerSessionCookie(),
+      },
+    },
   );
 }

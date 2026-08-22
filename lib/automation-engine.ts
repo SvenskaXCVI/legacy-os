@@ -5,6 +5,7 @@ import {
   eq,
   isNull,
   lte,
+  or,
 } from "drizzle-orm";
 import { getDb } from "../db";
 import {
@@ -14,6 +15,7 @@ import {
   approvals,
   assets,
   auditEvents,
+  automationDeadLetters,
   automationJobs,
   knowledgeItems,
   notifications,
@@ -30,6 +32,9 @@ import {
   APPROVAL_POLICY_VERSION,
   INTELLIGENCE_POLICY_VERSION,
 } from "./intelligence-policy";
+import { captureUniversalEvent } from "./capture-engine";
+import { routeAgentTask } from "./agent-engine";
+import { runPlaybooksForCapture } from "./playbook-engine";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -45,6 +50,13 @@ export type AutomationSignal = {
   value: Record<string, unknown>;
   qualityBps?: number;
   priority?: number;
+  actorType?: "owner" | "client" | "agent" | "system" | "external";
+  actorId?: string | null;
+  channel?: "owner" | "client" | "system" | "external";
+  consentGrantId?: string | null;
+  title?: string;
+  summary?: string | null;
+  contentPolicy?: "metadata_only" | "redacted_summary" | "explicit_owner_note";
 };
 
 const makeId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`;
@@ -76,12 +88,17 @@ export async function enqueueAutomationJob(
     payload: Record<string, unknown>;
     priority?: number;
     runAfter?: string;
+    idempotencyKey?: string;
   },
   db: Db = getDb(),
 ) {
   const now = new Date().toISOString();
   const requestedRunAfter = input.runAfter ?? now;
   const requestedPriority = input.priority ?? 50;
+  if (input.idempotencyKey) {
+    const prior = await db.select({ id: automationJobs.id }).from(automationJobs).where(and(eq(automationJobs.workspaceId, input.workspaceId), eq(automationJobs.idempotencyKey, input.idempotencyKey))).get();
+    if (prior) return prior.id;
+  }
   const entityPredicate = input.entityId
     ? eq(automationJobs.entityId, input.entityId)
     : isNull(automationJobs.entityId);
@@ -130,6 +147,7 @@ export async function enqueueAutomationJob(
     entityType: input.entityType,
     entityId: input.entityId ?? null,
     payloadJson: JSON.stringify(input.payload),
+    idempotencyKey: input.idempotencyKey || null,
     status: "queued",
     priority: requestedPriority,
     runAfter: requestedRunAfter,
@@ -144,6 +162,37 @@ export async function captureAutomationSignal(
   db: Db = getDb(),
 ) {
   const occurredAt = new Date().toISOString();
+  const inferredClientEvent =
+    input.eventType.startsWith("client_") ||
+    input.eventType === "project_candidate_submitted" ||
+    input.eventType === "healing_checkin_submitted";
+  const captureId = await captureUniversalEvent(
+    {
+      workspaceId: input.workspaceId,
+      projectId: input.projectId ?? null,
+      clientId: input.clientId ?? null,
+      actorType: input.actorType ?? (inferredClientEvent ? "client" : "system"),
+      actorId: input.actorId ?? (inferredClientEvent ? input.clientId ?? null : null),
+      channel: input.channel ?? (inferredClientEvent ? "client" : "system"),
+      eventType: input.eventType,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      title: input.title ?? input.eventType
+        .replaceAll("_", " ")
+        .replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      summary: input.summary ?? null,
+      metadata: {
+        category: input.category,
+        signalKey: input.signalKey,
+        qualityBps: input.qualityBps ?? 8500,
+        ...input.value,
+      },
+      contentPolicy: input.contentPolicy ?? "metadata_only",
+      consentGrantId: input.consentGrantId ?? null,
+      occurredAt,
+    },
+    db,
+  );
   const observationId = await captureObservation(
     {
       workspaceId: input.workspaceId,
@@ -155,6 +204,7 @@ export async function captureAutomationSignal(
       signalKey: input.signalKey,
       value: input.value,
       qualityBps: input.qualityBps ?? 8500,
+      consentGrantId: input.consentGrantId ?? null,
       occurredAt,
     },
     db,
@@ -199,11 +249,45 @@ export async function captureAutomationSignal(
     `event:${input.eventType}`,
     db,
   );
+  const agentTask = await routeAgentTask(
+    {
+      workspaceId: input.workspaceId,
+      taskType: input.eventType,
+      title: input.title ?? input.eventType.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      instructionSummary: `Review the ${input.category} signal, connect it to the correct project or client context, and prepare the next safe internal step.`,
+      category: input.category,
+      requestedAction: "analyze_internal",
+      projectId: input.projectId ?? null,
+      clientId: input.clientId ?? null,
+      requestedByType: "system",
+      requestedById: input.actorId ?? null,
+      sourceType: input.sourceType,
+      sourceId: input.sourceId,
+      evidence: [{ captureId, observationId, signalKey: input.signalKey }],
+      priority: input.priority ?? 60,
+      riskLevel: "low",
+      idempotencyKey: `signal:${input.sourceType}:${input.sourceId}:${input.eventType}`,
+    },
+    db,
+  );
+  const playbookRuns = await runPlaybooksForCapture(
+    {
+      workspaceId: input.workspaceId,
+      captureId,
+      eventType: input.eventType,
+      projectId: input.projectId ?? null,
+      clientId: input.clientId ?? null,
+    },
+    db,
+  );
   return {
+    captureId,
     observationId,
     workflowJobId,
     learningJobId,
     automationResult,
+    agentTaskId: agentTask?.id ?? null,
+    playbookRunIds: playbookRuns.map((run) => run.id),
   };
 }
 
@@ -552,7 +636,9 @@ export async function runAutomationSweep(
 
   const started = new Date();
   const runId = makeId("run");
+  const workerId = `automation:${runId}`;
   const correlationId = crypto.randomUUID();
+  await recoverExpiredAutomationLeases(workspaceId, db);
   const dueJobs = await db
     .select()
     .from(automationJobs)
@@ -594,17 +680,21 @@ export async function runAutomationSweep(
   for (const job of dueJobs) {
     const attempt = job.attempts + 1;
     const lockedAt = new Date().toISOString();
-    await db
+    const claimed = await db
       .update(automationJobs)
       .set({
         status: "running",
         attempts: attempt,
         lockedAt,
+        leaseOwner: workerId,
+        leaseExpiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
         updatedAt: lockedAt,
       })
       .where(
         and(eq(automationJobs.id, job.id), eq(automationJobs.status, "queued")),
-      );
+      )
+      .returning({ id: automationJobs.id });
+    if (!claimed.length) continue;
     const callStarted = new Date();
     const toolCallId = makeId("tool");
     try {
@@ -617,6 +707,8 @@ export async function runAutomationSweep(
             status: "succeeded",
             completedAt,
             lockedAt: null,
+            leaseOwner: null,
+            leaseExpiresAt: null,
             lastError: null,
             updatedAt: completedAt,
           })
@@ -651,17 +743,33 @@ export async function runAutomationSweep(
         db
           .update(automationJobs)
           .set({
-            status: terminal ? "failed" : "queued",
+            status: terminal ? "dead_letter" : "queued",
             runAfter: terminal
               ? job.runAfter
               : new Date(
                   failedAt.getTime() + Math.min(60, 2 ** attempt) * 60_000,
                 ).toISOString(),
             lockedAt: null,
+            leaseOwner: null,
+            leaseExpiresAt: null,
+            deadLetteredAt: terminal ? failedAt.toISOString() : null,
             lastError: message.slice(0, 500),
             updatedAt: failedAt.toISOString(),
           })
           .where(eq(automationJobs.id, job.id)),
+        ...(terminal ? [db.insert(automationDeadLetters).values({
+          id: makeId("dead"),
+          workspaceId,
+          jobId: job.id,
+          jobType: job.jobType,
+          entityType: job.entityType,
+          entityId: job.entityId,
+          payloadRedactedJson: JSON.stringify({ entityType: job.entityType, entityId: job.entityId }),
+          errorSummary: message.slice(0, 500),
+          attempts: attempt,
+          status: "open",
+          createdAt: failedAt.toISOString(),
+        }).onConflictDoNothing()] : []),
         db.insert(toolCalls).values({
           id: toolCallId,
           workspaceId,
@@ -757,6 +865,46 @@ export async function runAutomationSweep(
     runId,
     completedAt: completed.toISOString(),
   };
+}
+
+export async function recoverExpiredAutomationLeases(workspaceId: string, db: Db = getDb()) {
+  const now = new Date();
+  const staleFallback = new Date(now.getTime() - 15 * 60_000).toISOString();
+  const recovered = await db.update(automationJobs).set({
+    status: "queued",
+    lockedAt: null,
+    leaseOwner: null,
+    leaseExpiresAt: null,
+    runAfter: now.toISOString(),
+    lastError: "Worker lease expired; safely returned to the queue.",
+    updatedAt: now.toISOString(),
+  }).where(and(
+    eq(automationJobs.workspaceId, workspaceId),
+    eq(automationJobs.status, "running"),
+    or(lte(automationJobs.leaseExpiresAt, now.toISOString()), and(isNull(automationJobs.leaseExpiresAt), lte(automationJobs.lockedAt, staleFallback))),
+  )).returning({ id: automationJobs.id });
+  return recovered.length;
+}
+
+export async function replayAutomationJob(workspaceId: string, jobId: string, db: Db = getDb()) {
+  const job = await db.select().from(automationJobs).where(and(eq(automationJobs.id, jobId), eq(automationJobs.workspaceId, workspaceId), eq(automationJobs.status, "dead_letter"))).get();
+  if (!job) throw new Error("Dead-letter job not found");
+  const now = new Date().toISOString();
+  const replayJobId = makeId("job");
+  await db.batch([
+    db.insert(automationJobs).values({
+      id: replayJobId, workspaceId, jobType: job.jobType, entityType: job.entityType, entityId: job.entityId,
+      payloadJson: job.payloadJson, idempotencyKey: `replay:${job.id}:${crypto.randomUUID()}`, status: "queued",
+      priority: job.priority, runAfter: now, maxAttempts: job.maxAttempts, replayOfJobId: job.id, createdAt: now, updatedAt: now,
+    }),
+    db.update(automationDeadLetters).set({ status: "replayed", replayJobId, replayedAt: now }).where(and(eq(automationDeadLetters.workspaceId, workspaceId), eq(automationDeadLetters.jobId, job.id))),
+    db.insert(auditEvents).values({
+      id: makeId("audit"), workspaceId, actorType: "owner", actorId: "owner", action: "automation.dead_letter_replayed",
+      targetType: "automation_job", targetId: replayJobId, riskLevel: "low", outcome: "queued",
+      metadataJson: JSON.stringify({ sourceJobId: job.id }), occurredAt: now,
+    }),
+  ]);
+  return replayJobId;
 }
 
 export async function runAutomationSweepIfDue(

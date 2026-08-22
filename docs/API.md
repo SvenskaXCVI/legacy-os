@@ -1,7 +1,7 @@
 # Legacy OS API Contract
 
 Base path: `/api`  
-Current version: alpha v0.6
+Current version: 0.7.0-alpha.28
 Encoding: JSON UTF-8
 
 ## Identity
@@ -30,11 +30,36 @@ authorization boundary for the deployed application.
 - `POST|PATCH /api/projects` creates a project or advances its lifecycle and
   learning state.
 - `POST /api/appointments` schedules a client/project appointment.
+- `GET /api/scheduling` returns explicit capacity windows, project session
+  requirements, evaluation runs, and approval-gated scheduling opportunities.
+  `POST /api/scheduling` manages those inputs, evaluates usable capacity, or
+  routes one exact proposed appointment through owner approval; it never books
+  a recommendation directly.
 - `POST /api/messages` writes an owner message into the shared conversation.
 - `POST /api/approvals` creates a client-facing approval or records an owner
   decision.
 - `POST /api/briefing` prioritizes live workspace state and writes a complete
   observable run.
+- `GET /api/tools` returns the owner-only tool contracts and recent authority
+  decisions. `POST /api/tools` records a dry-run policy evaluation without
+  executing the selected capability.
+- `GET /api/chief` returns the owner-only Chief of Staff run and delegation
+  ledger. `POST /api/chief` creates an idempotent, scoped manager run or resumes
+  a run after its exact approval has been decided.
+- `GET /api/specialists` returns the eight bounded specialist profiles and their
+  evidence-linked evaluation history. `POST /api/specialists` runs one domain or
+  all domains against an optional project/client scope through the existing task,
+  tool-authority, AI-run, usage, event, and audit ledgers.
+- `GET /api/connectors/google` reports whether server-side Google OAuth is ready.
+  `POST /api/connectors/google` creates a short-lived, single-use authorization
+  request for Gmail or Google Calendar. `DELETE /api/connectors/google` revokes
+  the provider token when possible and always removes the locally usable
+  credential. The callback never returns credentials to the browser.
+- `GET /api/craft` returns owner-only session craft records, healing assessments,
+  evaluator runs, candidate/active patterns, thresholds, and craft recommendations.
+  `POST /api/craft` saves a scoped session record, saves Joshua's structured
+  healing assessment, or runs the deterministic evidence evaluator. Test and
+  archived projects are rejected from this learning path.
 - `GET|POST /api/payments` lists owner-scoped payment records or creates,
   approves, voids, and refunds a payment request. Financial mutations require
   verified owner access and write audit events.
@@ -81,7 +106,7 @@ portal token hashes, or client-sensitive content.
 
 ## Planned routes
 
-Future routes will add dedicated tattoo-session capture, structured healing,
-content publishing, full-text search, and direct knowledge graph
-editing. Their lifecycle checkpoints already generate internal workflow
-guidance but do not fabricate domain records that have not been entered.
+Future routes will add content publishing, full-text search, and direct
+knowledge-graph editing. Existing lifecycle and craft routes already provide
+dedicated tattoo-session and structured healing capture without fabricating
+domain records that have not been entered.

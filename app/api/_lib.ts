@@ -33,8 +33,13 @@ export function supabasePublicKey() {
 export function authConfiguration() {
   const supabase =
     Boolean(env.SUPABASE_URL?.trim()) && Boolean(supabasePublicKey());
-  const ownerAccessCode = Boolean(env.OWNER_ACCESS_CODE_HASH?.trim());
+  const configuredOwnerHash = ownerCodeHash();
+  const ownerAccessCode = /^[a-f0-9]{64}$/.test(configuredOwnerHash);
+  const ownerAccessCodeMisconfigured =
+    Boolean(configuredOwnerHash) && !ownerAccessCode;
   const ownerAllowlistConfigured = ownerAllowlist().size > 0;
+  const supabasePartiallyConfigured =
+    Boolean(env.SUPABASE_URL?.trim()) !== Boolean(supabasePublicKey());
   return {
     mode: supabase
       ? "supabase"
@@ -54,6 +59,8 @@ export function authConfiguration() {
       Boolean(env.SOCIAL_TOKEN_ENCRYPTION_KEY?.trim()),
     ownerAllowlistConfigured,
     ownerAccessCode,
+    ownerAccessCodeMisconfigured,
+    supabasePartiallyConfigured,
     externalClientReady:
       (supabase && ownerAllowlistConfigured) || ownerAccessCode,
   };
@@ -156,6 +163,13 @@ export async function resolveUser(request: Request) {
       (await hasValidOwnerSession(request));
     if (!localPreview && !platformEmail && !codeSession) return null;
     const allowlist = ownerAllowlist();
+    if (
+      configuration.mode === "private_preview" &&
+      !localPreview &&
+      (!platformEmail || !allowlist.has(platformEmail))
+    ) {
+      return null;
+    }
     if (
       platformEmail &&
       allowlist.size > 0 &&

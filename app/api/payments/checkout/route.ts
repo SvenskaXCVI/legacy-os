@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../../db";
 import { auditEvents, clients, paymentCustomers, paymentRequests } from "../../../../db/schema";
 import { integrationIdentifier, getStripe } from "../../../../lib/stripe";
+import { recordObservedConnectorExecution } from "../../../../lib/connector-engine";
 import { jsonError, makeId, resolveClientAccess } from "../../_lib";
 
 export async function POST(request: Request) {
@@ -74,6 +75,17 @@ export async function POST(request: Request) {
         riskLevel: "medium", outcome: "redirect_created", metadataJson: JSON.stringify({ attempt }), occurredAt: now,
       }),
     ]);
+    await recordObservedConnectorExecution({
+      workspaceId: access.workspaceId,
+      connectorKey: "stripe",
+      actionType: "client_checkout",
+      actorType: "client",
+      actorId: access.clientId,
+      idempotencyKey: `stripe-checkout:${session.id}`,
+      externalReference: session.id,
+      resultSummary: "Stripe-hosted Checkout session created; settlement remains webhook-authoritative.",
+      redactedRequest: { paymentRequestId: payment.id, amountCents: payment.amountCents, currency: payment.currency, attempt },
+    }, db).catch(() => null);
     return Response.json({ url: session.url });
   } catch (error) {
     return jsonError(error instanceof Error ? error.message : "Unable to start secure checkout", 500);

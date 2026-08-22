@@ -12,6 +12,7 @@ import {
   captureObservation,
   runLearningCycle,
 } from "./intelligence-engine";
+import { captureUniversalEvent } from "./capture-engine";
 
 const makeId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`;
 
@@ -258,6 +259,31 @@ export async function syncSocialConnections(
               rawCaptionRetained: false,
             },
             qualityBps: linkedProjectId ? 8000 : 5500,
+            consentGrantId: grant.id,
+            occurredAt: media.timestamp ?? now,
+          },
+          db,
+        );
+        await captureUniversalEvent(
+          {
+            workspaceId,
+            projectId: linkedProjectId,
+            clientId: connection.clientId,
+            actorType: "external",
+            actorId: connection.externalAccountId,
+            channel: "external",
+            eventType: "social_media_observed",
+            sourceType: "instagram_media",
+            sourceId: media.id,
+            title: "Consented Instagram evidence observed",
+            metadata: {
+              mediaType: media.media_type || "media",
+              matchBps: match.scoreBps,
+              matchedTerms: match.matches,
+              metrics,
+              rawCaptionRetained: false,
+            },
+            contentPolicy: "metadata_only",
             consentGrantId: grant.id,
             occurredAt: media.timestamp ?? now,
           },

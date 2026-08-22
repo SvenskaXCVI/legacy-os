@@ -26,8 +26,19 @@ export async function GET() {
         env.AI_MODEL?.trim(),
     );
     const stripe = stripeConfiguration();
+    const configurationIssues = [
+      auth.ownerAccessCodeMisconfigured
+        ? "OWNER_ACCESS_CODE_HASH must be a 64-character SHA-256 hex digest"
+        : null,
+      auth.supabasePartiallyConfigured
+        ? "SUPABASE_URL and the Supabase public key must be configured together"
+        : null,
+      auth.mode === "supabase" && !auth.ownerAllowlistConfigured
+        ? "OWNER_EMAILS is required before owner account access is ready"
+        : null,
+    ].filter(Boolean);
     return Response.json({
-      status: "healthy",
+      status: configurationIssues.length > 0 ? "limited" : "healthy",
       version: LEGACY_OS_VERSION,
       release: LEGACY_OS_RELEASE,
       checkedAt,
@@ -38,6 +49,9 @@ export async function GET() {
         audit_and_usage_ledger: "healthy",
         automations:
           workspace?.automationStatus === "active" ? "active" : "paused",
+        background_worker: env.AUTOMATION_WORKER_SECRET?.trim()
+          ? "authenticated endpoint ready"
+          : "owner wake-up only",
         secure_identity:
           auth.mode === "supabase"
             ? "account authentication configured"
@@ -62,7 +76,9 @@ export async function GET() {
           : "configuration required",
       },
       readiness: {
-        ownerPrivateAlpha: true,
+        ownerPrivateAlpha:
+          auth.mode === "access_code" ||
+          (auth.mode === "supabase" && auth.ownerAllowlistConfigured),
         externalClientAlpha: auth.externalClientReady,
         modelProviderConfigured: modelConfigured,
         instagramConfigured: auth.instagramConnection,
@@ -70,6 +86,13 @@ export async function GET() {
         stripeTestMode: stripe.testMode,
         stripeLiveEnabled: stripe.liveEnabled,
         lastAutomationAt: workspace?.lastAutomationAt || null,
+        backgroundWorkerConfigured: Boolean(env.AUTOMATION_WORKER_SECRET?.trim()),
+        configurationIssues,
+      },
+    }, {
+      headers: {
+        "cache-control": "no-store, max-age=0",
+        pragma: "no-cache",
       },
     });
   } catch {

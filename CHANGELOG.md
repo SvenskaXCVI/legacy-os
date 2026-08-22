@@ -1,5 +1,146 @@
 # Legacy OS release history
 
+## 0.7.0-alpha.28 — 2026-08-22
+
+- Added explicit owner-defined tattoo, design, admin, and protected personal capacity windows instead of treating empty calendar time as availability.
+- Added project-level session requirements for duration, preparation, travel, buffers, energy demand, date boundaries, location, and expected value.
+- Added a deterministic scheduling evaluator that requires session-stage readiness, an exact approved design version, a paid deposit, and a complete session requirement before suggesting a fit.
+- Added collision, daily tattoo-minute, high-energy-session, protected-time, and minimum-session constraints with visible evidence and readiness blockers.
+- Added weekly collected-revenue context while keeping projected project value clearly separate from settled payments.
+- Added an owner Scheduling & Capacity workspace for entering capacity and policy, reviewing recommendations, and routing one exact appointment through the existing approval system.
+- Added five additive scheduling tables without modifying or deleting existing alpha records; recommendations never create appointments without owner approval.
+
+## 0.7.0-alpha.27 — 2026-08-22
+
+- Added owner-only session craft records for machine, needle, ink/wash, voltage, technique, placement, skin response, client response, fresh-result evidence, and Joshua's assessment.
+- Added structured owner healing assessments connected to submitted client check-ins, including retention, saturation, line quality, smoothness, overall healed outcome, touch-up status, feedback, and photo evidence.
+- Added an automatic, deterministic craft evaluator that excludes test and archived projects and requires complete session-to-healed-result evidence.
+- Added explicit promotion thresholds across completed projects, distinct clients, observed effect, confidence, and record completeness; insufficient evidence remains visibly labeled as a candidate.
+- Added owner-approval-required craft recommendations using association language rather than causal claims.
+- Added a responsive Professional Craft Intelligence workspace with capture forms, visible thresholds, pattern evidence counts, confidence, and an analysis ledger.
+- Added three additive tables without modifying or deleting existing alpha records.
+
+## 0.7.0-alpha.26 — 2026-08-22
+
+- Added production Google OAuth for separately authorized Gmail and Google Calendar connections using minimal task-specific scopes.
+- Added single-use, ten-minute, HMAC-signed OAuth state records and AES-256-GCM encrypted refresh credentials; usable tokens never enter browser storage, logs, workspace responses, or connector traces.
+- Added exact owner-approved Gmail delivery with client/project scope checks and metadata-only operational capture.
+- Added optional Google Calendar mirroring for approved Legacy appointments using deterministic provider event IDs to prevent duplicate external events.
+- Added refresh-token rotation, connection health degradation, revocation, reconnection, and owner-facing connect/disconnect controls.
+- Retained Stripe-hosted Checkout with dynamic payment methods, restricted-key preference, signed-webhook settlement authority, current API versioning, and live-payment lockout.
+- Added two connector-security tables through an additive migration that does not modify or remove existing alpha records.
+
+## 0.7.0-alpha.25 — 2026-08-22
+
+- Added eight bounded specialist intelligence capabilities for client relationships, design readiness, knowledge quality, operations, scheduling, finance, content, and analytics.
+- Standardized every specialist result into facts, findings, safe internal recommendations, evidence references, confidence, and explicit limitations.
+- Kept calculations and state retrieval deterministic while allowing an optional model-agnostic structured interpretation that cannot introduce unknown evidence or increase confidence.
+- Connected specialist work to the existing task router, authority registry, AI run trace, usage ledger, audit trail, and Chief of Staff delegation path.
+- Added an owner-only Specialist Intelligence console with optional project and client scope plus a readable evaluation history for all eight domains.
+- Added one evaluation table through an additive migration; existing alpha records are not changed or removed.
+
+## 0.7.0-alpha.24 — 2026-08-22
+
+- Added a durable Chief of Staff manager that reads authorized workspace state, retrieves scoped memory, prioritizes evidence-backed work, and delegates bounded tasks to specialist agents.
+- Added an optional model-agnostic structured planning adapter with a deterministic fallback; every proposed step is independently constrained by Legacy OS entity, tool, and authority registries.
+- Added parent-child run provenance linking Chief plans to specialist work, plus step-by-step evidence, approval, usage, tool-call, event, and audit traces.
+- Added owner controls for scoped Chief objectives, safe internal planning, response drafting, and exact approval-gated client messages or appointment requests.
+- Added resumable authority pauses: approval does not silently perform an external action, and unavailable connector execution remains visibly held at the connector boundary.
+- Added two manager trace tables and one nullable parent-run field through an additive migration that preserves existing alpha records.
+
+## 0.7.0-alpha.23 — 2026-08-22
+
+- Added a durable registry for every AI-callable tool, including input and output contracts, side-effect class, authority class, retry policy, audit behavior, allowed agents, and connector binding.
+- Added deterministic `AUTO`, `AUTO WITH LOG`, `ASK`, `OWNER ONLY`, and `DENIED` policy enforcement with unknown tools denied by default.
+- Routed AI delegation and connector execution through the same authority engine so a capability cannot grant itself more authority or bypass an approval at execution time.
+- Added durable, hashed authority decisions with task, approval, actor, policy, reason, and correlation provenance.
+- Added an owner-only inspection API and an operational Tool + Authority Registry with live class counts and a recent decision ledger.
+- Added two new tables and one defaulted task field through an additive migration that preserves all existing alpha records.
+
+## 0.7.0-alpha.22 — 2026-08-22
+
+- Added a durable realtime event ledger sourced from normalized Legacy OS activity.
+- Added an authenticated streaming endpoint with resumable sequence cursors, heartbeats, automatic reconnects, and cache prevention.
+- Added strict owner and client audience isolation; clients receive only allowlisted updates scoped to their own client identity.
+- Connected owner and client interfaces to coalesced live-state refreshes without storing authentication tokens or private records in browser storage.
+- Added visible live, connecting, reconnecting, and offline status indicators with reduced-motion support.
+- Added one additive realtime table and cursor indexes without changing existing alpha records.
+
+
+## 0.7.0-alpha.21 — 2026-08-22
+
+- Added a durable Always On scheduler for maintenance and the daily studio briefing.
+- Added authenticated worker execution with owner fallback, recorded heartbeats, and visible processing metrics.
+- Added atomic job claims, five-minute worker leases, automatic recovery of abandoned work, bounded exponential retries, and duplicate suppression.
+- Added a durable dead-letter queue for work that exhausts its retry policy, plus owner-only replay into a new traceable job.
+- Added owner-facing schedule, heartbeat, queue, and failure-recovery controls under Settings → Automations.
+- Added three runtime tables and five nullable queue fields through an additive migration that preserves existing alpha records.
+
+
+## 0.7.0-alpha.20 — 2026-08-22
+
+- Added nine production automation playbooks spanning inquiry triage, project launch, design approval, payment-to-booking, appointment preparation, session-to-healing, healing review, completion learning, and the daily studio brief.
+- Connected normalized lifecycle events to idempotent playbook runs and durable specialist steps with exact project, client, capture, and task provenance.
+- Added safe automatic execution for internal analysis while retaining existing owner approval and connector boundaries for client messages, scheduling, publishing, financial actions, and destructive changes.
+- Added owner controls to inspect, pause, enable, and manually run each playbook, plus a readable run and step ledger in AI Operations.
+- Added wake-up processing for due playbook steps without claiming a continuously running scheduler when the application is asleep.
+- Added three new tables through an additive migration; no existing alpha records are modified or removed.
+
+## 0.7.0-alpha.19 — 2026-08-22
+
+- Added one least-privilege connector gateway between approved AI tasks and real service actions.
+- Added functional approved adapters for private client-portal messages and conflict-checked studio appointments.
+- Routed consented Instagram evidence synchronization through the same connector execution ledger without enabling publishing or engagement actions.
+- Recorded client-initiated Stripe-hosted Checkout activity while retaining signed webhooks as settlement authority and keeping direct agent charging disabled.
+- Added connector availability, credential state, health, execution results, and configuration-required states to AI Operations.
+- Added redacted, hashed, idempotent execution records without storing provider secrets or copying message content into connector logs.
+- Added two connector tables and one defaulted agent-task field through an additive migration that preserves existing alpha data.
+
+## 0.7.0-alpha.18 — 2026-08-22
+
+- Added a durable nine-agent staff registry led by the Chief of Staff and supported by client, design, operations, scheduling, finance, content, knowledge, and analytics specialists.
+- Added deterministic, model-agnostic task routing with project/client scope, exact memory references, evidence, priority, risk, reversibility, correlation, idempotency, attempts, and results.
+- Connected normalized workflow signals to one idempotent specialist review task so new studio activity automatically reaches the appropriate AI staff role.
+- Added owner-facing delegation, roster, approval-state, run, retry, cancellation, result, and audit controls in AI Operations.
+- Enforced approval and connector boundaries for client communication, scheduling changes, publishing, payments, sharing, and destructive actions.
+- Added three additive D1 tables and preserved all existing alpha records unchanged.
+
+## 0.7.0-alpha.17 — 2026-08-22
+
+- Added durable workspace, client, and project memory with source-capture provenance, confidence, sensitivity, verification state, validity windows, and version history.
+- Added deterministic memory consolidation that separates transient events from facts, decisions, outcomes, preferences, and explicit owner notes worth remembering.
+- Added reinforcement for repeated evidence and supersession for changed memory instead of silently overwriting prior knowledge.
+- Added bounded context packets that rank relevant memory by scope, owner verification, confidence, and recency while excluding revoked and unrelated client records.
+- Connected scoped memory evidence to Chief of Staff briefing runs and exposed included, available, and budget-omitted context counts.
+- Added owner controls to consolidate, verify, revoke, inspect, and search memory from the Knowledge Library.
+- Added one additive D1 migration; existing capture, knowledge, client, project, AI, payment, and audit data remains unchanged.
+
+## 0.7.0-alpha.16 — 2026-08-22
+
+- Added one durable, normalized capture stream spanning owner notes, client activity, workflow changes, file uploads, AI/system events, and consented social evidence.
+- Added an owner-facing Universal Capture workspace for recording and connecting observations to live tattoo projects.
+- Kept raw message and client content out of the capture ledger by default; explicit owner notes are the only full text retained through this surface.
+- Added source pointers, content hashes, consent references, channel labels, correlation fields, and workspace-scoped idempotency protection.
+- Safely normalizes recent historical audit metadata without editing or deleting the original alpha records.
+- Added an additive D1 migration for the capture ledger; all existing specialist ledgers remain authoritative and unchanged.
+
+## 0.7.0-alpha.15 — 2026-08-22
+
+- Connected inquiry, qualification, project, references, design, exact approval, quote, deposit, appointment, session, final payment, healing, content consent, outcome, knowledge, and completion into one evidence-based tattoo journey.
+- Added a live project journey panel with progress, the next missing requirement, and evidence-derived milestone states.
+- Prevented projects from skipping canonical phases or advancing when required operational records are missing.
+- Reconciled content rights classifications so approved studio-created and authorized tattoo media can enter the existing consent-gated content workflow.
+- Reused existing records and computed the new journey projection without rewriting alpha data or adding duplicate lifecycle tables.
+
+
+## 0.7.0-alpha.14 — 2026-08-22
+
+- Closed an unsafe private-preview fallback so an arbitrary external platform identity can never become an owner without an explicit server allowlist.
+- Added strict deployment validation for malformed owner access hashes, partial Supabase configuration, and missing owner allowlists.
+- Marked all access-code session and authentication-configuration responses private and non-cacheable to prevent cross-device or shared-cache session confusion.
+- Added visible health diagnostics for incomplete identity configuration without exposing credentials, codes, hashes, or account data.
+- Preserved all existing client, project, payment, media, approval, audit, and learning records; Stage 14 requires no destructive data migration.
+
 ## 0.7.0-alpha.5 — 2026-08-21
 
 - Replaced the Design Studio filename placeholder with authenticated image previews of private R2 assets.

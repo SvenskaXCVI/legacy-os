@@ -1,9 +1,26 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { auditEvents, clients, notifications, projects } from "../../../db/schema";
+import {
+  appointments,
+  approvals,
+  assets,
+  auditEvents,
+  clients,
+  consentGrants,
+  contentCandidates,
+  healingCheckins,
+  knowledgeItems,
+  notifications,
+  outcomes,
+  paymentRequests,
+  projectCandidates,
+  projects,
+  tattooSessions,
+} from "../../../db/schema";
 import { actorFrom, jsonError, makeId, requireOwner, routeError, WORKSPACE_ID } from "../_lib";
 import { captureCompletedProject } from "../../../lib/intelligence-engine";
 import { captureAutomationSignal } from "../../../lib/automation-engine";
+import { buildTattooJourney } from "../../../lib/tattoo-journey";
 
 export async function POST(request: Request) {
   try {
@@ -192,6 +209,53 @@ export async function PATCH(request: Request) {
       return Response.json({ id: existing.id, status: "updated", action: payload.action });
     }
     const nextPhase = payload.lifecyclePhase ?? existing.lifecyclePhase;
+    const phaseOrder = ["consult", "design", "approval", "session", "healing", "complete"];
+    const currentIndex = phaseOrder.indexOf(existing.lifecyclePhase);
+    const nextIndex = phaseOrder.indexOf(nextPhase);
+    if (nextIndex > currentIndex + 1) {
+      return jsonError("Projects must move through each canonical lifecycle phase in order", 409);
+    }
+    if (nextIndex > currentIndex) {
+      const [candidateRows, assetRows, approvalRows, paymentRows, appointmentRows, sessionRows, healingRows, contentRows, consentRows, outcomeRows, knowledgeRows] = await Promise.all([
+        db.select().from(projectCandidates).where(and(eq(projectCandidates.workspaceId, WORKSPACE_ID), eq(projectCandidates.proposedProjectId, existing.id))),
+        db.select().from(assets).where(and(eq(assets.workspaceId, WORKSPACE_ID), eq(assets.projectId, existing.id))),
+        db.select().from(approvals).where(and(eq(approvals.workspaceId, WORKSPACE_ID), eq(approvals.projectId, existing.id))),
+        db.select().from(paymentRequests).where(and(eq(paymentRequests.workspaceId, WORKSPACE_ID), eq(paymentRequests.projectId, existing.id))),
+        db.select().from(appointments).where(and(eq(appointments.workspaceId, WORKSPACE_ID), eq(appointments.projectId, existing.id))),
+        db.select().from(tattooSessions).where(and(eq(tattooSessions.workspaceId, WORKSPACE_ID), eq(tattooSessions.projectId, existing.id))),
+        db.select().from(healingCheckins).where(and(eq(healingCheckins.workspaceId, WORKSPACE_ID), eq(healingCheckins.projectId, existing.id))),
+        db.select().from(contentCandidates).where(and(eq(contentCandidates.workspaceId, WORKSPACE_ID), eq(contentCandidates.projectId, existing.id))),
+        existing.clientId
+          ? db.select().from(consentGrants).where(and(eq(consentGrants.workspaceId, WORKSPACE_ID), eq(consentGrants.clientId, existing.clientId), eq(consentGrants.consentType, "tattoo_media_use")))
+          : Promise.resolve([]),
+        db.select().from(outcomes).where(and(eq(outcomes.workspaceId, WORKSPACE_ID), eq(outcomes.projectId, existing.id))),
+        db.select().from(knowledgeItems).where(and(eq(knowledgeItems.workspaceId, WORKSPACE_ID), eq(knowledgeItems.projectId, existing.id))),
+      ]);
+      const journey = buildTattooJourney({
+        project: existing,
+        candidates: candidateRows,
+        assets: assetRows,
+        approvals: approvalRows,
+        payments: paymentRows,
+        appointments: appointmentRows,
+        sessions: sessionRows,
+        healing: healingRows,
+        content: contentRows,
+        consent: consentRows,
+        outcomes: outcomeRows,
+        knowledge: knowledgeRows,
+      });
+      if (journey.nextPhase !== nextPhase || !journey.canAdvance) {
+        return Response.json(
+          {
+            error: "This project is not ready for the next lifecycle phase",
+            nextPhase: journey.nextPhase,
+            blockers: journey.advanceBlockers,
+          },
+          { status: 409 },
+        );
+      }
+    }
     await db.batch([
       db
         .update(projects)

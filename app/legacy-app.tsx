@@ -36,6 +36,7 @@ import {
   Moon,
   Palette,
   Plus,
+  Save,
   Search,
   Send,
   Settings,
@@ -256,6 +257,99 @@ type HealingCheckinRecord = {
   reviewedAt: string | null;
 };
 
+type SessionCraftRecord = {
+  id: string;
+  sessionId: string;
+  projectId: string;
+  clientId: string;
+  machineName: string | null;
+  machineType: string | null;
+  needleGroupingsJson: string;
+  inkWashJson: string;
+  voltageMinMv: number | null;
+  voltageMaxMv: number | null;
+  techniquesJson: string;
+  bodyArea: string | null;
+  skinResponse: string | null;
+  clientResponse: string | null;
+  freshOutcomeRating: number | null;
+  ownerAssessment: string | null;
+  freshAssetIdsJson: string;
+  completenessBps: number;
+  updatedAt: string;
+};
+
+type HealingAssessmentRecord = {
+  id: string;
+  checkinId: string;
+  sessionId: string;
+  projectId: string;
+  clientId: string;
+  healingPhase: string;
+  retentionRating: number | null;
+  saturationRating: number | null;
+  lineQualityRating: number | null;
+  smoothnessRating: number | null;
+  healedOutcomeRating: number;
+  touchupRequired: boolean;
+  ownerAssessment: string;
+  clientFeedbackSummary: string | null;
+  assessedAt: string;
+};
+
+type CraftPatternRecord = {
+  id: string;
+  patternKey: string;
+  name: string;
+  description: string;
+  whyItMatters: string;
+  status: string;
+  supportCount: number;
+  distinctProjects: number;
+  distinctClients: number;
+  effectBps: number;
+  confidenceBps: number;
+  evidenceJson: string;
+  lastEvaluatedAt: string;
+};
+
+type CraftIntelligenceData = {
+  records: SessionCraftRecord[];
+  assessments: HealingAssessmentRecord[];
+  runs: Array<{ id: string; eligibleSessions: number; combinationsEvaluated: number; candidatePatterns: number; promotedPatterns: number; summary: string; policyVersion: string; completedAt: string }>;
+  patterns: CraftPatternRecord[];
+  recommendations: Array<{ id: string; patternId: string | null; title: string; rationale: string; confidenceBps: number; status: string; approvalRequired: boolean }>;
+  thresholds: { completedProjects: number; distinctClients: number; effectBps: number; confidenceBps: number; recordCompletenessBps: number };
+  policyVersion: string;
+};
+
+type SchedulingIntelligenceData = {
+  profile: {
+    id: string; defaultPrepMinutes: number; defaultTravelMinutes: number; defaultBufferBeforeMinutes: number;
+    defaultBufferAfterMinutes: number; maximumTattooMinutesPerDay: number; maximumHighEnergySessionsPerDay: number;
+    minimumBookableMinutes: number; weeklyRevenueTargetCents: number; policyVersion: string;
+  } | null;
+  requirements: Array<{
+    id: string; projectId: string; estimatedSessionMinutes: number; prepMinutes: number | null; travelMinutes: number | null;
+    bufferBeforeMinutes: number | null; bufferAfterMinutes: number | null; energyDemand: string; minimumRevenueCents: number;
+    earliestStart: string | null; latestEnd: string | null; location: string | null; notes: string | null; status: string;
+  }>;
+  windows: Array<{
+    id: string; title: string; startsAt: string; endsAt: string; windowType: string; status: string;
+    energyCapacity: string; location: string | null; notes: string | null; source: string;
+  }>;
+  runs: Array<{
+    id: string; windowsEvaluated: number; projectsEvaluated: number; readyProjects: number; opportunitiesCreated: number;
+    conflictsDetected: number; projectedRevenueCents: number; summary: string; policyVersion: string; completedAt: string;
+  }>;
+  opportunities: Array<{
+    id: string; windowId: string; projectId: string; clientId: string; suggestedStartsAt: string; suggestedEndsAt: string;
+    reservedFrom: string; reservedUntil: string; readinessBps: number; fitBps: number; projectedRevenueCents: number;
+    energyDemand: string; rationale: string; status: string; approvalRequired: boolean; taskId: string | null;
+  }>;
+  policyVersion: string;
+};
+
 type ContentCandidateRecord = {
   id: string;
   projectId: string;
@@ -280,12 +374,36 @@ type MediaConsentRecord = {
   revokedAt: string | null;
 };
 
+type OutcomeRecord = {
+  id: string;
+  projectId: string | null;
+  metricName: string;
+  status: string;
+};
+
+type ProjectJourneyRecord = {
+  projectId: string;
+  progressPercent: number;
+  nextAction: string;
+  nextPhase: string | null;
+  canAdvance: boolean;
+  advanceBlockers: string[];
+  milestones: Array<{
+    id: string;
+    label: string;
+    status: "complete" | "current" | "blocked";
+    detail: string;
+    evidenceIds: string[];
+  }>;
+};
+
 type ApprovalRecord = {
   id: string;
   projectId: string | null;
   assetId?: string | null;
   assetVersion?: number | null;
   category: string;
+  actionType: string;
   subject: string;
   summary: string;
   riskLevel: string;
@@ -364,6 +482,272 @@ type AuditRecord = {
   occurredAt: string;
 };
 
+type CaptureEventRecord = {
+  id: string;
+  projectId: string | null;
+  clientId: string | null;
+  actorType: string;
+  channel: string;
+  eventType: string;
+  sourceType: string;
+  sourceId: string | null;
+  title: string;
+  summary: string | null;
+  contentPolicy: string;
+  status: string;
+  occurredAt: string;
+};
+
+type MemoryRecord = {
+  id: string;
+  projectId: string | null;
+  clientId: string | null;
+  scopeType: string;
+  scopeKey: string;
+  memoryKey: string;
+  memoryType: string;
+  title: string;
+  content: string;
+  sourceCaptureIdsJson: string;
+  confidenceBps: number;
+  sensitivity: string;
+  verificationStatus: string;
+  status: string;
+  version: number;
+  lastReinforcedAt: string;
+  updatedAt: string;
+};
+
+type AgentDefinitionRecord = {
+  id: string;
+  agentKey: string;
+  displayName: string;
+  role: string;
+  purpose: string;
+  capabilitiesJson: string;
+  autonomyPolicy: string;
+  status: string;
+  policyVersion: string;
+};
+
+type AgentTaskRecord = {
+  id: string;
+  agentKey: string;
+  parentTaskId: string | null;
+  projectId: string | null;
+  clientId: string | null;
+  taskType: string;
+  toolKey: string;
+  title: string;
+  instructionSummary: string;
+  actionPayloadJson: string;
+  contextMemoryIdsJson: string;
+  riskLevel: string;
+  autonomyLevel: string;
+  approvalRequired: boolean;
+  approvalId: string | null;
+  status: string;
+  priority: number;
+  attempts: number;
+  maxAttempts: number;
+  resultSummary: string | null;
+  errorSummary: string | null;
+  createdAt: string;
+  completedAt: string | null;
+};
+
+type AgentHandoffRecord = {
+  id: string;
+  taskId: string;
+  fromAgentKey: string;
+  toAgentKey: string;
+  reason: string;
+  contractVersion: string;
+  status: string;
+  occurredAt: string;
+};
+
+type SpecialistEvaluationRecord = {
+  id: string;
+  taskId: string;
+  aiRunId: string;
+  agentKey: string;
+  domain: string;
+  capabilityKey: string;
+  projectId: string | null;
+  clientId: string | null;
+  status: string;
+  provider: string;
+  model: string;
+  summary: string;
+  factsJson: string;
+  findingsJson: string;
+  recommendationsJson: string;
+  evidenceJson: string;
+  limitationsJson: string;
+  confidenceBps: number;
+  createdAt: string;
+};
+
+type ConnectorDefinitionRecord = {
+  id: string;
+  connectorKey: string;
+  displayName: string;
+  category: string;
+  description: string;
+  capabilitiesJson: string;
+  credentialState: string;
+  status: string;
+  healthStatus: string;
+  lastCheckedAt: string | null;
+  lastSuccessAt: string | null;
+  lastErrorSummary: string | null;
+  policyVersion: string;
+};
+
+type ConnectorAccountRecord = {
+  id: string;
+  connectorKey: string;
+  provider: string;
+  accountEmail: string | null;
+  displayName: string | null;
+  grantedScopesJson: string;
+  tokenExpiresAt: string | null;
+  status: string;
+  lastValidatedAt: string | null;
+  lastErrorSummary: string | null;
+  connectedAt: string;
+  revokedAt: string | null;
+};
+
+type ConnectorExecutionRecord = {
+  id: string;
+  connectorKey: string;
+  taskId: string | null;
+  actionType: string;
+  externalReference: string | null;
+  resultSummary: string | null;
+  status: string;
+  attempts: number;
+  errorSummary: string | null;
+  createdAt: string;
+  completedAt: string | null;
+};
+
+type ToolDefinitionRecord = {
+  id: string;
+  toolKey: string;
+  displayName: string;
+  description: string;
+  inputSchemaJson: string;
+  outputSchemaJson: string;
+  sideEffectClass: string;
+  approvalClass: "AUTO" | "AUTO_WITH_LOG" | "ASK" | "OWNER_ONLY" | "DENIED";
+  retryPolicyJson: string;
+  auditBehaviorJson: string;
+  allowedAgentsJson: string;
+  connectorKey: string | null;
+  enabled: boolean;
+  status: string;
+  policyVersion: string;
+};
+
+type AuthorityDecisionRecord = {
+  id: string;
+  toolKey: string;
+  taskId: string | null;
+  approvalId: string | null;
+  actorType: string;
+  actorId: string | null;
+  authorityClass: string;
+  decision: string;
+  reason: string;
+  correlationId: string;
+  policyVersion: string;
+  evaluatedAt: string;
+  resolvedAt: string | null;
+};
+
+type ChiefManagerRunRecord = {
+  id: string;
+  aiRunId: string;
+  projectId: string | null;
+  clientId: string | null;
+  objective: string;
+  mode: string;
+  status: string;
+  provider: string;
+  model: string;
+  summary: string | null;
+  nextAction: string | null;
+  confidenceBps: number | null;
+  correlationId: string;
+  startedAt: string;
+  completedAt: string | null;
+  createdAt: string;
+};
+
+type ChiefManagerStepRecord = {
+  id: string;
+  managerRunId: string;
+  sequence: number;
+  agentKey: string;
+  title: string;
+  purpose: string;
+  toolKey: string;
+  taskId: string | null;
+  approvalId: string | null;
+  status: string;
+  resultSummary: string | null;
+  errorSummary: string | null;
+  createdAt: string;
+};
+
+type AutomationPlaybookRecord = {
+  id: string;
+  playbookKey: string;
+  displayName: string;
+  description: string;
+  triggerEventsJson: string;
+  stepsJson: string;
+  autonomyMode: string;
+  enabled: boolean;
+  status: string;
+  version: number;
+  policyVersion: string;
+  lastTriggeredAt: string | null;
+};
+
+type AutomationPlaybookRunRecord = {
+  id: string;
+  playbookKey: string;
+  sourceEventType: string;
+  projectId: string | null;
+  clientId: string | null;
+  status: string;
+  totalSteps: number;
+  completedSteps: number;
+  heldSteps: number;
+  failedSteps: number;
+  summary: string | null;
+  startedAt: string;
+  completedAt: string | null;
+};
+
+type AutomationPlaybookStepRecord = {
+  id: string;
+  runId: string;
+  sequence: number;
+  stepKey: string;
+  title: string;
+  agentKey: string;
+  taskId: string | null;
+  status: string;
+  resultSummary: string | null;
+  errorSummary: string | null;
+  scheduledFor: string;
+};
+
 type NotificationRecord = {
   id: string;
   projectId: string | null;
@@ -391,6 +775,39 @@ type AutomationSnapshot = {
     createdAt: string;
   }>;
   notifications: NotificationRecord[];
+  schedules: Array<{
+    id: string;
+    scheduleKey: string;
+    displayName: string;
+    enabled: boolean;
+    nextRunAt: string;
+    lastRunAt: string | null;
+    lastOutcome: string | null;
+    lastError: string | null;
+  }>;
+  workerRuns: Array<{
+    id: string;
+    status: string;
+    triggerType: string;
+    schedulesProcessed: number;
+    jobsProcessed: number;
+    jobsSucceeded: number;
+    jobsFailed: number;
+    leasesRecovered: number;
+    playbookStepsProcessed: number;
+    startedAt: string;
+    completedAt: string | null;
+  }>;
+  deadLetters: Array<{
+    id: string;
+    jobId: string;
+    jobType: string;
+    errorSummary: string;
+    attempts: number;
+    status: string;
+    replayJobId: string | null;
+    createdAt: string;
+  }>;
 };
 
 type WorkspaceData = {
@@ -430,6 +847,26 @@ type WorkspaceData = {
   healingCheckins: HealingCheckinRecord[];
   contentCandidates: ContentCandidateRecord[];
   mediaConsent: MediaConsentRecord[];
+  outcomes: OutcomeRecord[];
+  projectJourneys: ProjectJourneyRecord[];
+  captureEvents: CaptureEventRecord[];
+  memoryRecords: MemoryRecord[];
+  agentDefinitions: AgentDefinitionRecord[];
+  agentTasks: AgentTaskRecord[];
+  agentHandoffs: AgentHandoffRecord[];
+  connectorDefinitions: ConnectorDefinitionRecord[];
+  connectorAccounts: ConnectorAccountRecord[];
+  connectorExecutions: ConnectorExecutionRecord[];
+  toolDefinitions: ToolDefinitionRecord[];
+  authorityDecisions: AuthorityDecisionRecord[];
+  chiefManagerRuns: ChiefManagerRunRecord[];
+  chiefManagerSteps: ChiefManagerStepRecord[];
+  specialistEvaluations: SpecialistEvaluationRecord[];
+  craftIntelligence: CraftIntelligenceData;
+  schedulingIntelligence: SchedulingIntelligenceData;
+  automationPlaybooks: AutomationPlaybookRecord[];
+  automationPlaybookRuns: AutomationPlaybookRunRecord[];
+  automationPlaybookSteps: AutomationPlaybookStepRecord[];
 };
 
 type PortalLifecycleData = {
@@ -475,6 +912,19 @@ type Briefing = {
   }>;
   confidence: number;
   generatedAt: string;
+  memoryContext?: {
+    policyVersion: string;
+    included: number;
+    available: number;
+    omitted: number;
+    highlights: Array<{
+      id: string;
+      title: string;
+      scopeType: string;
+      confidenceBps: number;
+      verificationStatus: string;
+    }>;
+  };
 };
 
 type IntelligenceData = {
@@ -753,6 +1203,68 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
     );
   }
   return data;
+}
+
+type RealtimeConnectionStatus = "connecting" | "live" | "reconnecting" | "offline";
+
+function useRealtimeFeed(
+  scope: "owner" | "client",
+  token: string | null,
+  onChange: () => void,
+  enabled = true,
+) {
+  const [status, setStatus] = useState<RealtimeConnectionStatus>(enabled ? "connecting" : "offline");
+  useEffect(() => {
+    if (!enabled) {
+      return;
+    }
+    let active = true;
+    let cursor = 0;
+    let controller: AbortController | null = null;
+    let refreshTimer = 0;
+    const scheduleRefresh = () => {
+      window.clearTimeout(refreshTimer);
+      refreshTimer = window.setTimeout(onChange, 220);
+    };
+    async function connect() {
+      while (active) {
+        controller = new AbortController();
+        try {
+          const headers = new Headers();
+          if (activeApiAccessToken) headers.set("authorization", `Bearer ${activeApiAccessToken}`);
+          const tokenQuery = scope === "client" && token && token !== "__authenticated__" ? `&token=${encodeURIComponent(token)}` : "";
+          const response = await fetch(`/api/realtime?scope=${scope}&after=${cursor}${tokenQuery}`, { headers, signal: controller.signal, cache: "no-store" });
+          if (!response.ok || !response.body) throw new Error("Realtime channel unavailable");
+          setStatus("live");
+          const reader = response.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = "";
+          while (active) {
+            const chunk = await reader.read();
+            if (chunk.done) break;
+            buffer += decoder.decode(chunk.value, { stream: true });
+            const frames = buffer.split("\n\n");
+            buffer = frames.pop() || "";
+            for (const frame of frames) {
+              const id = frame.match(/^id:\s*(\d+)/m)?.[1];
+              if (id) cursor = Math.max(cursor, Number(id));
+              if (frame.includes("event: change")) scheduleRefresh();
+            }
+          }
+        } catch {
+          if (active) setStatus(navigator.onLine ? "reconnecting" : "offline");
+        }
+        if (active) await new Promise((resolve) => window.setTimeout(resolve, 1_200));
+      }
+    }
+    void connect();
+    return () => {
+      active = false;
+      controller?.abort();
+      window.clearTimeout(refreshTimer);
+    };
+  }, [enabled, onChange, scope, token]);
+  return status;
 }
 
 async function fetchAssetBlob(asset: AssetRecord, portalToken?: string) {
@@ -1064,6 +1576,7 @@ function OwnerHeader({
   onNavigate,
   data,
   refresh,
+  realtimeStatus,
 }: {
   view: OwnerView;
   onMenu: () => void;
@@ -1071,6 +1584,7 @@ function OwnerHeader({
   onNavigate: (target: NavigationTarget) => void;
   data: WorkspaceData;
   refresh: () => void;
+  realtimeStatus: RealtimeConnectionStatus;
 }) {
   const detail = viewDetails[view];
   const [searchOpen, setSearchOpen] = useState(false);
@@ -1194,6 +1708,15 @@ function OwnerHeader({
       type: "Knowledge",
       searchText: `${item.summary || ""} ${item.content} ${item.tagsJson} ${projectLabel(item.projectId)}`,
     })),
+    ...data.memoryRecords.filter((memory) => memory.status === "active").map((memory) => ({
+      id: memory.id,
+      targetId: memory.projectId || memory.clientId || undefined,
+      label: memory.title,
+      detail: `${memory.scopeType} memory · ${memory.verificationStatus.replaceAll("_", " ")} · ${Math.round(memory.confidenceBps / 100)}% confidence`,
+      view: "knowledge" as OwnerView,
+      type: "Memory",
+      searchText: `${memory.content} ${memory.memoryType} ${projectLabel(memory.projectId)}`,
+    })),
   ];
   const results = normalized.length < 2
     ? []
@@ -1301,6 +1824,7 @@ function OwnerHeader({
         <p>{detail.subtitle}</p>
       </div>
       <div className="header-tools">
+        <span className={cn("realtime-status", realtimeStatus)} title="Secure backend event channel"><i />{realtimeStatus}</span>
         <button
           className="search-control"
           onClick={() => setSearchOpen(true)}
@@ -1791,6 +2315,7 @@ function ProjectsView({
   const project =
     filteredProjects.find((item) => item.id === selected) ??
     filteredProjects[0];
+  const journey = data.projectJourneys.find((item) => item.projectId === project?.id);
 
   async function advanceProject() {
     if (!project) return;
@@ -1989,14 +2514,41 @@ function ProjectsView({
                 <p className="eyebrow">PROJECT BRIEF</p>
                 <p>{project.summary || "No project brief has been added yet."}</p>
               </article>
+              {journey && (
+                <section className="project-journey" aria-label="Complete tattoo project journey">
+                  <header>
+                    <div>
+                      <p className="eyebrow gold">END-TO-END JOURNEY</p>
+                      <h3>{journey.progressPercent}% operationally complete</h3>
+                    </div>
+                    <strong>{journey.nextAction}</strong>
+                  </header>
+                  <div className="journey-progress" aria-hidden="true">
+                    <span style={{ width: `${journey.progressPercent}%` }} />
+                  </div>
+                  <div className="journey-milestones">
+                    {journey.milestones.map((milestone) => (
+                      <article className={milestone.status} key={milestone.id}>
+                        <span>{milestone.status === "complete" ? <Check size={13} /> : milestone.status === "current" ? <ArrowRight size={13} /> : <Clock3 size={13} />}</span>
+                        <div>
+                          <strong>{milestone.label}</strong>
+                          <small>{milestone.detail}</small>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+              )}
               <div className="project-detail-actions">
                 <span>
                   {project.lifecyclePhase === "complete"
                     ? "Learning captured from this completed project."
-                    : "Advancing records a workflow observation automatically."}
+                    : journey?.canAdvance
+                      ? "Every prerequisite is connected. Advancing records a workflow observation automatically."
+                      : journey?.advanceBlockers[0] || "Complete the highlighted journey requirement before advancing."}
                 </span>
                 {project.lifecyclePhase !== "complete" && (
-                  <button className="gold-button" onClick={advanceProject}>
+                  <button className="gold-button" onClick={advanceProject} disabled={journey ? !journey.canAdvance : false}>
                     Advance to{" "}
                     {phases[
                       Math.min(
@@ -2278,12 +2830,17 @@ function ClientsView({
 function CalendarView({
   data,
   onCreate,
+  refresh,
+  notify,
   targetId,
 }: {
   data: WorkspaceData;
   onCreate: () => void;
+  refresh: () => Promise<void>;
+  notify: (message: string, error?: boolean) => void;
   targetId?: string;
 }) {
+  const [saving, setSaving] = useState(false);
   useEffect(() => {
     if (!targetId) return;
     document.getElementById(`appointment-${targetId}`)?.scrollIntoView({
@@ -2291,6 +2848,51 @@ function CalendarView({
       block: "center",
     });
   }, [targetId]);
+
+  async function schedulingAction(payload: Record<string, unknown>, success?: string) {
+    setSaving(true);
+    try {
+      const result = await api<{ evaluation?: { summary: string }; summary?: string }>("/api/scheduling", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(payload) });
+      notify(success || result.evaluation?.summary || result.summary || "Scheduling intelligence updated.");
+      await refresh();
+      return result;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update scheduling intelligence", true);
+      return null;
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createCapacityWindow(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    const startsAt = new Date(String(values.startsAt || ""));
+    const endsAt = new Date(String(values.endsAt || ""));
+    const result = await schedulingAction({ ...values, action: "create_window", startsAt: startsAt.toISOString(), endsAt: endsAt.toISOString() });
+    if (result) form.reset();
+  }
+
+  async function saveProjectRequirement(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    const earliestStart = values.earliestStart ? new Date(String(values.earliestStart)).toISOString() : "";
+    const latestEnd = values.latestEnd ? new Date(String(values.latestEnd)).toISOString() : "";
+    const result = await schedulingAction({ ...values, action: "save_requirement", earliestStart, latestEnd, minimumRevenueCents: Math.round(Number(values.minimumRevenueDollars || 0) * 100) });
+    if (result) form.reset();
+  }
+
+  async function saveSchedulingPolicy(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const values = Object.fromEntries(new FormData(event.currentTarget));
+    await schedulingAction({ ...values, action: "update_profile", weeklyRevenueTargetCents: Math.round(Number(values.weeklyRevenueTargetDollars || 0) * 100) }, "Scheduling capacity policy saved and the workspace was re-evaluated.");
+  }
+
+  const scheduling = data.schedulingIntelligence;
+  const latestRun = scheduling.runs[0];
+  const realProjects = data.projects.filter((project) => !project.isTest && !project.archivedAt && project.status === "active");
 
   return (
     <section className="page-stack">
@@ -2303,6 +2905,70 @@ function CalendarView({
           <Plus size={16} /> Schedule
         </button>
       </div>
+      <section className="os-panel scheduling-intelligence-panel">
+        <div className="scheduling-intelligence-heading">
+          <div><p className="eyebrow gold">CAPACITY INTELLIGENCE</p><h2>Book work that is actually ready</h2><p>Empty time is not automatically usable time. Legacy checks exact approval, paid deposit, project phase, duration, preparation, travel, buffers, protected time, daily tattoo limits, energy, and conflicts before suggesting anything.</p></div>
+          <button className="gold-button" disabled={saving} onClick={() => void schedulingAction({ action: "evaluate" })}><BrainCircuit size={15} /> {saving ? "Evaluating…" : "Evaluate capacity"}</button>
+        </div>
+        <div className="scheduling-stat-grid">
+          <span><strong>{scheduling.windows.filter((item) => item.status === "open").length}</strong><small>open windows</small></span>
+          <span><strong>{latestRun?.readyProjects || 0}</strong><small>ready projects</small></span>
+          <span><strong>{scheduling.opportunities.filter((item) => item.status === "proposed").length}</strong><small>suggested fits</small></span>
+          <span><strong>{latestRun?.conflictsDetected || 0}</strong><small>conflicts avoided</small></span>
+          <span><strong>{formatMoney(latestRun?.projectedRevenueCents || 0)}</strong><small>potential value</small></span>
+        </div>
+        <div className="schedule-opportunity-list">
+          <div className="capture-stream-heading"><strong>Best available fits</strong><small>Every booking requires exact owner approval</small></div>
+          {scheduling.opportunities.length ? scheduling.opportunities.map((opportunity) => {
+            const project = data.projects.find((item) => item.id === opportunity.projectId);
+            const client = data.clients.find((item) => item.id === opportunity.clientId);
+            return <article key={opportunity.id}>
+              <div className="schedule-opportunity-time"><strong>{formatDate(opportunity.suggestedStartsAt, true)}</strong><small>to {formatDate(opportunity.suggestedEndsAt, true)}</small></div>
+              <div><span className={cn("agent-task-status", opportunity.status === "proposed" ? "queued" : "held_for_approval")}>{opportunity.status.replaceAll("_", " ")}</span><h3>{project?.title || "Project"}</h3><p>{fullName(client)} · {opportunity.energyDemand} energy · {formatMoney(opportunity.projectedRevenueCents)} potential</p><small>{opportunity.rationale}</small></div>
+              {opportunity.status === "proposed" ? <button className="outline-button" disabled={saving} onClick={() => void schedulingAction({ action: "request_booking", opportunityId: opportunity.id }, "The exact appointment is now held for owner approval. Nothing was booked automatically.")}><ShieldCheck size={14} /> Request approval</button> : <button className="outline-button" disabled>Approval pending</button>}
+            </article>;
+          }) : <EmptyState icon={CalendarDays} title="No safe scheduling fit yet" body={latestRun?.summary || "Add an explicit capacity window and scheduling requirements for a session-ready project."} />}
+        </div>
+      </section>
+      <div className="scheduling-control-grid">
+        <section className="os-panel scheduling-control-card">
+          <PanelTitle eyebrow="CAPACITY WINDOWS" title="Available and protected time" />
+          <form className="modal-form" onSubmit={createCapacityWindow}>
+            <label><span>TITLE</span><input name="title" required placeholder="Saturday tattoo capacity" /></label>
+            <div className="field-row"><label><span>START</span><input name="startsAt" type="datetime-local" required /></label><label><span>END</span><input name="endsAt" type="datetime-local" required /></label></div>
+            <div className="field-row"><label><span>USE</span><select name="windowType" defaultValue="tattoo"><option value="tattoo">Tattoo capacity</option><option value="design">Deep-focus design</option><option value="admin">Administration</option><option value="personal">Personal/family</option></select></label><label><span>STATE</span><select name="status" defaultValue="open"><option value="open">Open capacity</option><option value="protected">Protected / unavailable</option></select></label></div>
+            <div className="field-row"><label><span>ENERGY CAPACITY</span><select name="energyCapacity" defaultValue="high"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label><label><span>LOCATION</span><input name="location" placeholder="Legacy Lines" /></label></div>
+            <button className="outline-button wide" disabled={saving}><Plus size={14} /> Add capacity window</button>
+          </form>
+          <div className="capacity-window-list">{scheduling.windows.filter((item) => item.status !== "closed").map((window) => <article key={window.id}><span className={cn("status-dot", window.status === "protected" && "warning")} /><div><strong>{window.title}</strong><small>{formatDate(window.startsAt, true)} – {formatDate(window.endsAt, true)} · {window.status}</small></div><button className="text-button" disabled={saving} onClick={() => void schedulingAction({ action: "close_window", windowId: window.id }, "Capacity window closed and dependent suggestions expired.")}><X size={13} /> Close</button></article>)}</div>
+        </section>
+        <section className="os-panel scheduling-control-card">
+          <PanelTitle eyebrow="PROJECT CAPACITY" title="What each session requires" />
+          <form className="modal-form" onSubmit={saveProjectRequirement}>
+            <label><span>PROJECT</span><select name="projectId" required defaultValue=""><option value="" disabled>Select active project</option>{realProjects.map((project) => <option key={project.id} value={project.id}>{project.title} · {project.lifecyclePhase}</option>)}</select></label>
+            <div className="field-row"><label><span>SESSION MINUTES</span><input name="estimatedSessionMinutes" type="number" min="30" max="960" required defaultValue="240" /></label><label><span>ENERGY DEMAND</span><select name="energyDemand" defaultValue="high"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label></div>
+            <div className="field-row"><label><span>PREP MINUTES</span><input name="prepMinutes" type="number" min="0" max="480" placeholder="Use studio default" /></label><label><span>TRAVEL MINUTES</span><input name="travelMinutes" type="number" min="0" max="480" placeholder="Use studio default" /></label></div>
+            <div className="field-row"><label><span>BUFFER BEFORE</span><input name="bufferBeforeMinutes" type="number" min="0" max="240" placeholder="Use default" /></label><label><span>BUFFER AFTER</span><input name="bufferAfterMinutes" type="number" min="0" max="240" placeholder="Use default" /></label></div>
+            <div className="field-row"><label><span>EARLIEST</span><input name="earliestStart" type="datetime-local" /></label><label><span>LATEST</span><input name="latestEnd" type="datetime-local" /></label></div>
+            <div className="field-row"><label><span>MINIMUM SESSION VALUE</span><input name="minimumRevenueDollars" type="number" min="0" step="1" placeholder="0" /></label><label><span>LOCATION</span><input name="location" placeholder="Legacy Lines" /></label></div>
+            <button className="outline-button wide" disabled={saving || !realProjects.length}><Save size={14} /> Save project requirements</button>
+          </form>
+        </section>
+      </div>
+      {scheduling.profile && <section className="os-panel scheduling-policy-card">
+        <PanelTitle eyebrow="STUDIO LIMITS" title="Preparation, recovery, and financial guardrails" />
+        <form className="scheduling-policy-form" onSubmit={saveSchedulingPolicy}>
+          <label><span>DEFAULT PREP</span><input name="defaultPrepMinutes" type="number" min="0" max="480" defaultValue={scheduling.profile.defaultPrepMinutes} /></label>
+          <label><span>DEFAULT TRAVEL</span><input name="defaultTravelMinutes" type="number" min="0" max="480" defaultValue={scheduling.profile.defaultTravelMinutes} /></label>
+          <label><span>BUFFER BEFORE</span><input name="defaultBufferBeforeMinutes" type="number" min="0" max="240" defaultValue={scheduling.profile.defaultBufferBeforeMinutes} /></label>
+          <label><span>BUFFER AFTER</span><input name="defaultBufferAfterMinutes" type="number" min="0" max="240" defaultValue={scheduling.profile.defaultBufferAfterMinutes} /></label>
+          <label><span>MAX TATTOO MIN/DAY</span><input name="maximumTattooMinutesPerDay" type="number" min="60" max="960" defaultValue={scheduling.profile.maximumTattooMinutesPerDay} /></label>
+          <label><span>MAX HIGH-ENERGY/DAY</span><input name="maximumHighEnergySessionsPerDay" type="number" min="1" max="4" defaultValue={scheduling.profile.maximumHighEnergySessionsPerDay} /></label>
+          <label><span>MIN BOOKABLE TIME</span><input name="minimumBookableMinutes" type="number" min="30" max="720" defaultValue={scheduling.profile.minimumBookableMinutes} /></label>
+          <label><span>WEEKLY REVENUE TARGET</span><input name="weeklyRevenueTargetDollars" type="number" min="0" step="1" defaultValue={Math.round(scheduling.profile.weeklyRevenueTargetCents / 100)} /></label>
+          <button className="gold-button" disabled={saving}><Check size={14} /> Save limits</button>
+        </form>
+      </section>}
       <section className="os-panel calendar-surface">
         {data.appointments.length === 0 ? (
           <EmptyState
@@ -2721,6 +3387,10 @@ function ChiefView({
   const [syncingSocial, setSyncingSocial] = useState(false);
   const [intelligenceError, setIntelligenceError] = useState("");
   const [intelligenceNotice, setIntelligenceNotice] = useState("");
+  const [chiefBusy, setChiefBusy] = useState(false);
+  const [chiefNotice, setChiefNotice] = useState("");
+  const [chiefError, setChiefError] = useState("");
+  const [managerOperations, setManagerOperations] = useState<{ runs: ChiefManagerRunRecord[]; steps: ChiefManagerStepRecord[] }>({ runs: data.chiefManagerRuns, steps: data.chiefManagerSteps });
 
   const loadIntelligence = useCallback(async () => {
     try {
@@ -2735,10 +3405,69 @@ function ChiefView({
     }
   }, []);
 
+  const loadChiefOperations = useCallback(async () => {
+    try {
+      const result = await api<{ runs: ChiefManagerRunRecord[]; steps: ChiefManagerStepRecord[] }>("/api/chief");
+      setManagerOperations(result);
+    } catch (error) {
+      setChiefError(error instanceof Error ? error.message : "Unable to load Chief operations");
+    }
+  }, []);
+
   useEffect(() => {
-    const handle = window.setTimeout(() => void loadIntelligence(), 0);
+    const handle = window.setTimeout(() => { void loadIntelligence(); void loadChiefOperations(); }, 0);
     return () => window.clearTimeout(handle);
-  }, [loadIntelligence]);
+  }, [loadChiefOperations, loadIntelligence]);
+
+  async function runChiefCommand(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setChiefBusy(true);
+    setChiefError("");
+    setChiefNotice("");
+    const form = new FormData(event.currentTarget);
+    const requestedTool = String(form.get("requestedTool") || "analyze_internal");
+    try {
+      const result = await api<{ run: ChiefManagerRunRecord; steps: ChiefManagerStepRecord[] }>("/api/chief", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          action: "run",
+          objective: form.get("objective"),
+          mode: requestedTool === "analyze_internal" ? "operating_brief" : "command",
+          requestedTool,
+          projectId: form.get("projectId") || null,
+          clientId: form.get("clientId") || null,
+          actionPayload: {
+            messageBody: String(form.get("messageBody") || "").trim() || undefined,
+            startsAt: form.get("startsAt") || undefined,
+            endsAt: form.get("endsAt") || undefined,
+            appointmentType: form.get("appointmentType") || undefined,
+          },
+          idempotencyKey: crypto.randomUUID(),
+        }),
+      });
+      setChiefNotice(result.run.nextAction || result.run.summary || "Chief run recorded.");
+      await loadChiefOperations();
+    } catch (error) {
+      setChiefError(error instanceof Error ? error.message : "Unable to run the Chief of Staff");
+    } finally {
+      setChiefBusy(false);
+    }
+  }
+
+  async function resumeChief(runId: string) {
+    setChiefBusy(true);
+    setChiefError("");
+    try {
+      const result = await api<{ run: ChiefManagerRunRecord }>("/api/chief", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "resume", runId }) });
+      setChiefNotice(result.run.nextAction || "Chief run rechecked.");
+      await loadChiefOperations();
+    } catch (error) {
+      setChiefError(error instanceof Error ? error.message : "Unable to resume the Chief run");
+    } finally {
+      setChiefBusy(false);
+    }
+  }
 
   async function learnNow() {
     setLearning(true);
@@ -2769,18 +3498,14 @@ function ChiefView({
     setIntelligenceNotice("");
     try {
       const result = await api<{
-        connectionsSynced: number;
-        mediaObserved: number;
-        projectMatches: number;
+        execution: { resultSummary: string | null };
       }>("/api/social/sync", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: "{}",
       });
       await loadIntelligence();
-      setIntelligenceNotice(
-        `Social sync completed: ${result.connectionsSynced} connection${result.connectionsSynced === 1 ? "" : "s"}, ${result.mediaObserved} media observation${result.mediaObserved === 1 ? "" : "s"}, and ${result.projectMatches} project match${result.projectMatches === 1 ? "" : "es"}.`,
-      );
+      setIntelligenceNotice(result.execution.resultSummary || "Social evidence synchronization completed and was recorded.");
     } catch (syncError) {
       setIntelligenceError(
         syncError instanceof Error
@@ -2810,8 +3535,41 @@ function ChiefView({
           <span>operational records</span>
           <small>CAPTURE MODE</small>
           <strong className="capture-label">Metadata only</strong>
+          <small>ACTIVE MEMORY</small>
+          <strong>{data.memoryRecords.filter((memory) => memory.status === "active").length}</strong>
+          <span>scoped records</span>
         </aside>
       </div>
+      <section className="os-panel chief-manager-console">
+        <div className="agent-operations-heading">
+          <PanelTitle eyebrow="MANAGER RUNTIME" title="Command the AI staff through one trusted Chief" />
+          <p>The Chief retrieves current context, builds a bounded plan, delegates specialists, invokes only registered tools, pauses at authority gates, and records the complete trace.</p>
+        </div>
+        <form className="chief-command-form" onSubmit={runChiefCommand}>
+          <label className="chief-objective"><span>OBJECTIVE</span><textarea name="objective" required rows={2} maxLength={1200} placeholder="What should Legacy understand, prepare, or coordinate?" defaultValue="Review the studio’s current operating state and handle every safe internal next step." /></label>
+          <label><span>ACTION MODE</span><select name="requestedTool" defaultValue="analyze_internal"><option value="analyze_internal">Plan and delegate safe internal work</option><option value="draft_response">Prepare a client response draft</option><option value="send_client_message">Request approval for an exact client message</option><option value="schedule_appointment">Request approval for an exact appointment</option></select></label>
+          <label><span>PROJECT SCOPE</span><select name="projectId" defaultValue=""><option value="">Whole workspace</option>{data.projects.filter((project) => !project.archivedAt && !project.isTest).map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label>
+          <label><span>CLIENT SCOPE</span><select name="clientId" defaultValue=""><option value="">No single client</option>{data.clients.filter((client) => !client.archivedAt).map((client) => <option key={client.id} value={client.id}>{fullName(client)}</option>)}</select></label>
+          <label className="chief-message"><span>EXACT MESSAGE, WHEN REQUESTED</span><textarea name="messageBody" rows={2} maxLength={2000} placeholder="Only used for the approval-gated client message action." /></label>
+          <label><span>APPOINTMENT START</span><input name="startsAt" type="datetime-local" /></label>
+          <label><span>APPOINTMENT END</span><input name="endsAt" type="datetime-local" /></label>
+          <label><span>APPOINTMENT TYPE</span><select name="appointmentType" defaultValue="session"><option value="consult">Consult</option><option value="design_review">Design review</option><option value="session">Tattoo session</option><option value="healing_review">Healing review</option></select></label>
+          <button className="gold-button" disabled={chiefBusy}><BrainCircuit size={16} /> {chiefBusy ? "Chief is coordinating…" : "Run Chief of Staff"}</button>
+        </form>
+        {chiefNotice && <p className="chief-run-notice"><CheckCircle2 size={15} /> {chiefNotice}</p>}
+        {chiefError && <p className="form-error">{chiefError}</p>}
+        <div className="chief-run-ledger">
+          <div className="capture-stream-heading"><strong>Manager traces</strong><small>{managerOperations.runs.length} recorded</small></div>
+          {managerOperations.runs.length ? managerOperations.runs.slice(0, 8).map((run) => {
+            const steps = managerOperations.steps.filter((step) => step.managerRunId === run.id).sort((a, b) => a.sequence - b.sequence);
+            return <article key={run.id}>
+              <header><span className={cn("agent-task-status", run.status)}>{run.status.replaceAll("_", " ")}</span><div><strong>{run.objective}</strong><small>{run.provider} · {run.model} · {formatDate(run.startedAt, true)} · {Math.round((run.confidenceBps || 0) / 100)}% confidence</small><p>{run.summary || "Planning is in progress."}</p></div>{["awaiting_approval", "awaiting_execution", "needs_attention"].includes(run.status) && <button type="button" className="outline-button" disabled={chiefBusy} onClick={() => void resumeChief(run.id)}>Recheck run</button>}</header>
+              <div className="chief-trace-steps">{steps.map((step) => <div key={step.id}><span>{step.sequence}</span><div><strong>{step.title}</strong><small>{step.agentKey.replaceAll("_", " ")} · {step.toolKey.replaceAll("_", " ")}</small><p>{step.resultSummary || step.errorSummary || step.purpose}</p></div><em className={cn("authority-decision", step.status)}>{step.status.replaceAll("_", " ")}</em></div>)}</div>
+              {run.nextAction && <footer><ShieldCheck size={14} /> {run.nextAction}</footer>}
+            </article>;
+          }) : <EmptyState icon={BrainCircuit} title="No manager runs yet" body="Give the Chief an objective to create the first context, delegation, authority, and outcome trace." />}
+        </div>
+      </section>
       <div className="chief-columns">
         <section className="os-panel">
           <PanelTitle eyebrow="RECOMMENDATIONS" title="Prioritized work" />
@@ -2835,9 +3593,23 @@ function ChiefView({
             <article><LockKeyhole size={18} /><div><strong>Approval first</strong><p>Client messages, scheduling changes, financial actions, and publishing remain gated.</p></div></article>
             <article><Link2 size={18} /><div><strong>Evidence attached</strong><p>Recommendations point back to projects, appointments, approvals, or messages.</p></div></article>
             <article><Activity size={18} /><div><strong>Every run recorded</strong><p>Purpose, engine, timing, confidence, and outcome are visible in AI Operations.</p></div></article>
+            <article><BrainCircuit size={18} /><div><strong>Scoped memory</strong><p>Project and client memories enter context only for the matching relationship; revoked memory is excluded.</p></div></article>
           </div>
         </section>
       </div>
+      <section className="os-panel chief-memory-context">
+        <PanelTitle eyebrow="CONTEXT ENGINE" title="What the Chief of Staff remembered for this run" />
+        {briefing?.memoryContext?.highlights.length ? (
+          <div className="chief-memory-grid">
+            {briefing.memoryContext.highlights.map((memory) => (
+              <article key={memory.id}><span>{memory.scopeType}</span><strong>{memory.title}</strong><small>{Math.round(memory.confidenceBps / 100)}% confidence · {memory.verificationStatus.replaceAll("_", " ")}</small></article>
+            ))}
+          </div>
+        ) : (
+          <p className="settings-placeholder">Generate a briefing to assemble a bounded context packet from active workspace, client, and project memory.</p>
+        )}
+        <footer><span>{briefing?.memoryContext?.included ?? 0} included</span><span>{briefing?.memoryContext?.available ?? data.memoryRecords.filter((memory) => memory.status === "active").length} available</span><span>{briefing?.memoryContext?.omitted ?? 0} omitted by context budget</span></footer>
+      </section>
       <section className="os-panel intelligence-system">
         <PanelTitle
           eyebrow="CONTINUOUS INTELLIGENCE"
@@ -2953,6 +3725,61 @@ function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refres
     form.reset();
   }
 
+  async function saveSessionCraft(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    setSaving(true);
+    try {
+      const result = await api<{ completenessBps: number }>("/api/craft", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "save_session_craft", ...values }),
+      });
+      notify(`Craft record saved at ${Math.round(result.completenessBps / 100)}% completeness. Only sufficiently complete, healed evidence can influence patterns.`);
+      form.reset();
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to save session craft evidence", true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function saveHealingAssessment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    setSaving(true);
+    try {
+      await api("/api/craft", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "save_healing_assessment", ...values, touchupRequired: values.touchupRequired === "on" }),
+      });
+      notify("Owner healing assessment saved as outcome evidence. No medical diagnosis was generated.");
+      form.reset();
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to save healing outcome", true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function runCraftAnalysis() {
+    setSaving(true);
+    try {
+      const result = await api<{ summary: string }>("/api/craft", {
+        method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action: "run_analysis" }),
+      });
+      notify(result.summary);
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to evaluate craft evidence", true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function createContentCandidate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -2963,7 +3790,163 @@ function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refres
     form.reset();
   }
 
+  async function captureNote(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    setSaving(true);
+    try {
+      await api("/api/capture", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...values, requestKey: crypto.randomUUID() }),
+      });
+      form.reset();
+      notify("Note captured, normalized, and queued for evidence processing.");
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to capture note", true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function createAgentTask(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    setSaving(true);
+    try {
+      await api("/api/agents", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...values,
+          projectId: values.projectId || undefined,
+          clientId: values.clientId || undefined,
+          priority: Number(values.priority || 50),
+          idempotencyKey: crypto.randomUUID(),
+          actionPayload: {
+            clientId: values.clientId || undefined,
+            projectId: values.projectId || undefined,
+            messageBody: values.messageBody || undefined,
+            subject: values.subject || undefined,
+            startsAt: values.startsAt || undefined,
+            endsAt: values.endsAt || undefined,
+            appointmentType: values.appointmentType || undefined,
+          },
+        }),
+      });
+      form.reset();
+      notify("The Chief of Staff routed the task to the correct specialist with a bounded context packet.");
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to route agent task", true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function runSpecialistIntelligence(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    setSaving(true);
+    try {
+      const result = await api<{ tasks: AgentTaskRecord[] }>("/api/specialists", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ domain: values.domain, projectId: values.projectId || undefined, clientId: values.clientId || undefined, objective: values.objective, idempotencyKey: crypto.randomUUID() }),
+      });
+      notify(`${result.tasks.length} specialist intelligence evaluation${result.tasks.length === 1 ? " was" : "s were"} completed and recorded.`);
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to run specialist intelligence", true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function updateAgentTask(taskId: string, action: "run" | "retry" | "cancel") {
+    setSaving(true);
+    try {
+      await api("/api/agents", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ taskId, action }),
+      });
+      notify(action === "cancel" ? "Agent task cancelled." : "Agent task processed and recorded.");
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update agent task", true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function executeConnectorTask(taskId: string) {
+    setSaving(true);
+    try {
+      const result = await api<{ execution: ConnectorExecutionRecord }>("/api/connectors", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ taskId, idempotencyKey: `agent-task:${taskId}` }),
+      });
+      if (result.execution.status === "failed") throw new Error(result.execution.errorSummary || "Connector execution failed");
+      notify(result.execution.resultSummary || "Approved connector action completed and recorded.");
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to execute connector action", true);
+      await refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function manageGoogleConnector(connectorKey: "gmail" | "google_calendar", disconnect = false) {
+    setSaving(true);
+    try {
+      if (disconnect) {
+        await api("/api/connectors/google", { method: "DELETE", headers: { "content-type": "application/json" }, body: JSON.stringify({ connectorKey }) });
+        notify(`${connectorKey === "gmail" ? "Gmail" : "Google Calendar"} disconnected and its stored OAuth credential removed.`);
+        await refresh();
+      } else {
+        const result = await api<{ authorizationUrl: string }>("/api/connectors/google", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ connectorKey }) });
+        window.location.assign(result.authorizationUrl);
+      }
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update Google connector", true);
+      setSaving(false);
+    }
+  }
+
+  async function managePlaybook(payload: Record<string, unknown>, success: string) {
+    setSaving(true);
+    try {
+      await api("/api/playbooks", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ ...payload, requestKey: crypto.randomUUID() }),
+      });
+      notify(success);
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update automation playbook", true);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const eligibleAssets = data.assets.filter((asset) => asset.contentEligible && asset.projectId);
+  const realProjectIds = new Set(data.projects.filter((project) => !project.isTest && !project.archivedAt).map((project) => project.id));
+  const completedCraftSessions = data.tattooSessions.filter((session) => session.status === "completed" && realProjectIds.has(session.projectId));
+  const assessableHealing = data.healingCheckins.filter((checkin) =>
+    realProjectIds.has(checkin.projectId) && Boolean(checkin.submittedAt || ["reviewed", "closed", "needs_attention"].includes(checkin.status)),
+  );
+  const specialistDomains = [
+    ["client", "Client"], ["design", "Design"], ["knowledge", "Knowledge"], ["operations", "Operations"],
+    ["scheduling", "Scheduling"], ["finance", "Finance"], ["content", "Content"], ["analytics", "Analytics"],
+  ] as const;
   return (
     <section className="page-stack">
       <div className="operations-banner">
@@ -2979,6 +3962,179 @@ function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refres
         <StatCard icon={Gauge} label="SUCCESS RATE" value={`${successRate}%`} detail={data.aiRuns.length ? "Calculated from completed runs" : "Waiting for first run"} />
         <StatCard icon={Clock3} label="LAST RUN" value={data.aiRuns[0] ? formatDate(data.aiRuns[0].createdAt, true) : "None"} detail="Most recent automation event" />
         <StatCard icon={Activity} label="AUDIT EVENTS" value={data.auditEvents.length} detail="Recent owner, client, and system actions" />
+      </section>
+      <section className="os-panel playbook-operations-panel">
+        <div className="agent-operations-heading">
+          <PanelTitle eyebrow="PRODUCTION AUTOMATIONS" title="Tattoo workflows run as observable playbooks" />
+          <p>Each live event can start a bounded sequence of internal specialist tasks. Every run is idempotent, evidence-linked, and unable to message, schedule, publish, or charge without the existing approval and connector gates.</p>
+        </div>
+        <div className="playbook-grid">
+          {data.automationPlaybooks.map((playbook) => {
+            const triggers = (() => { try { return JSON.parse(playbook.triggerEventsJson) as string[]; } catch { return []; } })();
+            const steps = (() => { try { return JSON.parse(playbook.stepsJson) as Array<{ title: string }>; } catch { return []; } })();
+            return <article key={playbook.id} className={cn(!playbook.enabled && "playbook-disabled")}>
+              <header><div><strong>{playbook.displayName}</strong><small>{steps.length} specialist step{steps.length === 1 ? "" : "s"}</small></div><span className={cn("agent-task-status", playbook.enabled ? "succeeded" : "cancelled")}>{playbook.enabled ? "active" : "paused"}</span></header>
+              <p>{playbook.description}</p>
+              <div className="playbook-triggers">{triggers.map((trigger) => <span key={trigger}>{trigger.replaceAll("_", " ")}</span>)}</div>
+              <footer><small>{playbook.lastTriggeredAt ? `Last run ${formatDate(playbook.lastTriggeredAt, true)}` : "Waiting for its first matching event"}</small><div><button className="text-button" type="button" disabled={saving} onClick={() => void managePlaybook({ action: "toggle", playbookKey: playbook.playbookKey, enabled: !playbook.enabled }, `${playbook.displayName} ${playbook.enabled ? "paused" : "enabled"}.`)}>{playbook.enabled ? "Pause" : "Enable"}</button><button className="outline-button" type="button" disabled={saving || !playbook.enabled} onClick={() => void managePlaybook({ action: "run", playbookKey: playbook.playbookKey }, `${playbook.displayName} started and recorded.`)}><WandSparkles size={14} /> Run now</button></div></footer>
+            </article>;
+          })}
+        </div>
+        <div className="playbook-run-ledger">
+          <div className="capture-stream-heading"><strong>Recent playbook runs</strong><small>{data.automationPlaybookRuns.length} recorded</small></div>
+          {data.automationPlaybookRuns.length ? data.automationPlaybookRuns.slice(0, 8).map((run) => {
+            const playbook = data.automationPlaybooks.find((item) => item.playbookKey === run.playbookKey);
+            const steps = data.automationPlaybookSteps.filter((step) => step.runId === run.id).sort((a, b) => a.sequence - b.sequence);
+            return <article key={run.id}>
+              <div className="playbook-run-summary"><span className={cn("agent-task-status", run.status)}>{run.status.replaceAll("_", " ")}</span><div><strong>{playbook?.displayName || run.playbookKey.replaceAll("_", " ")}</strong><small>{run.sourceEventType.replaceAll("_", " ")} · {formatDate(run.startedAt, true)}</small><p>{run.summary || `${run.completedSteps} of ${run.totalSteps} steps completed.`}</p></div></div>
+              <div className="playbook-step-list">{steps.map((step) => <span key={step.id} title={step.errorSummary || step.resultSummary || step.title}><CheckCircle2 size={13} /><b>{step.title}</b><small>{step.status.replaceAll("_", " ")}</small></span>)}</div>
+            </article>;
+          }) : <EmptyState icon={WandSparkles} title="Playbooks are armed" body="A matching inquiry, payment, appointment, session, healing, completion, or manual daily-brief event will create the first recorded run." />}
+        </div>
+      </section>
+      <section className="os-panel tool-authority-panel">
+        <div className="agent-operations-heading">
+          <PanelTitle eyebrow="TOOL + AUTHORITY REGISTRY" title="Every capability has a locked operating boundary" />
+          <p>Legacy denies unknown tools by default. Registered tools declare their inputs, outputs, side effects, approval class, retry policy, audit behavior, agent access, and connector before any AI run may use them.</p>
+        </div>
+        <div className="authority-summary" aria-label="Authority class summary">
+          {(["AUTO", "AUTO_WITH_LOG", "ASK", "OWNER_ONLY", "DENIED"] as const).map((authorityClass) => <div key={authorityClass}><strong>{data.toolDefinitions.filter((tool) => tool.approvalClass === authorityClass).length}</strong><span>{authorityClass.replaceAll("_", " ")}</span></div>)}
+        </div>
+        <div className="tool-registry-grid">
+          {data.toolDefinitions.map((tool) => {
+            const retry = (() => { try { return JSON.parse(tool.retryPolicyJson) as { maxAttempts?: number }; } catch { return {}; } })();
+            const agents = (() => { try { return JSON.parse(tool.allowedAgentsJson) as string[]; } catch { return []; } })();
+            return <article key={tool.id}>
+              <header><div><strong>{tool.displayName}</strong><small>{tool.toolKey}</small></div><span className={cn("authority-class", tool.approvalClass.toLowerCase())}>{tool.approvalClass.replaceAll("_", " ")}</span></header>
+              <p>{tool.description}</p>
+              <footer><span>{tool.sideEffectClass.replaceAll("_", " ")}</span><span>{agents.length ? `${agents.length} staff role${agents.length === 1 ? "" : "s"}` : "Owner only"}</span><span>{retry.maxAttempts || 0} retries</span>{tool.connectorKey && <span>{tool.connectorKey.replaceAll("_", " ")}</span>}</footer>
+            </article>;
+          })}
+        </div>
+        <div className="authority-ledger">
+          <div className="capture-stream-heading"><strong>Recent authority decisions</strong><small>{data.authorityDecisions.length} recorded</small></div>
+          {data.authorityDecisions.length ? data.authorityDecisions.slice(0, 8).map((decision) => <article key={decision.id}><span className={cn("authority-decision", decision.decision)}>{decision.decision.replaceAll("_", " ")}</span><div><strong>{data.toolDefinitions.find((tool) => tool.toolKey === decision.toolKey)?.displayName || decision.toolKey.replaceAll("_", " ")}</strong><small>{decision.actorId || decision.actorType} · {formatDate(decision.evaluatedAt, true)}</small><p>{decision.reason}</p></div></article>) : <EmptyState icon={ShieldCheck} title="No authority decisions yet" body="The first delegated task or connector action will create an inspectable policy decision here." />}
+        </div>
+      </section>
+      <section className="os-panel agent-operations-panel">
+        <div className="agent-operations-heading">
+          <PanelTitle eyebrow="SPECIALIST INTELLIGENCE" title="Eight domains, one professional state" />
+          <p>Each specialist calculates facts from the same authorized Legacy records, then returns findings, evidence, confidence, limitations, and safe internal recommendations. Test and archived projects never enter these evaluations.</p>
+        </div>
+        <form className="specialist-run-form" onSubmit={runSpecialistIntelligence}>
+          <label><span>INTELLIGENCE DOMAIN</span><select name="domain" defaultValue="all"><option value="all">Run all eight specialists</option>{specialistDomains.map(([key, label]) => <option key={key} value={key}>{label} Intelligence</option>)}</select></label>
+          <label><span>PROJECT SCOPE</span><select name="projectId" defaultValue=""><option value="">All operational projects</option>{data.projects.filter((project) => !project.archivedAt && !project.isTest).map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label>
+          <label><span>CLIENT SCOPE</span><select name="clientId" defaultValue=""><option value="">All active clients</option>{data.clients.filter((client) => !client.archivedAt).map((client) => <option key={client.id} value={client.id}>{fullName(client)}</option>)}</select></label>
+          <label className="specialist-objective"><span>OBJECTIVE</span><input name="objective" maxLength={500} defaultValue="Review current readiness, risks, opportunities, and the next safe internal action." /></label>
+          <button className="gold-button" disabled={saving}><Sparkles size={15} /> {saving ? "Evaluating…" : "Run intelligence"}</button>
+        </form>
+        <div className="specialist-domain-grid">
+          {specialistDomains.map(([domain, label]) => {
+            const evaluation = data.specialistEvaluations.find((item) => item.domain === domain);
+            const findings = (() => { try { return JSON.parse(evaluation?.findingsJson || "[]") as Array<{ severity: string; title: string; detail: string; evidenceRefs: string[] }>; } catch { return []; } })();
+            const recommendations = (() => { try { return JSON.parse(evaluation?.recommendationsJson || "[]") as Array<{ title: string; rationale: string }>; } catch { return []; } })();
+            const facts = (() => { try { return Object.entries(JSON.parse(evaluation?.factsJson || "{}") as Record<string, unknown>); } catch { return []; } })();
+            return <article key={domain} className={cn("specialist-domain-card", evaluation && "evaluated")}>
+              <header><div><strong>{label} Intelligence</strong><small>{evaluation ? `${evaluation.provider} · ${Math.round(evaluation.confidenceBps / 100)}% confidence` : "Ready for first evaluation"}</small></div><span className={cn("status-dot", !evaluation && "warning")} /></header>
+              <p>{evaluation?.summary || "Run this bounded specialist against the current authorized professional state."}</p>
+              {facts.length > 0 && <div className="specialist-facts">{facts.slice(0, 6).map(([key, value]) => <span key={key}><strong>{String(value)}</strong><small>{key.replace(/([A-Z])/g, " $1").toLowerCase()}</small></span>)}</div>}
+              {findings.length > 0 && <div className="specialist-findings">{findings.slice(0, 3).map((finding, index) => <div key={`${finding.title}-${index}`}><i className={finding.severity} /><span><strong>{finding.title}</strong><small>{finding.detail}</small></span></div>)}</div>}
+              <footer><span>{evaluation ? `${findings.length} finding${findings.length === 1 ? "" : "s"} · ${(() => { try { return (JSON.parse(evaluation.evidenceJson) as string[]).length; } catch { return 0; } })()} evidence refs` : "No fabricated output"}</span>{recommendations[0] && <strong>Next: {recommendations[0].title}</strong>}</footer>
+            </article>;
+          })}
+        </div>
+      </section>
+      <section className="os-panel agent-operations-panel">
+        <div className="agent-operations-heading">
+          <PanelTitle eyebrow="AI STAFF OPERATIONS" title="Delegate with evidence, scope, and control" />
+          <p>The Chief of Staff routes internal work automatically. Client messages, publishing, scheduling changes, and financial actions stop at an owner approval and connector boundary.</p>
+        </div>
+        <div className="agent-roster" aria-label="AI staff roster">
+          {data.agentDefinitions.map((agent) => (
+            <article key={agent.id}>
+              <span className={cn("status-dot", agent.status !== "active" && "warning")} />
+              <div><strong>{agent.displayName}</strong><small>{agent.role}</small></div>
+              <p>{agent.purpose}</p>
+              <span className="agent-policy-chip">{agent.autonomyPolicy.replaceAll("_", " ")}</span>
+            </article>
+          ))}
+        </div>
+        <form className="agent-task-form" onSubmit={createAgentTask}>
+          <label><span>TASK TYPE</span><select name="taskType" defaultValue="workflow_review"><option value="workflow_review">Workflow review</option><option value="client_follow_up_draft">Client follow-up draft</option><option value="design_brief">Design brief</option><option value="schedule_plan">Schedule plan</option><option value="payment_review">Payment review</option><option value="content_brief">Content brief</option><option value="knowledge_review">Knowledge review</option><option value="outcome_analysis">Outcome analysis</option></select></label>
+          <label><span>PROJECT SCOPE</span><select name="projectId" defaultValue=""><option value="">Workspace only</option>{data.projects.filter((project) => !project.archivedAt).map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label>
+          <label><span>CLIENT SCOPE</span><select name="clientId" defaultValue=""><option value="">No client</option>{data.clients.filter((client) => !client.archivedAt).map((client) => <option key={client.id} value={client.id}>{fullName(client)}</option>)}</select></label>
+          <label><span>ACTION BOUNDARY</span><select name="requestedAction" defaultValue="analyze_internal"><option value="analyze_internal">Internal analysis</option><option value="draft_internal">Prepare a draft</option><option value="send_client_message">Send portal message (approval required)</option><option value="send_client_email">Send Gmail email (approval + connection)</option><option value="schedule_appointment">Schedule appointment (approval + Calendar mirror)</option><option value="publish_content">Publish content (approval only; no adapter)</option><option value="charge_payment">Charge payment (disabled; client Checkout only)</option></select></label>
+          <label><span>PRIORITY</span><select name="priority" defaultValue="50"><option value="30">Low</option><option value="50">Normal</option><option value="75">High</option><option value="95">Urgent</option></select></label>
+          <label className="agent-task-title"><span>TITLE</span><input name="title" required maxLength={180} placeholder="What outcome should the staff produce?" /></label>
+          <label className="agent-task-instruction"><span>INSTRUCTION</span><textarea name="instructionSummary" required rows={2} maxLength={1000} placeholder="Give the task its purpose and expected output. The system will attach only relevant scoped memory." /></label>
+          <label className="agent-action-message"><span>APPROVED MESSAGE BODY</span><textarea name="messageBody" rows={2} maxLength={2000} placeholder="Required only when the action boundary is Send client message." /></label>
+          <label><span>EMAIL SUBJECT</span><input name="subject" maxLength={200} placeholder="Required only for Gmail delivery" /></label>
+          <label><span>APPOINTMENT START</span><input name="startsAt" type="datetime-local" /></label>
+          <label><span>APPOINTMENT END</span><input name="endsAt" type="datetime-local" /></label>
+          <label><span>APPOINTMENT TYPE</span><select name="appointmentType" defaultValue="session"><option value="consult">Consult</option><option value="design_review">Design review</option><option value="session">Tattoo session</option><option value="healing_review">Healing review</option></select></label>
+          <button className="gold-button" disabled={saving}><Bot size={15} /> {saving ? "Routing…" : "Delegate task"}</button>
+        </form>
+        <div className="agent-task-ledger">
+          <div className="capture-stream-heading"><strong>Delegation ledger</strong><small>{data.agentTasks.length} task{data.agentTasks.length === 1 ? "" : "s"}</small></div>
+          {data.agentTasks.length ? data.agentTasks.slice(0, 12).map((task) => {
+            const agent = data.agentDefinitions.find((item) => item.agentKey === task.agentKey);
+            const approval = task.approvalId ? data.approvals.find((item) => item.id === task.approvalId) : null;
+            const contextCount = (() => { try { return (JSON.parse(task.contextMemoryIdsJson) as string[]).length; } catch { return 0; } })();
+            return <article key={task.id}>
+              <div className="agent-task-main"><span className={cn("agent-task-status", task.status)}>{task.status.replaceAll("_", " ")}</span><div><strong>{task.title}</strong><small>{agent?.displayName || task.agentKey.replaceAll("_", " ")} · priority {task.priority} · {contextCount} scoped memories · {formatDate(task.createdAt, true)}</small><p>{task.resultSummary || task.instructionSummary}</p>{task.errorSummary && <p className="error-copy">{task.errorSummary}</p>}</div></div>
+              <div className="agent-task-controls">
+                {task.approvalRequired && <span className="agent-approval-state"><ShieldCheck size={14} /> {approval?.status || "approval missing"}</span>}
+                {["held_for_approval", "queued", "failed"].includes(task.status) && <button className="outline-button" type="button" disabled={saving} onClick={() => void updateAgentTask(task.id, task.status === "failed" ? "retry" : "run")}>{task.status === "failed" ? "Retry" : "Run"}</button>}
+                {task.status === "ready_for_connector" && (["send_client_message", "send_client_email", "schedule_appointment"].includes(approval?.actionType || "") ? <button className="gold-button" type="button" disabled={saving} onClick={() => void executeConnectorTask(task.id)}>Execute connector</button> : <button className="outline-button" type="button" disabled>Connector unavailable</button>)}
+                {!['succeeded', 'cancelled', 'ready_for_connector'].includes(task.status) && <button className="text-button" type="button" disabled={saving} onClick={() => void updateAgentTask(task.id, "cancel")}>Cancel</button>}
+              </div>
+            </article>;
+          }) : <EmptyState icon={Bot} title="The AI staff is ready" body="Delegate a task or create new workspace activity. Every assignment will be routed, scoped, and recorded here." />}
+        </div>
+        <div className="connector-operations">
+          <div className="capture-stream-heading"><strong>Secure connector gateway</strong><small>Least-privilege adapters · no credentials stored here</small></div>
+          <div className="connector-grid">
+            {data.connectorDefinitions.map((connector) => (
+              <article key={connector.id}>
+                <div><span className={cn("status-dot", connector.status !== "available" && "warning")} /><strong>{connector.displayName}</strong></div>
+                <small>{connector.category} · {connector.healthStatus.replaceAll("_", " ")}</small>
+                <p>{connector.description}</p>
+                {data.connectorAccounts.find((account) => account.connectorKey === connector.connectorKey && account.status === "connected")?.accountEmail && <span className="connector-account-email">{data.connectorAccounts.find((account) => account.connectorKey === connector.connectorKey && account.status === "connected")?.accountEmail}</span>}
+                {(["gmail", "google_calendar"].includes(connector.connectorKey)) && <button className={connector.status === "available" ? "text-button" : "outline-button"} type="button" disabled={saving} onClick={() => void manageGoogleConnector(connector.connectorKey as "gmail" | "google_calendar", connector.status === "available")}>{connector.status === "available" ? "Disconnect" : "Connect Google"}</button>}
+                <footer><span>{connector.status.replaceAll("_", " ")}</span><span>{connector.credentialState.replaceAll("_", " ")}</span></footer>
+              </article>
+            ))}
+          </div>
+          <div className="connector-execution-list">
+            {data.connectorExecutions.slice(0, 8).map((execution) => (
+              <article key={execution.id}><span className={cn("agent-task-status", execution.status)}>{execution.status}</span><div><strong>{data.connectorDefinitions.find((connector) => connector.connectorKey === execution.connectorKey)?.displayName || execution.connectorKey} · {execution.actionType.replaceAll("_", " ")}</strong><small>{formatDate(execution.createdAt, true)} · attempt {execution.attempts}</small><p>{execution.resultSummary || execution.errorSummary || "Execution recorded."}</p></div></article>
+            ))}
+            {!data.connectorExecutions.length && <p className="connector-empty">Connector activity will appear here after an approved action, social synchronization, or client checkout.</p>}
+          </div>
+        </div>
+      </section>
+      <section className="os-panel universal-capture-panel">
+        <div className="universal-capture-intro">
+          <PanelTitle eyebrow="UNIVERSAL CAPTURE" title="One stream for everything the studio learns" />
+          <p>Owner notes, client activity, workflow changes, uploads, AI events, and consented external evidence are normalized here and connected to their source records.</p>
+        </div>
+        <form className="capture-note-form" onSubmit={captureNote}>
+          <label><span>TITLE</span><input name="title" required maxLength={240} placeholder="What should Legacy OS remember?" /></label>
+          <label><span>CONNECT TO PROJECT</span><select name="projectId" defaultValue=""><option value="">Workspace-wide note</option>{data.projects.filter((project) => !project.archivedAt).map((project) => <option key={project.id} value={project.id}>{project.title}</option>)}</select></label>
+          <label className="capture-note-body"><span>NOTE</span><textarea name="body" required maxLength={4000} rows={3} placeholder="Capture an observation, preference, technique lesson, decision, or follow-up." /></label>
+          <button className="gold-button" disabled={saving}><BrainCircuit size={15} /> {saving ? "Capturing…" : "Capture and connect"}</button>
+        </form>
+        <div className="capture-stream">
+          <div className="capture-stream-heading"><strong>Recent normalized signals</strong><small>{data.captureEvents.length} loaded</small></div>
+          {data.captureEvents.length ? data.captureEvents.slice(0, 12).map((item) => {
+            const project = data.projects.find((candidate) => candidate.id === item.projectId);
+            return <article key={item.id}>
+              <span className={cn("capture-channel", item.channel)}>{item.channel}</span>
+              <div><strong>{item.title}</strong><small>{project?.title || item.sourceType.replaceAll("_", " ")} · {formatDate(item.occurredAt, true)}</small>{item.summary && <p>{item.summary}</p>}</div>
+              <span className="capture-status"><CheckCircle2 size={14} /> {item.status}</span>
+            </article>;
+          }) : <EmptyState icon={Inbox} title="The capture stream is ready" body="New owner, client, workflow, upload, AI, and consented external events will appear here without copying private raw content." />}
+        </div>
       </section>
       <div className="operations-grid lifecycle-operations-grid">
         <section className="os-panel lifecycle-control-panel">
@@ -3013,6 +4169,79 @@ function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refres
           </div>
         </section>
       </div>
+      <section className="os-panel craft-intelligence-panel">
+        <div className="craft-intelligence-heading">
+          <div>
+            <PanelTitle eyebrow="PROFESSIONAL CRAFT INTELLIGENCE" title="Connect session conditions to healed results" />
+            <p>Legacy learns only from completed, real projects with a sufficiently complete session record and a late-healing or healed owner assessment. Associations never replace Joshua’s professional judgment.</p>
+          </div>
+          <button className="gold-button" type="button" disabled={saving} onClick={() => void runCraftAnalysis()}><BrainCircuit size={15} /> {saving ? "Evaluating…" : "Evaluate craft evidence"}</button>
+        </div>
+        <div className="craft-threshold-grid">
+          <span><strong>{data.craftIntelligence.thresholds.completedProjects}+</strong><small>completed projects</small></span>
+          <span><strong>{data.craftIntelligence.thresholds.distinctClients}+</strong><small>distinct clients</small></span>
+          <span><strong>{Math.round(data.craftIntelligence.thresholds.effectBps / 100)}%+</strong><small>observed lift</small></span>
+          <span><strong>{Math.round(data.craftIntelligence.thresholds.confidenceBps / 100)}%+</strong><small>minimum confidence</small></span>
+          <span><strong>{Math.round(data.craftIntelligence.thresholds.recordCompletenessBps / 100)}%+</strong><small>record completeness</small></span>
+        </div>
+        <div className="craft-capture-grid">
+          <form className="modal-form craft-evidence-form" onSubmit={saveSessionCraft}>
+            <header><strong>Session conditions</strong><small>Private operational evidence</small></header>
+            <label><span>COMPLETED SESSION</span><select name="sessionId" required defaultValue=""><option value="" disabled>Select completed session</option>{completedCraftSessions.map((session) => <option key={session.id} value={session.id}>{data.projects.find((project) => project.id === session.projectId)?.title || "Project"} · Session {session.sessionNumber}</option>)}</select></label>
+            <div className="field-row">
+              <label><span>MACHINE</span><input name="machineName" required placeholder="Machine name or model" /></label>
+              <label><span>MACHINE TYPE</span><select name="machineType" required defaultValue=""><option value="" disabled>Select type</option><option value="rotary_pen">Rotary pen</option><option value="rotary_direct_drive">Rotary direct drive</option><option value="coil">Coil</option><option value="other">Other</option></select></label>
+            </div>
+            <div className="field-row">
+              <label><span>NEEDLE GROUPINGS</span><input name="needleGroupings" required placeholder="3RL, 9CM" /></label>
+              <label><span>INK / WASH</span><input name="inkWash" required placeholder="Black, medium grey wash" /></label>
+            </div>
+            <div className="field-row">
+              <label><span>VOLTAGE MIN</span><input name="voltageMin" required type="number" min="3" max="15" step="0.1" placeholder="7.5" /></label>
+              <label><span>VOLTAGE MAX</span><input name="voltageMax" required type="number" min="3" max="15" step="0.1" placeholder="8.5" /></label>
+            </div>
+            <div className="field-row">
+              <label><span>TECHNIQUES</span><input name="techniques" required placeholder="Smooth shading, whip shading" /></label>
+              <label><span>BODY AREA</span><input name="bodyArea" required placeholder="Outer forearm" /></label>
+            </div>
+            <div className="field-row">
+              <label><span>SKIN RESPONSE</span><select name="skinResponse" required defaultValue=""><option value="" disabled>Select observed response</option><option value="low_trauma">Low trauma</option><option value="expected">Expected response</option><option value="reactive">Reactive</option><option value="highly_reactive">Highly reactive</option></select></label>
+              <label><span>FRESH RESULT</span><select name="freshOutcomeRating" required defaultValue=""><option value="" disabled>Rate 1–5</option>{[1,2,3,4,5].map((rating) => <option key={rating} value={rating}>{rating} / 5</option>)}</select></label>
+            </div>
+            <label><span>CLIENT RESPONSE</span><input name="clientResponse" placeholder="Observed client response after the session" /></label>
+            <label><span>JOSHUA&apos;S ASSESSMENT</span><textarea name="ownerAssessment" rows={2} placeholder="What worked, what did not, and what to watch while healing" /></label>
+            <button className="outline-button wide" disabled={saving || !completedCraftSessions.length}><Save size={15} /> Save session evidence</button>
+          </form>
+          <form className="modal-form craft-evidence-form" onSubmit={saveHealingAssessment}>
+            <header><strong>Healing outcome</strong><small>Owner-observed evidence, not medical advice</small></header>
+            <label><span>CLIENT CHECK-IN</span><select name="checkinId" required defaultValue=""><option value="" disabled>Select submitted check-in</option>{assessableHealing.map((checkin) => <option key={checkin.id} value={checkin.id}>{data.projects.find((project) => project.id === checkin.projectId)?.title || "Project"} · Day {checkin.checkpointDay}</option>)}</select></label>
+            <div className="field-row">
+              <label><span>HEALING PHASE</span><select name="healingPhase" required defaultValue=""><option value="" disabled>Select phase</option><option value="early_healing">Early healing</option><option value="late_healing">Late healing</option><option value="healed">Healed</option></select></label>
+              <label><span>OVERALL OUTCOME</span><select name="healedOutcomeRating" required defaultValue=""><option value="" disabled>Rate 1–5</option>{[1,2,3,4,5].map((rating) => <option key={rating} value={rating}>{rating} / 5</option>)}</select></label>
+            </div>
+            <div className="craft-rating-grid">
+              {[['retentionRating','Retention'],['saturationRating','Saturation'],['lineQualityRating','Line quality'],['smoothnessRating','Smoothness']].map(([name, label]) => <label key={name}><span>{label.toUpperCase()}</span><select name={name} defaultValue=""><option value="">Not rated</option>{[1,2,3,4,5].map((rating) => <option key={rating} value={rating}>{rating}</option>)}</select></label>)}
+            </div>
+            <label><span>JOSHUA&apos;S ASSESSMENT</span><textarea name="ownerAssessment" required rows={3} placeholder="Describe retention, settling, consistency, and any limitations in the evidence" /></label>
+            <label><span>CLIENT FEEDBACK SUMMARY</span><input name="clientFeedbackSummary" placeholder="Optional summary of the client's saved feedback" /></label>
+            <label className="craft-checkbox"><input name="touchupRequired" type="checkbox" /><span>Touch-up appears required</span></label>
+            <button className="outline-button wide" disabled={saving || !assessableHealing.length}><HeartHandshake size={15} /> Save healed outcome</button>
+          </form>
+        </div>
+        <div className="craft-pattern-ledger">
+          <div className="capture-stream-heading"><strong>Evidence-backed setup patterns</strong><small>{data.craftIntelligence.patterns.length} tracked · {data.craftIntelligence.patterns.filter((pattern) => pattern.status === "active").length} active</small></div>
+          {data.craftIntelligence.patterns.length ? <div className="craft-pattern-grid">{data.craftIntelligence.patterns.map((pattern) => <article key={pattern.id}>
+            <header><span className={cn("agent-task-status", pattern.status === "active" ? "succeeded" : "queued")}>{pattern.status}</span><strong>{Math.round(pattern.confidenceBps / 100)}%</strong></header>
+            <h3>{pattern.name}</h3><p>{pattern.description}</p><small>{pattern.whyItMatters}</small>
+            <footer><span>{pattern.supportCount} observations</span><span>{pattern.distinctProjects} projects</span><span>{pattern.distinctClients} clients</span></footer>
+          </article>)}</div> : <EmptyState icon={BrainCircuit} title="Craft learning is waiting for healed evidence" body="Complete real sessions, capture their equipment and technique conditions, then add Joshua’s late-healing or healed assessment. Candidate patterns appear before recommendations are allowed." />}
+          {data.craftIntelligence.recommendations.some((item) => item.status === "proposed") && <div className="craft-recommendation-list">
+            <div className="capture-stream-heading"><strong>Owner review suggestions</strong><small>Internal guidance only</small></div>
+            {data.craftIntelligence.recommendations.filter((item) => item.status === "proposed").map((item) => <article key={item.id}><ShieldCheck size={17} /><div><strong>{item.title}</strong><p>{item.rationale}</p><small>{Math.round(item.confidenceBps / 100)}% confidence · Joshua decides whether it applies</small></div></article>)}
+          </div>}
+          {data.craftIntelligence.runs[0] && <div className="craft-latest-run"><ShieldCheck size={15} /><span><strong>Latest evaluation</strong><small>{data.craftIntelligence.runs[0].summary} · {formatDate(data.craftIntelligence.runs[0].completedAt, true)}</small></span></div>}
+        </div>
+      </section>
       <section className="os-panel lifecycle-content-panel">
         <PanelTitle eyebrow="CONTENT SAFETY GATE" title="Draft from eligible media, then approve manually" />
         <form className="modal-form lifecycle-content-form" onSubmit={createContentCandidate}>
@@ -3276,16 +4505,20 @@ function FinanceView({ data, refresh, notify }: { data: WorkspaceData; refresh: 
 function ModuleView({
   type,
   data,
+  refresh,
+  notify,
 }: {
   type: "knowledge" | "content";
   data: WorkspaceData;
+  refresh: () => Promise<void>;
+  notify: (message: string, error?: boolean) => void;
 }) {
   const config = {
     knowledge: {
       icon: Library,
       title: "Your knowledge library starts empty",
       body: "Technique notes, lessons, references, and evidence will be captured from real projects—never prefilled with fictional work.",
-      labels: ["Techniques", "Lessons", "References", "Project notes"],
+      labels: ["Memory", "Techniques", "Lessons", "References", "Project notes"],
     },
     content: {
       icon: ImageIcon,
@@ -3295,11 +4528,23 @@ function ModuleView({
     },
   }[type];
   const [activeTab, setActiveTab] = useState(config.labels[0]);
+  const [memoryBusy, setMemoryBusy] = useState(false);
   const Icon = config.icon;
-  const records = useMemo(() => {
+  const records = useMemo<Array<{ id: string; title: string; detail: string; meta: string; memory?: MemoryRecord }>>(() => {
     const operationalProjects = data.projects.filter((project) => !project.isTest && !project.archivedAt);
     const operationalProjectIds = new Set(operationalProjects.map((project) => project.id));
     if (type === "knowledge") {
+      if (activeTab === "Memory") {
+        return data.memoryRecords
+          .filter((memory) => memory.status === "active")
+          .map((memory) => ({
+            id: memory.id,
+            title: memory.title,
+            detail: memory.content,
+            meta: `${memory.scopeType} · ${memory.memoryType.replaceAll("_", " ")} · ${Math.round(memory.confidenceBps / 100)}% · ${memory.verificationStatus.replaceAll("_", " ")} · v${memory.version}`,
+            memory,
+          }));
+      }
       if (activeTab === "Techniques") {
         const tags = new Map<string, number>();
         operationalProjects.forEach((project) =>
@@ -3390,6 +4635,39 @@ function ModuleView({
     }
     return [];
   }, [activeTab, data, type]);
+
+  async function consolidateMemory() {
+    setMemoryBusy(true);
+    try {
+      const result = await api<{ created: number; reinforced: number; superseded: number }>("/api/memory", { method: "POST" });
+      notify(`Memory updated: ${result.created} created, ${result.reinforced} reinforced, ${result.superseded} superseded.`);
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to consolidate memory", true);
+    } finally {
+      setMemoryBusy(false);
+    }
+  }
+
+  async function updateMemory(memory: MemoryRecord, action: "verify" | "revoke") {
+    const reason = action === "revoke" ? window.prompt("Why should this memory no longer be used?") : null;
+    if (action === "revoke" && !reason?.trim()) return;
+    setMemoryBusy(true);
+    try {
+      await api("/api/memory", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: memory.id, action, reason }),
+      });
+      notify(action === "verify" ? "Memory verified by owner." : "Memory revoked and removed from future context.");
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update memory", true);
+    } finally {
+      setMemoryBusy(false);
+    }
+  }
+
   return (
     <section className="module-surface">
       <div className="module-tabs">
@@ -3402,6 +4680,11 @@ function ModuleView({
             {label}
           </button>
         ))}
+        {type === "knowledge" && activeTab === "Memory" && (
+          <button className="memory-refresh-button" disabled={memoryBusy} onClick={() => void consolidateMemory()}>
+            <BrainCircuit size={14} /> {memoryBusy ? "Consolidating…" : "Consolidate captures"}
+          </button>
+        )}
       </div>
       <section className={cn("os-panel", !records.length && "tall-empty")}>
         {records.length ? (
@@ -3413,6 +4696,12 @@ function ModuleView({
                   <strong>{record.title}</strong>
                   <p>{record.detail}</p>
                   <small>{record.meta}</small>
+                  {record.memory && (
+                    <div className="memory-actions">
+                      <button className="text-button" disabled={memoryBusy || record.memory.verificationStatus === "owner_verified"} onClick={() => void updateMemory(record.memory!, "verify")}><Check size={13} /> {record.memory.verificationStatus === "owner_verified" ? "Verified" : "Verify"}</button>
+                      <button className="text-button danger-text" disabled={memoryBusy} onClick={() => void updateMemory(record.memory!, "revoke")}>Revoke</button>
+                    </div>
+                  )}
                 </div>
               </article>
             ))}
@@ -3517,6 +4806,23 @@ function SettingsView({
         error instanceof Error ? error.message : "Unable to update automations",
         true,
       );
+    } finally {
+      setAutomationBusy(false);
+    }
+  }
+
+  async function replayDeadLetter(jobId: string) {
+    setAutomationBusy(true);
+    try {
+      await api("/api/worker", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "replay", jobId }),
+      });
+      notify("The failed job was copied into a fresh, auditable queue record.");
+      await loadAutomations();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to replay failed work", true);
     } finally {
       setAutomationBusy(false);
     }
@@ -3736,6 +5042,22 @@ function SettingsView({
               <p><ShieldCheck size={15} /> Publishing, payments, and permissions require approval</p>
               <p><ShieldCheck size={15} /> Destructive or health-sensitive actions are never automatic</p>
             </div>
+          </section>
+          <section className="os-panel setting-card always-on-schedules-card">
+            <PanelTitle eyebrow="DURABLE SCHEDULER" title="Always On schedules" />
+            <p>Schedules survive restarts and advance only after a worker safely claims them.</p>
+            <div className="automation-schedule-list">
+              {automation?.schedules.map((schedule) => <div key={schedule.id}><span className={cn("status-dot", !schedule.enabled && "warning")} /><div><strong>{schedule.displayName}</strong><small>Next {formatDate(schedule.nextRunAt, true)} · {schedule.lastOutcome || "waiting"}</small></div></div>)}
+            </div>
+          </section>
+          <section className="os-panel setting-card worker-health-card">
+            <PanelTitle eyebrow="WORKER HEARTBEAT" title={automation?.workerRuns[0] ? automation.workerRuns[0].status.replaceAll("_", " ") : "Waiting for first run"} />
+            {automation?.workerRuns[0] ? <div className="worker-metrics"><p><strong>{automation.workerRuns[0].jobsProcessed}</strong><span>jobs processed</span></p><p><strong>{automation.workerRuns[0].playbookStepsProcessed}</strong><span>playbook steps</span></p><p><strong>{automation.workerRuns[0].leasesRecovered}</strong><span>leases recovered</span></p><p><strong>{automation.workerRuns[0].jobsFailed}</strong><span>failures</span></p></div> : <p>The first authenticated worker or owner-triggered run will appear here.</p>}
+            <small>Last heartbeat: {formatDate(automation?.workerRuns[0]?.completedAt || automation?.workerRuns[0]?.startedAt, true)}</small>
+          </section>
+          <section className="os-panel setting-card dead-letter-card">
+            <PanelTitle eyebrow="FAILURE RECOVERY" title="Dead-letter queue" />
+            {automation?.deadLetters.length ? automation.deadLetters.slice(0, 6).map((letter) => <div className="dead-letter-row" key={letter.id}><div><strong>{letter.jobType.replaceAll("_", " ")}</strong><small>{letter.attempts} attempts · {letter.errorSummary}</small></div>{letter.status === "open" ? <button className="outline-button" type="button" disabled={automationBusy} onClick={() => void replayDeadLetter(letter.jobId)}>Replay safely</button> : <span className="agent-task-status succeeded">replayed</span>}</div>) : <p className="settings-placeholder">No work has exhausted its retry policy.</p>}
           </section>
           <section className="os-panel setting-card automation-queue-card">
             <PanelTitle eyebrow="LIVE QUEUE" title="Recent automation jobs" />
@@ -4253,7 +5575,6 @@ function ClientPortal({
     }, 0);
     return () => window.clearTimeout(handle);
   }, []);
-
   const loadSocial = useCallback(async () => {
     try {
       setSocial(
@@ -4289,6 +5610,12 @@ function ClientPortal({
     const handle = window.setTimeout(() => void loadLifecycle(), 0);
     return () => window.clearTimeout(handle);
   }, [loadLifecycle, tab]);
+  const refreshPortalRealtime = useCallback(() => {
+    void load();
+    if (tab === "healing") void loadLifecycle();
+    if (tab === "privacy") void loadSocial();
+  }, [load, loadLifecycle, loadSocial, tab]);
+  const realtimeStatus = useRealtimeFeed("client", token, refreshPortalRealtime);
   const project = data?.projects.find((item) => item.id === projectId) || data?.projects[0];
   const messages = useMemo(
     () =>
@@ -4620,7 +5947,7 @@ function ClientPortal({
         </nav>
         <div className="client-account">
           <span>{data.client.firstName.slice(0, 1)}{data.client.lastName.slice(0, 1)}</span>
-          <div><strong>{fullName(data.client)}</strong><small>Client portal</small></div>
+          <div><strong>{fullName(data.client)}</strong><small>Client portal · <span className={cn("realtime-status", realtimeStatus)}><i />{realtimeStatus}</span></small></div>
           <button className="icon-button" onClick={onExit} aria-label="Exit portal"><X size={17} /></button>
         </div>
       </header>
@@ -4932,6 +6259,7 @@ export function LegacyApp({
       setLoading(false);
     }
   }, []);
+  const realtimeStatus = useRealtimeFeed("owner", null, load, mode === "owner" && Boolean(data));
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
@@ -4941,17 +6269,26 @@ export function LegacyApp({
         window.sessionStorage.setItem("legacy_client_invitation", token);
         setPortalToken(token);
         setMode("portal");
-      } else if (params.has("payment")) {
+          } else if (params.has("payment")) {
         const storedToken = window.sessionStorage.getItem("legacy_client_invitation");
         if (storedToken) {
           setPortalToken(storedToken);
-          setMode("portal");
-        }
-      }
-      void load();
+              setMode("portal");
+            }
+          }
+          const connectorResult = params.get("connector");
+          if (connectorResult === "connected") notify(`${params.get("provider") === "gmail" ? "Gmail" : "Google Calendar"} connected securely.`);
+          else if (connectorResult === "failed") notify("Google connection was not completed. Check the OAuth configuration and try again.", true);
+          if (connectorResult) {
+            params.delete("connector");
+            params.delete("provider");
+            const query = params.toString();
+            window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}`);
+          }
+          void load();
     }, 0);
     return () => window.clearTimeout(handle);
-  }, [load]);
+      }, [load, notify]);
 
   async function generateBriefing() {
     setGenerating(true);
@@ -5041,20 +6378,21 @@ export function LegacyApp({
           onMenu={() => setMenuOpen(true)}
           onNew={openNew}
           refresh={load}
+          realtimeStatus={realtimeStatus}
         />
         <div className="owner-content">
           {view === "dashboard" && <Dashboard data={data} firstName={actualFirstName} briefing={briefing} generating={generating} onGenerate={generateBriefing} onClient={() => setModal("client")} onProject={() => setModal("project")} onAppointment={() => setModal("appointment")} onView={(nextView) => navigate({ view: nextView })} />}
           {view === "projects" && <ProjectsView key={navigationTarget.view === "projects" ? navigationTarget.id || "projects" : "projects"} data={data} onCreate={() => setModal("project")} refresh={load} notify={notify} targetId={navigationTarget.view === "projects" ? navigationTarget.id : undefined} />}
           {view === "clients" && <ClientsView key={navigationTarget.view === "clients" ? navigationTarget.id || "clients" : "clients"} data={data} onCreate={() => setModal("client")} onInvite={setInviteClient} refresh={load} notify={notify} onView={(nextView) => navigate({ view: nextView })} targetId={navigationTarget.view === "clients" ? navigationTarget.id : undefined} />}
-          {view === "calendar" && <CalendarView key={navigationTarget.view === "calendar" ? navigationTarget.id || "calendar" : "calendar"} data={data} onCreate={() => setModal("appointment")} targetId={navigationTarget.view === "calendar" ? navigationTarget.id : undefined} />}
+          {view === "calendar" && <CalendarView key={navigationTarget.view === "calendar" ? navigationTarget.id || "calendar" : "calendar"} data={data} onCreate={() => setModal("appointment")} refresh={load} notify={notify} targetId={navigationTarget.view === "calendar" ? navigationTarget.id : undefined} />}
           {view === "inbox" && <InboxView key={navigationTarget.view === "inbox" ? navigationTarget.id || "inbox" : "inbox"} data={data} onSent={load} notify={notify} targetId={navigationTarget.view === "inbox" ? navigationTarget.id : undefined} />}
           {view === "design" && <DesignStudio key={navigationTarget.view === "design" ? navigationTarget.id || "design" : "design"} data={data} refresh={load} notify={notify} targetId={navigationTarget.view === "design" ? navigationTarget.id : undefined} />}
           {view === "chief" && <ChiefView data={data} briefing={briefing} generating={generating} onGenerate={generateBriefing} />}
           {view === "operations" && <OperationsView data={data} refresh={load} notify={notify} />}
           {view === "analytics" && <AnalyticsView data={data} onNavigate={navigate} />}
-          {(view === "knowledge" || view === "content") && (
-            <ModuleView key={view} type={view} data={data} />
-          )}
+              {(view === "knowledge" || view === "content") && (
+                <ModuleView key={view} type={view} data={data} refresh={load} notify={notify} />
+              )}
           {view === "finances" && <FinanceView data={data} refresh={load} notify={notify} />}
           {view === "settings" && <SettingsView data={data} notify={notify} refresh={load} onView={(nextView) => navigate({ view: nextView })} personalization={personalization} onPersonalization={updatePersonalization} />}
         </div>
