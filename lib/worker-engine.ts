@@ -1,6 +1,7 @@
 import { and, asc, desc, eq, lte } from "drizzle-orm";
 import { getDb } from "../db";
 import {
+  auditEvents,
   automationDeadLetters,
   automationSchedules,
   automationWorkerRuns,
@@ -10,6 +11,8 @@ import {
   runAutomationSweep,
 } from "./automation-engine";
 import { processDuePlaybookSteps, runPlaybook } from "./playbook-engine";
+import { backfillAuditCaptureEvents } from "./capture-engine";
+import { consolidateCaptureMemory } from "./memory-engine";
 
 type Db = ReturnType<typeof getDb>;
 const makeId = (prefix: string) => `${prefix}_${crypto.randomUUID()}`;
@@ -74,6 +77,12 @@ export async function runAlwaysOnWorker(workspaceId: string, triggerType = "sche
           await runPlaybook({ workspaceId, playbookKey: "daily_studio_brief", sourceEventType: "scheduled_daily_brief", idempotencyKey: `schedule:${schedule.id}:${schedule.nextRunAt}` }, db);
         } else {
           maintenanceRan = true;
+          const recentAuditRows = await db.select().from(auditEvents)
+            .where(eq(auditEvents.workspaceId, workspaceId))
+            .orderBy(desc(auditEvents.occurredAt))
+            .limit(25);
+          await backfillAuditCaptureEvents(workspaceId, recentAuditRows, db);
+          await consolidateCaptureMemory(workspaceId, db);
           const sweep = await runAutomationSweep(workspaceId, `schedule:${schedule.scheduleKey}`, db, 25);
           jobsProcessed += sweep.processed;
           jobsSucceeded += sweep.succeeded;

@@ -19,10 +19,12 @@ test("unexpected server failures never expose query or provider details to clien
   assert.match(api, /Internal query, connector, and provider details must never reach a browser/);
 });
 
-test("workspace load failure remains retryable with a bounded public message", async () => {
-  const [route, ui] = await Promise.all([read("app/api/workspace/route.ts"), read("app/legacy-app.tsx")]);
+test("workspace reads stay fast while historical learning maintenance runs in the background worker", async () => {
+  const [route, worker, ui] = await Promise.all([read("app/api/workspace/route.ts"), read("lib/worker-engine.ts"), read("app/legacy-app.tsx")]);
   assert.match(route, /routeError\(error, "Unable to load workspace"\)/);
-  assert.match(route, /backfillAuditCaptureEvents\([\s\S]*?\.catch\(\(\) => null\)/);
+  assert.doesNotMatch(route, /backfillAuditCaptureEvents|consolidateCaptureMemory|runAutomationSweepIfDue/);
+  assert.match(worker, /backfillAuditCaptureEvents\(workspaceId, recentAuditRows, db\)/);
+  assert.match(worker, /consolidateCaptureMemory\(workspaceId, db\)/);
   assert.match(ui, /Legacy OS could not load the workspace/);
   assert.match(ui, />Try again</);
 });

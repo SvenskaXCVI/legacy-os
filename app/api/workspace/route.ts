@@ -42,10 +42,7 @@ import {
   routeError,
   WORKSPACE_ID,
 } from "../_lib";
-import { runAutomationSweepIfDue } from "../../../lib/automation-engine";
 import { buildTattooJourney } from "../../../lib/tattoo-journey";
-import { backfillAuditCaptureEvents } from "../../../lib/capture-engine";
-import { consolidateCaptureMemory } from "../../../lib/memory-engine";
 import { ensureAgentRegistry } from "../../../lib/agent-engine";
 import { ensureConnectorRegistry } from "../../../lib/connector-engine";
 import { listPlaybookOperations } from "../../../lib/playbook-engine";
@@ -84,22 +81,12 @@ export async function GET(request: Request) {
         set: { displayName, updatedAt: new Date().toISOString() },
       });
 
-    await runAutomationSweepIfDue(
-      WORKSPACE_ID,
-      "workspace_opened",
-      db,
-    ).catch(() => null);
-
     const existingAuditRows = await db
       .select()
       .from(auditEvents)
       .where(eq(auditEvents.workspaceId, WORKSPACE_ID))
       .orderBy(desc(auditEvents.occurredAt))
       .limit(100);
-    // Historical normalization improves intelligence but must never prevent the
-    // owner from opening the operational workspace.
-    await backfillAuditCaptureEvents(WORKSPACE_ID, existingAuditRows, db).catch(() => null);
-    await consolidateCaptureMemory(WORKSPACE_ID, db).catch(() => null);
     await ensureAgentRegistry(WORKSPACE_ID, db);
     await ensureConnectorRegistry(WORKSPACE_ID, db);
     await ensureToolRegistry(WORKSPACE_ID, db);
