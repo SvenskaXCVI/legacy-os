@@ -4,6 +4,7 @@ import { getDb } from "../../../db";
 import { workspaces } from "../../../db/schema";
 import { eq } from "drizzle-orm";
 import { authConfiguration, WORKSPACE_ID } from "../_lib";
+import { LEGACY_OS_RELEASE, LEGACY_OS_VERSION } from "../../../lib/version";
 
 export async function GET() {
   const checkedAt = new Date().toISOString();
@@ -25,6 +26,8 @@ export async function GET() {
     );
     return Response.json({
       status: "healthy",
+      version: LEGACY_OS_VERSION,
+      release: LEGACY_OS_RELEASE,
       checkedAt,
       services: {
         application: "healthy",
@@ -61,6 +64,8 @@ export async function GET() {
     return Response.json(
       {
         status: "degraded",
+        version: LEGACY_OS_VERSION,
+        release: LEGACY_OS_RELEASE,
         checkedAt,
         services: {
           application: "healthy",

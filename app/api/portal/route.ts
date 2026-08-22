@@ -8,6 +8,7 @@ import {
   clientMessages,
   clients,
   portalInvitations,
+  projectCandidates,
   projects,
   projectUpdates,
   workspaces,
@@ -19,6 +20,7 @@ import {
   WORKSPACE_ID,
 } from "../_lib";
 import { captureAutomationSignal } from "../../../lib/automation-engine";
+import { extractCandidateProject } from "../../../lib/intake-engine";
 
 export async function GET(request: Request) {
   try {
@@ -42,6 +44,8 @@ export async function GET(request: Request) {
             id: clients.id,
             firstName: clients.firstName,
             lastName: clients.lastName,
+            displayName: clients.displayName,
+            preferredName: clients.preferredName,
             status: clients.status,
           })
           .from(clients)
@@ -163,6 +167,32 @@ export async function GET(request: Request) {
             .orderBy(desc(projectUpdates.createdAt)),
         ])
       : [[], [], []];
+    const candidateRows = await db
+      .select({
+        id: projectCandidates.id,
+        requestedTitle: projectCandidates.requestedTitle,
+        placement: projectCandidates.placement,
+        sizeDescription: projectCandidates.sizeDescription,
+        styleTagsJson: projectCandidates.styleTagsJson,
+        concept: projectCandidates.concept,
+        budgetMinCents: projectCandidates.budgetMinCents,
+        budgetMaxCents: projectCandidates.budgetMaxCents,
+        targetDate: projectCandidates.targetDate,
+        status: projectCandidates.status,
+        confidenceBps: projectCandidates.confidenceBps,
+        proposedProjectId: projectCandidates.proposedProjectId,
+        clientResponse: projectCandidates.clientResponse,
+        submittedAt: projectCandidates.submittedAt,
+        updatedAt: projectCandidates.updatedAt,
+      })
+      .from(projectCandidates)
+      .where(
+        and(
+          eq(projectCandidates.clientId, access.clientId),
+          eq(projectCandidates.workspaceId, access.workspaceId),
+        ),
+      )
+      .orderBy(desc(projectCandidates.submittedAt));
 
     if (access.invitation) {
       await db
@@ -180,6 +210,7 @@ export async function GET(request: Request) {
       messages: messageRows,
       assets: assetRows,
       updates: updateRows,
+      candidates: candidateRows,
       access: {
         expiresAt: access.invitation?.expiresAt ?? null,
         hint: access.invitation?.tokenHint ?? "verified-account",
@@ -198,17 +229,123 @@ export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as {
       token?: string;
-      action?: "message" | "approval";
+      action?: "message" | "approval" | "project_intake";
       projectId?: string;
       body?: string;
       approvalId?: string;
       decision?: "approved" | "revision";
       reason?: string;
+      requestKey?: string;
+      concept?: string;
+      placement?: string;
+      sizeDescription?: string;
+      style?: string;
+      referencesSummary?: string;
+      constraints?: string;
+      budgetMin?: number;
+      budgetMax?: number;
+      targetDate?: string;
     };
     const access = await resolveClientAccess(request, payload.token ?? null);
     if (!access) return jsonError("Portal access is invalid or expired", 401);
     const db = getDb();
     const now = new Date().toISOString();
+
+    if (payload.action === "project_intake") {
+      if (!payload.requestKey?.trim() || !payload.concept?.trim()) {
+        return jsonError("A project concept and request key are required");
+      }
+      const prior = await db
+        .select({ id: projectCandidates.id, status: projectCandidates.status })
+        .from(projectCandidates)
+        .where(
+          and(
+            eq(projectCandidates.workspaceId, access.workspaceId),
+            eq(projectCandidates.sourceType, "client_portal"),
+            eq(projectCandidates.sourceId, payload.requestKey.trim()),
+          ),
+        )
+        .get();
+      if (prior) {
+        return Response.json({ ...prior, idempotent: true });
+      }
+      const extracted = extractCandidateProject(payload);
+      if (extracted.concept.length < 10) {
+        return jsonError("Please describe the tattoo concept in a little more detail");
+      }
+      const candidateId = makeId("candidate");
+      await db.batch([
+        db.insert(projectCandidates).values({
+          id: candidateId,
+          workspaceId: access.workspaceId,
+          clientId: access.clientId,
+          sourceType: "client_portal",
+          sourceId: payload.requestKey.trim(),
+          requestedTitle: extracted.requestedTitle,
+          placement: extracted.placement,
+          sizeDescription: extracted.sizeDescription,
+          styleTagsJson: JSON.stringify(extracted.styleTags),
+          concept: extracted.concept,
+          referencesSummary: extracted.referencesSummary,
+          constraints: extracted.constraints,
+          budgetMinCents: extracted.budgetMinCents,
+          budgetMaxCents: extracted.budgetMaxCents,
+          targetDate: extracted.targetDate,
+          status: "pending_review",
+          confidenceBps: extracted.confidenceBps,
+          extractionMethod: extracted.extractionMethod,
+          evidenceJson: JSON.stringify(extracted.evidence),
+          submittedAt: now,
+          createdAt: now,
+          updatedAt: now,
+        }),
+        db.insert(auditEvents).values({
+          id: makeId("audit"),
+          workspaceId: access.workspaceId,
+          actorType: "client",
+          actorId: access.clientId,
+          action: "project_candidate.submitted",
+          targetType: "project_candidate",
+          targetId: candidateId,
+          riskLevel: "low",
+          outcome: "structured",
+          metadataJson: JSON.stringify({
+            extractionMethod: extracted.extractionMethod,
+            confidenceBps: extracted.confidenceBps,
+          }),
+          occurredAt: now,
+        }),
+      ]);
+      await captureAutomationSignal(
+        {
+          workspaceId: access.workspaceId,
+          eventType: "project_candidate_submitted",
+          sourceType: "project_candidate",
+          sourceId: candidateId,
+          clientId: access.clientId,
+          category: "inquiry",
+          signalKey: "project.candidate_submitted",
+          value: {
+            extractionMethod: extracted.extractionMethod,
+            confidenceBps: extracted.confidenceBps,
+            evidenceFields: extracted.evidence
+              .filter((item) => item.present)
+              .map((item) => item.field),
+          },
+          priority: 90,
+        },
+        db,
+      );
+      return Response.json(
+        {
+          id: candidateId,
+          status: "pending_review",
+          requestedTitle: extracted.requestedTitle,
+          confidenceBps: extracted.confidenceBps,
+        },
+        { status: 201 },
+      );
+    }
 
     if (payload.action === "message") {
       if (!payload.body?.trim()) return jsonError("Message cannot be empty");

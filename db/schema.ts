@@ -63,9 +63,15 @@ export const clients = sqliteTable(
       .references(() => workspaces.id),
     firstName: text("first_name").notNull(),
     lastName: text("last_name").notNull(),
+    displayName: text("display_name"),
+    preferredName: text("preferred_name"),
     email: text("email"),
     phone: text("phone"),
+    instagramHandle: text("instagram_handle"),
+    tiktokHandle: text("tiktok_handle"),
     preferredChannel: text("preferred_channel"),
+    sourceType: text("source_type").notNull().default("owner_entry"),
+    identityStatus: text("identity_status").notNull().default("partial"),
     status: text("status").notNull().default("active"),
     consentStatus: text("consent_status").notNull().default("unknown"),
     notes: text("notes"),
@@ -120,6 +126,56 @@ export const projects = sqliteTable(
       table.workspaceId,
       table.requestKey,
     ),
+  ],
+);
+
+export const projectCandidates = sqliteTable(
+  "project_candidates",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => workspaces.id),
+    clientId: text("client_id")
+      .notNull()
+      .references(() => clients.id),
+    sourceType: text("source_type").notNull(),
+    sourceId: text("source_id").notNull(),
+    requestedTitle: text("requested_title").notNull(),
+    placement: text("placement"),
+    sizeDescription: text("size_description"),
+    styleTagsJson: text("style_tags_json").notNull().default("[]"),
+    concept: text("concept").notNull(),
+    referencesSummary: text("references_summary"),
+    constraints: text("constraints"),
+    budgetMinCents: integer("budget_min_cents"),
+    budgetMaxCents: integer("budget_max_cents"),
+    targetDate: text("target_date"),
+    status: text("status").notNull().default("pending_review"),
+    confidenceBps: integer("confidence_bps").notNull().default(0),
+    extractionMethod: text("extraction_method")
+      .notNull()
+      .default("legacy-intake-v1"),
+    evidenceJson: text("evidence_json").notNull().default("[]"),
+    proposedProjectId: text("proposed_project_id").references(() => projects.id),
+    clientResponse: text("client_response"),
+    reviewedBy: text("reviewed_by"),
+    reviewedAt: text("reviewed_at"),
+    submittedAt: text("submitted_at").notNull(),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("project_candidates_workspace_source_uq").on(
+      table.workspaceId,
+      table.sourceType,
+      table.sourceId,
+    ),
+    index("project_candidates_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+    ),
+    index("project_candidates_client_idx").on(table.clientId),
   ],
 );
 

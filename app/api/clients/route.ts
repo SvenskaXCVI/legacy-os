@@ -9,14 +9,28 @@ export async function POST(request: Request) {
     const payload = (await request.json()) as {
       firstName?: string;
       lastName?: string;
+      displayName?: string;
+      preferredName?: string;
       email?: string;
       phone?: string;
+      instagramHandle?: string;
+      tiktokHandle?: string;
       preferredChannel?: string;
       notes?: string;
     };
-    if (!payload.firstName?.trim() || !payload.lastName?.trim()) {
-      return jsonError("First and last name are required");
+    const displayName =
+      payload.displayName?.trim() ||
+      [payload.firstName?.trim(), payload.lastName?.trim()]
+        .filter(Boolean)
+        .join(" ");
+    if (!displayName) {
+      return jsonError("A client display name is required");
     }
+    const nameParts = displayName.split(/\s+/).filter(Boolean);
+    const firstName = payload.firstName?.trim() || nameParts[0] || "Client";
+    const lastName = payload.lastName?.trim() || nameParts.slice(1).join(" ");
+    const cleanHandle = (value?: string) =>
+      value?.trim().replace(/^@/, "").toLowerCase() || null;
     const clientId = makeId("cli");
     const actor = actorFrom(request);
     const now = new Date().toISOString();
@@ -25,11 +39,18 @@ export async function POST(request: Request) {
       db.insert(clients).values({
         id: clientId,
         workspaceId: WORKSPACE_ID,
-        firstName: payload.firstName.trim(),
-        lastName: payload.lastName.trim(),
+        firstName,
+        lastName,
+        displayName,
+        preferredName: payload.preferredName?.trim() || null,
         email: payload.email?.trim() || null,
         phone: payload.phone?.trim() || null,
+        instagramHandle: cleanHandle(payload.instagramHandle),
+        tiktokHandle: cleanHandle(payload.tiktokHandle),
         preferredChannel: payload.preferredChannel || "email",
+        sourceType: "owner_entry",
+        identityStatus:
+          payload.email?.trim() || payload.phone?.trim() ? "contactable" : "partial",
         notes: payload.notes?.trim() || null,
         createdAt: now,
         updatedAt: now,
@@ -61,6 +82,7 @@ export async function POST(request: Request) {
           preferredChannel: payload.preferredChannel || "email",
           hasEmail: Boolean(payload.email?.trim()),
           hasPhone: Boolean(payload.phone?.trim()),
+          hasInstagram: Boolean(cleanHandle(payload.instagramHandle)),
         },
         priority: 80,
       },

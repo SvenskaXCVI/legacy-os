@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 import { LegacyApp } from "./legacy-app";
+import { LEGACY_OS_RELEASE, LEGACY_OS_VERSION } from "../lib/version";
 
 type PublicAuthConfig = {
   mode: "supabase" | "access_code" | "private_preview";
@@ -732,6 +733,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
           {config?.mode === "access_code"
             ? "Protected owner access · Scoped client invitations · Role isolation"
             : "Verified identity · Two-step protection · Role isolation"}
+          <span className="release-version">v{LEGACY_OS_VERSION} · {LEGACY_OS_RELEASE}</span>
         </footer>
       </section>
       <aside className="access-art">

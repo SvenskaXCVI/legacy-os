@@ -9,6 +9,7 @@ import {
   clientMessages,
   clients,
   notifications,
+  projectCandidates,
   projects,
   users,
   workspaces,
@@ -65,6 +66,7 @@ export async function GET(request: Request) {
       owner,
       clientRows,
       projectRows,
+      candidateRows,
       appointmentRows,
       approvalRows,
       messageRows,
@@ -124,6 +126,11 @@ export async function GET(request: Request) {
         .orderBy(desc(projects.updatedAt)),
       db
         .select()
+        .from(projectCandidates)
+        .where(eq(projectCandidates.workspaceId, WORKSPACE_ID))
+        .orderBy(desc(projectCandidates.submittedAt)),
+      db
+        .select()
         .from(appointments)
         .where(eq(appointments.workspaceId, WORKSPACE_ID))
         .orderBy(appointments.startsAt),
@@ -174,6 +181,7 @@ export async function GET(request: Request) {
       owner,
       clients: clientRows,
       projects: projectRows,
+      projectCandidates: candidateRows,
       appointments: appointmentRows,
       approvals: approvalRows,
       messages: messageRows,

@@ -3559,6 +3559,75 @@ select {
   overflow: hidden;
 }
 
+.client-intake-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(290px, .65fr);
+  gap: 12px;
+}
+
+.client-intake-form {
+  align-content: start;
+}
+
+.client-intake-form .panel-title {
+  margin: -18px -18px 2px;
+}
+
+.form-intro {
+  margin: 0 0 2px;
+  color: #858b87;
+  font-size: 9px;
+  line-height: 1.65;
+}
+
+.candidate-status-list > article {
+  margin: 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #091011;
+  padding: 14px;
+}
+
+.candidate-status-list h3 {
+  margin: 10px 0 5px;
+  font-family: var(--display);
+  font-size: 13px;
+  font-weight: 480;
+}
+
+.candidate-status-list > article > p,
+.candidate-response p {
+  margin: 0;
+  color: #8c918d;
+  font-size: 9px;
+  line-height: 1.6;
+}
+
+.candidate-status-list small {
+  display: block;
+  margin-top: 9px;
+  color: #666d69;
+  font-size: 7px;
+}
+
+.candidate-response {
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 7px;
+  margin-top: 12px;
+  border-top: 1px solid var(--line);
+  padding-top: 11px;
+}
+
+.candidate-response svg {
+  color: var(--gold);
+}
+
+.candidate-response strong {
+  display: block;
+  color: var(--gold-pale);
+}
+
 .project-summary > p {
   margin: 0;
   padding: 20px;
@@ -3833,6 +3902,13 @@ select {
 
 .client-footer > span svg {
   color: var(--green);
+}
+
+.release-version {
+  color: #8a765f;
+  font-family: var(--display);
+  letter-spacing: .65px;
+  white-space: nowrap;
 }
 
 .social-consent-card {
@@ -4114,7 +4190,8 @@ select {
   }
 
   .client-grid,
-  .client-files-layout {
+  .client-files-layout,
+  .client-intake-layout {
     grid-template-columns: 1fr;
   }
 }
@@ -4699,6 +4776,12 @@ select {
   padding-top: 24px;
   color: #5c625f;
   font-size: 8px;
+}
+
+.access-card > footer .release-version {
+  margin-left: 5px;
+  border-left: 1px solid var(--line);
+  padding-left: 12px;
 }
 
 .access-art {

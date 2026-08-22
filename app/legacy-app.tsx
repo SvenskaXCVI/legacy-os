@@ -56,6 +56,7 @@ import {
   useState,
 } from "react";
 import { InstallAppButton } from "./install-app-button";
+import { LEGACY_OS_RELEASE, LEGACY_OS_VERSION } from "../lib/version";
 
 type OwnerView =
   | "dashboard"
@@ -76,12 +77,38 @@ type ClientRecord = {
   id: string;
   firstName: string;
   lastName: string;
+  displayName?: string | null;
+  preferredName?: string | null;
   email: string | null;
   phone: string | null;
+  instagramHandle?: string | null;
+  tiktokHandle?: string | null;
   preferredChannel: string | null;
   status: string;
   notes: string | null;
   createdAt: string;
+  updatedAt: string;
+};
+
+type ProjectCandidateRecord = {
+  id: string;
+  clientId?: string;
+  requestedTitle: string;
+  placement: string | null;
+  sizeDescription: string | null;
+  styleTagsJson: string;
+  concept: string;
+  referencesSummary?: string | null;
+  constraints?: string | null;
+  budgetMinCents: number | null;
+  budgetMaxCents: number | null;
+  targetDate: string | null;
+  status: string;
+  confidenceBps: number;
+  extractionMethod?: string;
+  proposedProjectId: string | null;
+  clientResponse: string | null;
+  submittedAt: string;
   updatedAt: string;
 };
 
@@ -232,6 +259,7 @@ type WorkspaceData = {
   } | null;
   clients: ClientRecord[];
   projects: ProjectRecord[];
+  projectCandidates: ProjectCandidateRecord[];
   appointments: AppointmentRecord[];
   approvals: ApprovalRecord[];
   messages: MessageRecord[];
@@ -249,6 +277,7 @@ type PortalData = {
   approvals: ApprovalRecord[];
   messages: MessageRecord[];
   assets: AssetRecord[];
+  candidates: ProjectCandidateRecord[];
   updates: Array<{
     id: string;
     projectId: string;
@@ -444,7 +473,13 @@ function cn(...values: Array<string | false | null | undefined>) {
 }
 
 function fullName(client?: ClientRecord | null) {
-  return client ? `${client.firstName} ${client.lastName}` : "Unassigned client";
+  if (!client) return "Unassigned client";
+  return (
+    client.preferredName ||
+    client.displayName ||
+    `${client.firstName} ${client.lastName}`.trim() ||
+    "Client"
+  );
 }
 
 function projectClient(project: ProjectRecord) {
@@ -1387,6 +1422,11 @@ function ProjectsView({
   const [selected, setSelected] = useState<string | null>(
     data.projects[0]?.id ?? null,
   );
+  const [candidateResponses, setCandidateResponses] = useState<Record<string, string>>({});
+  const [reviewingCandidate, setReviewingCandidate] = useState<string | null>(null);
+  const reviewCandidates = data.projectCandidates.filter((candidate) =>
+    ["pending_review", "needs_details"].includes(candidate.status),
+  );
   const filteredProjects = data.projects.filter((item) => {
     if (filter === "active") return item.status === "active";
     if (filter === "complete") return item.lifecyclePhase === "complete";
@@ -1428,6 +1468,42 @@ function ProjectsView({
       );
     }
   }
+
+  async function reviewCandidate(
+    candidate: ProjectCandidateRecord,
+    action: "approve" | "needs_details" | "reject",
+  ) {
+    const response = candidateResponses[candidate.id]?.trim();
+    if (action === "needs_details" && !response) {
+      notify("Add the question or missing detail before contacting the client.", true);
+      return;
+    }
+    setReviewingCandidate(candidate.id);
+    try {
+      await api("/api/project-candidates", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: candidate.id, action, response }),
+      });
+      notify(
+        action === "approve"
+          ? "Project request approved and converted without re-entering the intake."
+          : action === "needs_details"
+            ? "The question was sent through the client conversation."
+            : "Project request declined and the client was notified.",
+      );
+      refresh();
+    } catch (reviewError) {
+      notify(
+        reviewError instanceof Error
+          ? reviewError.message
+          : "Unable to review project request",
+        true,
+      );
+    } finally {
+      setReviewingCandidate(null);
+    }
+  }
   return (
     <section className="page-stack">
       <div className="section-toolbar">
@@ -1440,6 +1516,46 @@ function ProjectsView({
           <Plus size={16} /> New project
         </button>
       </div>
+      {reviewCandidates.length > 0 && (
+        <section className="os-panel candidate-queue">
+          <PanelTitle
+            eyebrow="AI-STRUCTURED INTAKE"
+            title={`${reviewCandidates.length} project request${reviewCandidates.length === 1 ? "" : "s"} waiting`}
+          />
+          <div className="client-grid">
+            {reviewCandidates.map((candidate) => {
+              const client = data.clients.find((item) => item.id === candidate.clientId);
+              return (
+                <article className="client-card" key={candidate.id}>
+                  <div className="candidate-heading">
+                    <div>
+                      <span className="status-badge">{candidate.status.replaceAll("_", " ")}</span>
+                      <h3>{candidate.requestedTitle}</h3>
+                      <small>{fullName(client)} · {Math.round(candidate.confidenceBps / 100)}% intake confidence</small>
+                    </div>
+                  </div>
+                  <p>{candidate.concept}</p>
+                  <div className="tag-row">
+                    {candidate.placement && <span>{candidate.placement}</span>}
+                    {candidate.sizeDescription && <span>{candidate.sizeDescription}</span>}
+                    {JSON.parse(candidate.styleTagsJson || "[]").map((tag: string) => <span key={tag}>{tag}</span>)}
+                  </div>
+                  <textarea
+                    value={candidateResponses[candidate.id] || ""}
+                    onChange={(event) => setCandidateResponses((current) => ({ ...current, [candidate.id]: event.target.value }))}
+                    placeholder="Optional response, or explain what details are needed..."
+                  />
+                  <div className="candidate-actions">
+                    <button className="gold-button" disabled={reviewingCandidate === candidate.id} onClick={() => void reviewCandidate(candidate, "approve")}><Check size={15} /> Approve project</button>
+                    <button className="outline-button" disabled={reviewingCandidate === candidate.id} onClick={() => void reviewCandidate(candidate, "needs_details")}><MessageSquareText size={15} /> Request details</button>
+                    <button className="text-button" disabled={reviewingCandidate === candidate.id} onClick={() => void reviewCandidate(candidate, "reject")}>Decline</button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </section>
+      )}
       {data.projects.length === 0 ? (
         <section className="os-panel tall-empty">
           <EmptyState
@@ -1562,11 +1678,15 @@ function ClientsView({
   onInvite: (client: ClientRecord) => void;
 }) {
   const [filter, setFilter] = useState<"all" | "active" | "archived">("active");
+  const [selectedId, setSelectedId] = useState<string | null>(
+    data.clients[0]?.id ?? null,
+  );
   const visibleClients = data.clients.filter((client) => {
     if (filter === "all") return true;
     if (filter === "archived") return client.status === "archived";
     return client.status !== "archived";
   });
+  const selectedClient = data.clients.find((client) => client.id === selectedId);
 
   return (
     <section className="page-stack">
@@ -1622,6 +1742,7 @@ function ClientsView({
           />
         </section>
       ) : (
+        <>
         <section className="os-panel table-panel">
           <div className="data-table clients-table">
             <div className="table-row table-head">
@@ -1634,13 +1755,16 @@ function ClientsView({
               return (
                 <div className="table-row" key={client.id}>
                   <span className="client-cell">
-                    <i>{client.firstName.slice(0, 1)}{client.lastName.slice(0, 1)}</i>
+                    <i>{fullName(client).slice(0, 2).toUpperCase()}</i>
                     <span><strong>{fullName(client)}</strong><small>Added {formatDate(client.createdAt)}</small></span>
                   </span>
                   <span><strong>{client.email || "No email"}</strong><small>{client.phone || "No phone"}</small></span>
                   <span>{count}</span>
                   <span><b className="status-dot" /> {client.status}</span>
                   <span>
+                    <button className="text-button" onClick={() => setSelectedId(client.id)}>
+                      Open workspace
+                    </button>
                     <button className="outline-button small" onClick={() => onInvite(client)}>
                       <Link2 size={14} /> Create access
                     </button>
@@ -1650,6 +1774,50 @@ function ClientsView({
             })}
           </div>
         </section>
+        {selectedClient && (
+          <section className="os-panel client-workspace-panel">
+            <PanelTitle eyebrow="CLIENT WORKSPACE" title={fullName(selectedClient)} />
+            <div className="client-grid">
+              <article className="client-card">
+                <h3>Contact and identity</h3>
+                <p>{selectedClient.email || "No email saved"}</p>
+                <p>{selectedClient.phone || "No phone saved"}</p>
+                <small>
+                  Preferred channel: {selectedClient.preferredChannel || "not set"}
+                </small>
+                {(selectedClient.instagramHandle || selectedClient.tiktokHandle) && (
+                  <div className="tag-row">
+                    {selectedClient.instagramHandle && <span>@{selectedClient.instagramHandle} · Instagram</span>}
+                    {selectedClient.tiktokHandle && <span>@{selectedClient.tiktokHandle} · TikTok</span>}
+                  </div>
+                )}
+              </article>
+              <article className="client-card">
+                <h3>Projects</h3>
+                {data.projects.filter((project) => project.clientId === selectedClient.id).length ? (
+                  data.projects
+                    .filter((project) => project.clientId === selectedClient.id)
+                    .map((project) => <p key={project.id}><strong>{project.title}</strong> · {project.lifecyclePhase}</p>)
+                ) : <p>No approved projects yet.</p>}
+              </article>
+              <article className="client-card">
+                <h3>Project requests</h3>
+                {data.projectCandidates.filter((candidate) => candidate.clientId === selectedClient.id).length ? (
+                  data.projectCandidates
+                    .filter((candidate) => candidate.clientId === selectedClient.id)
+                    .map((candidate) => <p key={candidate.id}><strong>{candidate.requestedTitle}</strong> · {candidate.status.replaceAll("_", " ")}</p>)
+                ) : <p>No intake requests submitted.</p>}
+              </article>
+              <article className="client-card">
+                <h3>Connected activity</h3>
+                <p>{data.messages.filter((message) => message.clientId === selectedClient.id).length} messages</p>
+                <p>{data.appointments.filter((appointment) => appointment.clientId === selectedClient.id).length} appointments</p>
+                <p>{data.assets.filter((asset) => asset.clientId === selectedClient.id).length} files</p>
+              </article>
+            </div>
+          </section>
+        )}
+        </>
       )}
     </section>
   );
@@ -2932,13 +3100,21 @@ function ClientForm({
     <Modal title="Add a client" eyebrow="CLIENT RECORD" onClose={onClose}>
       <form className="modal-form" onSubmit={submit}>
         <div className="field-row">
-          <Field label="First name" name="firstName" required />
-          <Field label="Last name" name="lastName" required />
+          <Field label="Display name" name="displayName" required placeholder="How this client should appear" />
+          <Field label="Preferred name" name="preferredName" placeholder="What they like to be called" />
+        </div>
+        <div className="field-row">
+          <Field label="First name" name="firstName" />
+          <Field label="Last name" name="lastName" />
         </div>
         <Field label="Email" name="email" type="email" placeholder="client@example.com" />
         <Field label="Phone" name="phone" type="tel" />
+        <div className="field-row">
+          <Field label="Instagram" name="instagramHandle" placeholder="@handle" />
+          <Field label="TikTok" name="tiktokHandle" placeholder="@handle" />
+        </div>
         <Field label="Preferred channel" name="preferredChannel">
-          <select name="preferredChannel"><option value="email">Email</option><option value="sms">SMS</option><option value="portal">Client portal</option></select>
+          <select name="preferredChannel"><option value="email">Email</option><option value="sms">SMS</option><option value="portal">Client portal</option><option value="instagram">Instagram</option><option value="tiktok">TikTok</option></select>
         </Field>
         <Field label="Private studio notes" name="notes">
           <textarea name="notes" placeholder="Preferences, context, or intake notes..." />
@@ -3193,11 +3369,13 @@ function ClientPortal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<
-    "overview" | "messages" | "approvals" | "files" | "privacy"
+    "overview" | "intake" | "messages" | "approvals" | "files" | "privacy"
   >("overview");
   const [projectId, setProjectId] = useState("");
   const [notice, setNotice] = useState("");
   const [social, setSocial] = useState<SocialAccessData | null>(null);
+  const [intakeKey, setIntakeKey] = useState(() => crypto.randomUUID());
+  const [submittingIntake, setSubmittingIntake] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -3262,6 +3440,40 @@ function ClientPortal({
   const messages = data?.messages.filter((item) => !project || !item.projectId || item.projectId === project.id) || [];
   const approvals = data?.approvals.filter((item) => !project || item.projectId === project.id) || [];
   const files = data?.assets.filter((item) => !project || item.projectId === project.id) || [];
+
+  async function submitProjectIntake(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submittingIntake) return;
+    setSubmittingIntake(true);
+    const formElement = event.currentTarget;
+    const values = Object.fromEntries(new FormData(formElement));
+    try {
+      await api("/api/portal", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          token,
+          action: "project_intake",
+          requestKey: intakeKey,
+          ...values,
+          budgetMin: values.budgetMin ? Number(values.budgetMin) : undefined,
+          budgetMax: values.budgetMax ? Number(values.budgetMax) : undefined,
+        }),
+      });
+      formElement.reset();
+      setIntakeKey(crypto.randomUUID());
+      setNotice("Your project request was structured and sent to the studio for review.");
+      await load();
+    } catch (intakeError) {
+      setNotice(
+        intakeError instanceof Error
+          ? intakeError.message
+          : "Unable to submit project request",
+      );
+    } finally {
+      setSubmittingIntake(false);
+    }
+  }
 
   async function sendMessage(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3415,6 +3627,11 @@ function ClientPortal({
       title: "Your portal is active.",
       body: "Your artist has not connected a project yet. You can return using this same private link.",
     },
+    intake: {
+      icon: Sparkles,
+      title: "Plan your next project",
+      body: "Tell the studio what you want to create. Legacy OS will organize the request for artist review.",
+    },
     messages: {
       icon: MessageSquareText,
       title: "No project conversation yet",
@@ -3443,8 +3660,8 @@ function ClientPortal({
       <header className="client-header">
         <Brand />
         <nav>
-          {(["overview", "messages", "approvals", "files", "privacy"] as const).map((item) => (
-            <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>{item}</button>
+          {(["overview", "intake", "messages", "approvals", "files", "privacy"] as const).map((item) => (
+            <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>{item === "intake" ? "new project" : item}</button>
           ))}
         </nav>
         <div className="client-account">
@@ -3458,15 +3675,48 @@ function ClientPortal({
         <div className="client-topline">
           <div>
             <p className="eyebrow gold">WELCOME BACK</p>
-            <h1>{data.client.firstName}, your project is connected.</h1>
-            <p>Review progress, share files, approve work, and message your artist in one secure place.</p>
+            <h1>{(data.client.preferredName || data.client.displayName || data.client.firstName || "Welcome").split(" ")[0]}, your creative workspace is ready.</h1>
+            <p>Plan a project, review progress, share files, approve work, and message your artist in one secure place.</p>
           </div>
           {data.projects.length > 1 && (
             <label><span>PROJECT</span><select value={project?.id || ""} onChange={(event) => setProjectId(event.target.value)}>{data.projects.map((item) => <option value={item.id} key={item.id}>{item.title}</option>)}</select></label>
           )}
         </div>
         {notice && <div className="portal-notice"><CheckCircle2 size={16} /> {notice}<button onClick={() => setNotice("")}><X size={14} /></button></div>}
-        {!project ? (
+        {tab === "intake" ? (
+          <div className="client-intake-layout">
+            <form className="client-card modal-form client-intake-form" onSubmit={submitProjectIntake}>
+              <PanelTitle eyebrow="NEW PROJECT REQUEST" title="Tell us what you want to create" />
+              <p className="form-intro">Share as much as you know today. Legacy OS will structure the request and send it to the artist for review; nothing is booked or charged automatically.</p>
+              <label><span>YOUR IDEA *</span><textarea name="concept" required rows={5} placeholder="Describe the subject, story, mood, and important details..." /></label>
+              <div className="field-row">
+                <label><span>PLACEMENT</span><input name="placement" placeholder="Left forearm, upper back..." /></label>
+                <label><span>APPROXIMATE SIZE</span><input name="sizeDescription" placeholder="6 inches, half sleeve..." /></label>
+              </div>
+              <label><span>STYLE OR VISUAL DIRECTION</span><input name="style" placeholder="Black and grey realism, fine line, illustrative..." /></label>
+              <label><span>REFERENCE NOTES</span><textarea name="referencesSummary" rows={3} placeholder="Describe references you have or what inspires the direction." /></label>
+              <label><span>CONSTRAINTS OR MUST-HAVES</span><textarea name="constraints" rows={3} placeholder="Existing tattoos, schedule limits, elements to include or avoid..." /></label>
+              <div className="field-row">
+                <label><span>BUDGET MINIMUM</span><input name="budgetMin" type="number" min="0" step="1" placeholder="$" /></label>
+                <label><span>BUDGET MAXIMUM</span><input name="budgetMax" type="number" min="0" step="1" placeholder="$" /></label>
+              </div>
+              <label><span>IDEAL COMPLETION DATE</span><input name="targetDate" type="date" /></label>
+              <button className="gold-button wide" type="submit" disabled={submittingIntake}>{submittingIntake ? <><Spinner label="Structuring request" /> Structuring request</> : <><Sparkles size={16} /> Send project for review</>}</button>
+            </form>
+            <section className="client-card candidate-status-list">
+              <PanelTitle eyebrow="REQUEST HISTORY" title="Your project requests" />
+              {data.candidates.length ? data.candidates.map((candidate) => (
+                <article key={candidate.id}>
+                  <span className={cn("status-badge", candidate.status)}>{candidate.status.replaceAll("_", " ")}</span>
+                  <h3>{candidate.requestedTitle}</h3>
+                  <p>{candidate.concept}</p>
+                  <small>Submitted {formatDate(candidate.submittedAt, true)} · {Math.round(candidate.confidenceBps / 100)}% information confidence</small>
+                  {candidate.clientResponse && <div className="candidate-response"><MessageSquareText size={15} /><p><strong>Studio response</strong>{candidate.clientResponse}</p></div>}
+                </article>
+              )) : <EmptyState icon={Sparkles} title="No project requests yet" body="Your submitted ideas and their review status will appear here." />}
+            </section>
+          </div>
+        ) : !project ? (
           <section className="client-empty">
             <div className="large-brain-orb"><EmptyPortalIcon size={38} /></div>
             <h2>{emptyPortal.title}</h2>
@@ -3514,6 +3764,7 @@ function ClientPortal({
                   <button onClick={() => setTab("messages")}><MessageSquareText size={20} /><span><strong>Message artist</strong><small>Ask a question or add context</small></span><ArrowRight size={15} /></button>
                   <button onClick={() => setTab("files")}><Upload size={20} /><span><strong>Share reference</strong><small>Upload an image or document</small></span><ArrowRight size={15} /></button>
                   <button onClick={() => setTab("approvals")}><ShieldCheck size={20} /><span><strong>Review approvals</strong><small>{approvals.filter((item) => item.status === "pending").length} waiting</small></span><ArrowRight size={15} /></button>
+                  <button onClick={() => setTab("intake")}><Sparkles size={20} /><span><strong>Plan another project</strong><small>Send a structured request</small></span><ArrowRight size={15} /></button>
                 </section>
               </div>
             )}
@@ -3625,7 +3876,7 @@ function ClientPortal({
           </>
         )}
       </main>
-      <footer className="client-footer"><Brand compact /><span><ShieldCheck size={15} /> {data.access.method === "account" ? "Verified account access" : `Private project access · Expires ${formatDate(data.access.expiresAt)}`}</span></footer>
+      <footer className="client-footer"><Brand compact /><span className="release-version">v{LEGACY_OS_VERSION} · {LEGACY_OS_RELEASE}</span><span><ShieldCheck size={15} /> {data.access.method === "account" ? "Verified account access" : `Private project access · Expires ${formatDate(data.access.expiresAt)}`}</span></footer>
     </div>
   );
 }
@@ -3784,7 +4035,7 @@ export function LegacyApp({
           )}
           {view === "settings" && <SettingsView data={data} notify={notify} refresh={load} onView={setView} />}
         </div>
-        <footer className="owner-footer"><span>LEGACY OS</span><p>Built for creators. Designed to last.</p><span><i /> CORE SYSTEMS OPERATIONAL</span></footer>
+        <footer className="owner-footer"><span>LEGACY OS</span><p>Built for creators. Designed to last.</p><span className="release-version">v{LEGACY_OS_VERSION} · {LEGACY_OS_RELEASE}</span><span><i /> CORE SYSTEMS OPERATIONAL</span></footer>
       </main>
 
       {modal === "client" && <ClientForm onClose={() => setModal(null)} onSaved={load} notify={notify} />}

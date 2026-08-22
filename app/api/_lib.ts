@@ -357,7 +357,10 @@ export async function bootstrapAuthenticatedUser(
     id,
     workspaceId: invitation.workspaceId,
     email,
-    displayName: `${client.firstName} ${client.lastName}`.trim(),
+    displayName:
+      client.preferredName ||
+      client.displayName ||
+      `${client.firstName} ${client.lastName}`.trim(),
     role: "client",
     authSubject: identity.id,
     authProvider: provider,
