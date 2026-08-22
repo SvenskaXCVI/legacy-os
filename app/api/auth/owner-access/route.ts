@@ -27,6 +27,10 @@ function requestKey(request: Request) {
 function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   if (!origin) return true;
+  if (origin === "null") {
+    const fetchSite = request.headers.get("sec-fetch-site");
+    return !fetchSite || fetchSite === "same-origin" || fetchSite === "none";
+  }
   try {
     return new URL(origin).host === new URL(request.url).host;
   } catch {
@@ -98,7 +102,7 @@ export async function POST(request: Request) {
   const payload = (await request.json().catch(() => null)) as {
     code?: unknown;
   } | null;
-  const code = typeof payload?.code === "string" ? payload.code : "";
+  const code = typeof payload?.code === "string" ? payload.code.trim() : "";
   if (!code || !(await verifyOwnerAccessCode(code))) {
     recordFailure(key);
     await audit(request, "denied");

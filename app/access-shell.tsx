@@ -444,7 +444,9 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
         await fetch("/api/auth/owner-access", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ code: ownerAccessCode }),
+          credentials: "same-origin",
+          cache: "no-store",
+          body: JSON.stringify({ code: ownerAccessCode.trim() }),
         }),
       );
       setOwnerAccessCode("");
@@ -872,6 +874,9 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
                       value={ownerAccessCode}
                       onChange={(event) => setOwnerAccessCode(event.target.value)}
                       autoComplete="current-password"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
                       minLength={10}
                       required
                     />
