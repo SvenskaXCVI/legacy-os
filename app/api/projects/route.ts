@@ -1,6 +1,6 @@
 import { and, eq } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { auditEvents, clients, projects } from "../../../db/schema";
+import { auditEvents, clients, notifications, projects } from "../../../db/schema";
 import { actorFrom, jsonError, makeId, requireOwner, routeError, WORKSPACE_ID } from "../_lib";
 import { captureCompletedProject } from "../../../lib/intelligence-engine";
 import { captureAutomationSignal } from "../../../lib/automation-engine";
@@ -142,6 +142,9 @@ export async function PATCH(request: Request) {
       nextAction?: string | null;
       nextActionAt?: string | null;
       summary?: string | null;
+      action?: "archive" | "restore" | "mark_test" | "mark_real";
+      reason?: string;
+      duplicateOfProjectId?: string | null;
     };
     if (!payload.id) return jsonError("Project id is required");
     if (
@@ -166,6 +169,28 @@ export async function PATCH(request: Request) {
     if (!existing) return jsonError("Project not found", 404);
     const now = new Date().toISOString();
     const actor = actorFrom(request);
+    if (payload.action) {
+      const archive = payload.action === "archive";
+      const restore = payload.action === "restore";
+      const markTest = payload.action === "mark_test";
+      const markReal = payload.action === "mark_real";
+      if (!archive && !restore && !markTest && !markReal) return jsonError("Project cleanup action is invalid");
+      if (payload.duplicateOfProjectId) {
+        const canonical = await db.select({ id: projects.id }).from(projects).where(and(eq(projects.id, payload.duplicateOfProjectId), eq(projects.workspaceId, WORKSPACE_ID))).get();
+        if (!canonical || canonical.id === existing.id) return jsonError("Canonical project is invalid", 409);
+      }
+      await db.batch([
+        db.update(projects).set({
+          status: archive ? "archived" : restore ? (existing.lifecyclePhase === "complete" ? "completed" : "active") : existing.status,
+          archivedAt: archive ? now : restore ? null : existing.archivedAt,
+          isTest: markTest ? true : markReal ? false : existing.isTest,
+          updatedAt: now,
+        }).where(eq(projects.id, existing.id)),
+        db.insert(auditEvents).values({ id: makeId("audit"), workspaceId: WORKSPACE_ID, actorType: "user", actorId: actor, action: `project.${payload.action}`, targetType: "project", targetId: existing.id, riskLevel: "medium", outcome: "succeeded", metadataJson: JSON.stringify({ reason: payload.reason?.trim() || null, duplicateOfProjectId: payload.duplicateOfProjectId || null, softDelete: archive }), occurredAt: now }),
+        ...(archive || markTest ? [db.update(notifications).set({ status: "dismissed", readAt: now }).where(and(eq(notifications.workspaceId, WORKSPACE_ID), eq(notifications.projectId, existing.id)))] : []),
+      ]);
+      return Response.json({ id: existing.id, status: "updated", action: payload.action });
+    }
     const nextPhase = payload.lifecyclePhase ?? existing.lifecyclePhase;
     await db.batch([
       db
@@ -209,7 +234,9 @@ export async function PATCH(request: Request) {
       nextPhase === "complete" &&
       existing.lifecyclePhase !== "complete"
     ) {
-      await captureCompletedProject(WORKSPACE_ID, existing.id, db);
+      if (!existing.isTest && !existing.archivedAt) {
+        await captureCompletedProject(WORKSPACE_ID, existing.id, db);
+      }
     }
     await captureAutomationSignal(
       {

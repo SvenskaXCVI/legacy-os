@@ -89,6 +89,7 @@ type ClientRecord = {
   notes: string | null;
   createdAt: string;
   updatedAt: string;
+  archivedAt?: string | null;
 };
 
 type ProjectCandidateRecord = {
@@ -133,6 +134,7 @@ type ProjectRecord = {
   summary: string | null;
   clientSummary?: string | null;
   isTest?: boolean;
+  archivedAt?: string | null;
   updatedAt: string;
 };
 
@@ -1303,14 +1305,14 @@ function Dashboard({
   onView: (view: OwnerView) => void;
 }) {
   const upcoming = data.appointments
-    .filter((item) => !["completed", "cancelled"].includes(item.status))
+    .filter((item) => !["completed", "cancelled"].includes(item.status) && (!item.projectId || data.projects.some((project) => project.id === item.projectId && !project.isTest && !project.archivedAt)))
     .slice(0, 5);
   const activeProjects = data.projects.filter(
-    (item) => item.status === "active",
+    (item) => item.status === "active" && !item.isTest && !item.archivedAt,
   );
-  const pending = data.approvals.filter((item) => item.status === "pending");
+  const pending = data.approvals.filter((item) => item.status === "pending" && (!item.projectId || activeProjects.some((project) => project.id === item.projectId)));
   const unread = data.messages.filter(
-    (item) => item.senderType === "client" && !item.status.includes("read"),
+    (item) => item.senderType === "client" && !item.status.includes("read") && data.clients.some((client) => client.id === item.clientId && !client.archivedAt),
   );
 
   return (
@@ -1549,19 +1551,22 @@ function ProjectsView({
   refresh: () => void;
   notify: (message: string, error?: boolean) => void;
 }) {
-  const [filter, setFilter] = useState<"all" | "active" | "complete">("all");
+  const [filter, setFilter] = useState<"all" | "active" | "complete" | "test" | "archived">("active");
   const [selected, setSelected] = useState<string | null>(
     data.projects[0]?.id ?? null,
   );
   const [candidateResponses, setCandidateResponses] = useState<Record<string, string>>({});
   const [reviewingCandidate, setReviewingCandidate] = useState<string | null>(null);
+  const [savingCleanup, setSavingCleanup] = useState(false);
   const reviewCandidates = data.projectCandidates.filter((candidate) =>
     ["pending_review", "needs_details"].includes(candidate.status),
   );
   const filteredProjects = data.projects.filter((item) => {
-    if (filter === "active") return item.status === "active";
-    if (filter === "complete") return item.lifecyclePhase === "complete";
-    return true;
+    if (filter === "active") return item.status === "active" && !item.isTest && !item.archivedAt;
+    if (filter === "complete") return item.lifecyclePhase === "complete" && !item.isTest && !item.archivedAt;
+    if (filter === "test") return Boolean(item.isTest) && !item.archivedAt;
+    if (filter === "archived") return Boolean(item.archivedAt);
+    return !item.archivedAt;
   });
   const project =
     filteredProjects.find((item) => item.id === selected) ??
@@ -1598,6 +1603,19 @@ function ProjectsView({
         true,
       );
     }
+  }
+
+  async function cleanupProject(action: "archive" | "restore" | "mark_test" | "mark_real") {
+    if (!project) return;
+    if (action === "archive" && !window.confirm(`Archive ${project.title}? Nothing will be deleted.`)) return;
+    setSavingCleanup(true);
+    try {
+      await api("/api/projects", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: project.id, action, reason: "Owner cleanup from project workspace" }) });
+      notify(action === "archive" ? "Project archived and removed from operational intelligence." : action === "mark_test" ? "Project marked as test data and removed from operational intelligence." : "Project restored to operational records.");
+      refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update project", true);
+    } finally { setSavingCleanup(false); }
   }
 
   async function reviewCandidate(
@@ -1639,9 +1657,11 @@ function ProjectsView({
     <section className="page-stack">
       <div className="section-toolbar">
         <div className="filter-tabs">
-          <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All projects <span>{data.projects.length}</span></button>
-          <button className={filter === "active" ? "active" : ""} onClick={() => setFilter("active")}>Active <span>{data.projects.filter((item) => item.status === "active").length}</span></button>
-          <button className={filter === "complete" ? "active" : ""} onClick={() => setFilter("complete")}>Complete <span>{data.projects.filter((item) => item.lifecyclePhase === "complete").length}</span></button>
+          <button className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All current <span>{data.projects.filter((item) => !item.archivedAt).length}</span></button>
+          <button className={filter === "active" ? "active" : ""} onClick={() => setFilter("active")}>Active <span>{data.projects.filter((item) => item.status === "active" && !item.isTest && !item.archivedAt).length}</span></button>
+          <button className={filter === "complete" ? "active" : ""} onClick={() => setFilter("complete")}>Complete <span>{data.projects.filter((item) => item.lifecyclePhase === "complete" && !item.isTest && !item.archivedAt).length}</span></button>
+          <button className={filter === "test" ? "active" : ""} onClick={() => setFilter("test")}>Test <span>{data.projects.filter((item) => item.isTest && !item.archivedAt).length}</span></button>
+          <button className={filter === "archived" ? "active" : ""} onClick={() => setFilter("archived")}>Archived <span>{data.projects.filter((item) => item.archivedAt).length}</span></button>
         </div>
         <button className="gold-button" onClick={onCreate}>
           <Plus size={16} /> New project
@@ -1768,6 +1788,7 @@ function ProjectsView({
                   </button>
                 )}
               </div>
+              <div className="record-cleanup-bar"><span><ShieldCheck size={15} /> Test and archived records never contribute to analytics, briefings, or learning.</span><div>{project.archivedAt ? <button className="outline-button" disabled={savingCleanup} onClick={() => void cleanupProject("restore")}>Restore project</button> : <button className="text-button danger-text" disabled={savingCleanup} onClick={() => void cleanupProject("archive")}>Archive project</button>}<button className="text-button" disabled={savingCleanup || Boolean(project.archivedAt)} onClick={() => void cleanupProject(project.isTest ? "mark_real" : "mark_test")}>{project.isTest ? "Mark as real work" : "Mark as test data"}</button></div></div>
             </section>
           )}
         </div>
@@ -1803,21 +1824,74 @@ function ClientsView({
   data,
   onCreate,
   onInvite,
+  refresh,
+  notify,
+  onView,
 }: {
   data: WorkspaceData;
   onCreate: () => void;
   onInvite: (client: ClientRecord) => void;
+  refresh: () => Promise<void>;
+  notify: (message: string, error?: boolean) => void;
+  onView: (view: OwnerView) => void;
 }) {
   const [filter, setFilter] = useState<"all" | "active" | "archived">("active");
   const [selectedId, setSelectedId] = useState<string | null>(
     data.clients[0]?.id ?? null,
   );
+  const [workspaceTab, setWorkspaceTab] = useState<"overview" | "projects" | "timeline" | "financials" | "privacy">("overview");
+  const [saving, setSaving] = useState(false);
+  const [viewOpenedAt] = useState(() => Date.now());
   const visibleClients = data.clients.filter((client) => {
     if (filter === "all") return true;
     if (filter === "archived") return client.status === "archived";
     return client.status !== "archived";
   });
   const selectedClient = data.clients.find((client) => client.id === selectedId);
+  const clientProjects = data.projects.filter((project) => project.clientId === selectedClient?.id);
+  const projectIds = new Set(clientProjects.map((project) => project.id));
+  const clientMessages = data.messages.filter((message) => message.clientId === selectedClient?.id);
+  const clientAppointments = data.appointments.filter((appointment) => appointment.clientId === selectedClient?.id);
+  const clientAssets = data.assets.filter((asset) => asset.clientId === selectedClient?.id);
+  const clientApprovals = data.approvals.filter((approval) => approval.projectId && projectIds.has(approval.projectId));
+  const clientPayments = data.paymentRequests.filter((payment) => payment.clientId === selectedClient?.id);
+  const clientSessions = data.tattooSessions.filter((session) => session.clientId === selectedClient?.id);
+  const clientHealing = data.healingCheckins.filter((checkin) => checkin.clientId === selectedClient?.id);
+  const clientConsent = data.mediaConsent.find((consent) => consent.clientId === selectedClient?.id && consent.status === "granted");
+  const totalPaid = clientPayments.reduce((sum, payment) => sum + payment.amountPaidCents - payment.amountRefundedCents, 0);
+  const totalOutstanding = clientPayments.filter((payment) => ["approved", "open"].includes(payment.status)).reduce((sum, payment) => sum + Math.max(0, payment.amountCents - payment.amountPaidCents), 0);
+  const timeline = [
+    ...clientMessages.map((item) => ({ id: item.id, at: item.createdAt, type: "Message", title: item.senderType === "client" ? "Client sent a message" : "Studio sent a message", detail: item.body })),
+    ...clientAppointments.map((item) => ({ id: item.id, at: item.startsAt, type: "Appointment", title: item.appointmentType, detail: item.location || item.status })),
+    ...clientAssets.map((item) => ({ id: item.id, at: item.createdAt, type: "File", title: item.originalName, detail: item.assetRole?.replaceAll("_", " ") || item.mediaType })),
+    ...clientApprovals.map((item) => ({ id: item.id, at: item.createdAt, type: "Approval", title: item.subject, detail: item.status })),
+    ...clientSessions.map((item) => ({ id: item.id, at: item.createdAt, type: "Session", title: `Tattoo session ${item.sessionNumber}`, detail: item.status })),
+  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+  async function clientAction(action: "archive" | "restore") {
+    if (!selectedClient) return;
+    if (action === "archive" && !window.confirm(`Archive ${fullName(selectedClient)}? Their history remains available and nothing is deleted.`)) return;
+    setSaving(true);
+    try {
+      await api("/api/clients", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: selectedClient.id, action, reason: "Owner cleanup from client workspace" }) });
+      notify(action === "archive" ? "Client archived without deleting history." : "Client restored to active records.");
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update client", true);
+    } finally { setSaving(false); }
+  }
+
+  async function projectCleanup(project: ProjectRecord, action: "archive" | "restore" | "mark_test" | "mark_real", duplicateOfProjectId?: string) {
+    if (action === "archive" && !window.confirm(`Archive ${project.title}? Related history remains preserved.`)) return;
+    setSaving(true);
+    try {
+      await api("/api/projects", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: project.id, action, duplicateOfProjectId, reason: duplicateOfProjectId ? "Duplicate project cleanup" : "Owner cleanup from client workspace" }) });
+      notify(action === "archive" ? "Project archived and excluded from operational intelligence." : action === "mark_test" ? "Project marked as test data and excluded from learning." : "Project record updated.");
+      await refresh();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update project", true);
+    } finally { setSaving(false); }
+  }
 
   return (
     <section className="page-stack">
@@ -1907,45 +1981,32 @@ function ClientsView({
         </section>
         {selectedClient && (
           <section className="os-panel client-workspace-panel">
-            <PanelTitle eyebrow="CLIENT WORKSPACE" title={fullName(selectedClient)} />
-            <div className="client-grid">
-              <article className="client-card">
-                <h3>Contact and identity</h3>
-                <p>{selectedClient.email || "No email saved"}</p>
-                <p>{selectedClient.phone || "No phone saved"}</p>
-                <small>
-                  Preferred channel: {selectedClient.preferredChannel || "not set"}
-                </small>
-                {(selectedClient.instagramHandle || selectedClient.tiktokHandle) && (
-                  <div className="tag-row">
-                    {selectedClient.instagramHandle && <span>@{selectedClient.instagramHandle} · Instagram</span>}
-                    {selectedClient.tiktokHandle && <span>@{selectedClient.tiktokHandle} · TikTok</span>}
-                  </div>
-                )}
-              </article>
-              <article className="client-card">
-                <h3>Projects</h3>
-                {data.projects.filter((project) => project.clientId === selectedClient.id).length ? (
-                  data.projects
-                    .filter((project) => project.clientId === selectedClient.id)
-                    .map((project) => <p key={project.id}><strong>{project.title}</strong> · {project.lifecyclePhase}</p>)
-                ) : <p>No approved projects yet.</p>}
-              </article>
-              <article className="client-card">
-                <h3>Project requests</h3>
-                {data.projectCandidates.filter((candidate) => candidate.clientId === selectedClient.id).length ? (
-                  data.projectCandidates
-                    .filter((candidate) => candidate.clientId === selectedClient.id)
-                    .map((candidate) => <p key={candidate.id}><strong>{candidate.requestedTitle}</strong> · {candidate.status.replaceAll("_", " ")}</p>)
-                ) : <p>No intake requests submitted.</p>}
-              </article>
-              <article className="client-card">
-                <h3>Connected activity</h3>
-                <p>{data.messages.filter((message) => message.clientId === selectedClient.id).length} messages</p>
-                <p>{data.appointments.filter((appointment) => appointment.clientId === selectedClient.id).length} appointments</p>
-                <p>{data.assets.filter((asset) => asset.clientId === selectedClient.id).length} files</p>
-              </article>
+            <div className="client-workspace-hero">
+              <div className="client-workspace-identity"><span>{fullName(selectedClient).slice(0, 2).toUpperCase()}</span><div><p className="eyebrow gold">OWNER CLIENT WORKSPACE</p><h2>{fullName(selectedClient)}</h2><small>{selectedClient.status} · {selectedClient.preferredChannel || "channel not set"}</small></div></div>
+              <div className="client-workspace-actions"><button className="outline-button" onClick={() => onInvite(selectedClient)}><Link2 size={14} /> Client access</button>{selectedClient.status === "archived" ? <button className="gold-button" disabled={saving} onClick={() => void clientAction("restore")}>Restore client</button> : <button className="text-button danger-text" disabled={saving} onClick={() => void clientAction("archive")}>Archive client</button>}</div>
             </div>
+            <div className="client-workspace-stats">
+              <DetailBox label="Projects" value={String(clientProjects.filter((project) => !project.archivedAt).length)} />
+              <DetailBox label="Lifetime paid" value={formatMoney(totalPaid)} />
+              <DetailBox label="Outstanding" value={formatMoney(totalOutstanding)} />
+              <DetailBox label="Next appointment" value={formatDate(clientAppointments.filter((item) => new Date(item.startsAt).getTime() >= viewOpenedAt).sort((a,b) => a.startsAt.localeCompare(b.startsAt))[0]?.startsAt, true)} />
+            </div>
+            <div className="filter-tabs client-workspace-tabs">
+              {(["overview", "projects", "timeline", "financials", "privacy"] as const).map((tab) => <button key={tab} className={workspaceTab === tab ? "active" : ""} onClick={() => setWorkspaceTab(tab)}>{tab}</button>)}
+            </div>
+            {workspaceTab === "overview" && <div className="client-grid">
+              <article className="client-card"><h3>Contact and identity</h3><p>{selectedClient.email || "No email saved"}</p><p>{selectedClient.phone || "No phone saved"}</p><small>Preferred channel: {selectedClient.preferredChannel || "not set"}</small><div className="tag-row">{selectedClient.instagramHandle && <span>@{selectedClient.instagramHandle} · Instagram</span>}{selectedClient.tiktokHandle && <span>@{selectedClient.tiktokHandle} · TikTok</span>}</div></article>
+              <article className="client-card owner-private-card"><h3><LockKeyhole size={16} /> Private studio notes</h3><p>{selectedClient.notes || "No private notes saved."}</p><small>Never returned by the client portal API.</small></article>
+              <article className="client-card"><h3>Relationship activity</h3><p>{clientMessages.length} messages</p><p>{clientAppointments.length} appointments</p><p>{clientAssets.length} files</p><p>{clientSessions.length} tattoo sessions</p></article>
+              <article className="client-card"><h3>Open attention</h3><p>{clientApprovals.filter((item) => item.status === "pending").length} approvals waiting</p><p>{clientHealing.filter((item) => ["submitted", "needs_attention"].includes(item.status)).length} healing reviews</p><p>{data.projectCandidates.filter((candidate) => candidate.clientId === selectedClient.id && ["pending_review", "needs_details"].includes(candidate.status)).length} intake requests</p></article>
+            </div>}
+            {workspaceTab === "projects" && <div className="relationship-project-list">
+              {clientProjects.length ? clientProjects.map((project) => <article className={cn(project.archivedAt && "archived-record", project.isTest && "test-record")} key={project.id}><div><span className="phase-pill">{project.lifecyclePhase}</span><h3>{project.title}</h3><p>{project.placement || "Placement not set"} · {project.status}</p><small>{project.isTest ? "Test data · excluded from intelligence" : project.archivedAt ? "Archived · excluded from operations" : project.nextAction || "No next action"}</small></div><div className="relationship-project-actions">{project.archivedAt ? <button className="outline-button" disabled={saving} onClick={() => void projectCleanup(project, "restore")}>Restore</button> : <button className="text-button danger-text" disabled={saving} onClick={() => void projectCleanup(project, "archive")}>Archive</button>}<button className="text-button" disabled={saving} onClick={() => void projectCleanup(project, project.isTest ? "mark_real" : "mark_test")}>{project.isTest ? "Mark real" : "Mark test"}</button>{!project.archivedAt && clientProjects.filter((item) => item.id !== project.id && !item.archivedAt).length > 0 && <select aria-label={`Mark ${project.title} as duplicate of`} defaultValue="" onChange={(event) => { const canonical = event.target.value; if (canonical && window.confirm(`Archive ${project.title} as a duplicate of the selected project?`)) void projectCleanup(project, "archive", canonical); event.target.value = ""; }}><option value="">Archive as duplicate…</option>{clientProjects.filter((item) => item.id !== project.id && !item.archivedAt).map((item) => <option value={item.id} key={item.id}>{item.title}</option>)}</select>}</div></article>) : <EmptyState icon={FolderKanban} title="No projects connected" body="Approved project requests will become part of this relationship workspace." />}
+            </div>}
+            {workspaceTab === "timeline" && <div className="relationship-timeline">{timeline.length ? timeline.map((item) => <article key={`${item.type}-${item.id}`}><span /><div><small>{item.type} · {formatDate(item.at, true)}</small><strong>{item.title}</strong><p>{item.detail}</p></div></article>) : <EmptyState icon={Activity} title="No relationship history yet" body="Messages, appointments, files, approvals, and sessions will appear in one timeline." />}</div>}
+            {workspaceTab === "financials" && <div className="client-grid"><article className="client-card"><h3>Financial relationship</h3><p><strong>{formatMoney(totalPaid)}</strong> collected after refunds</p><p><strong>{formatMoney(totalOutstanding)}</strong> currently outstanding</p><small>Budget ranges are not counted as revenue.</small></article><article className="client-card"><h3>Payment history</h3>{clientPayments.length ? clientPayments.map((payment) => <p key={payment.id}><strong>{payment.title}</strong> · {formatMoney(payment.amountCents)} · {payment.status}</p>) : <p>No payment requests.</p>}<button className="text-button" onClick={() => onView("finances")}>Open Finance Center <ArrowRight size={13} /></button></article></div>}
+            {workspaceTab === "privacy" && <div className="client-grid"><article className="client-card"><h3>Portal and identity boundary</h3><p>Client access is scoped to this client ID and deliberately shared project fields.</p><button className="outline-button" onClick={() => onInvite(selectedClient)}><Link2 size={14} /> Manage client access</button></article><article className="client-card"><h3>Tattoo media permission</h3><p>{clientConsent ? `Granted ${formatDate(clientConsent.grantedAt)}` : "Not granted"}</p><small>The client controls this permission from their healing workspace.</small></article><article className="client-card"><h3>Internal data boundary</h3><p>Private studio notes, AI reasoning, technique notes, and internal pricing context are owner-only.</p><small>Archiving preserves audit history and revokes operational use.</small></article></div>}
+            <div className="client-workspace-shortcuts"><button onClick={() => onView("inbox")}><MessageSquareText size={16} /> Open messages</button><button onClick={() => onView("projects")}><FolderKanban size={16} /> Open projects</button><button onClick={() => onView("calendar")}><CalendarDays size={16} /> Open calendar</button><button onClick={() => onView("operations")}><Activity size={16} /> Open lifecycle</button></div>
           </section>
         )}
         </>
@@ -2690,24 +2751,26 @@ function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refres
 }
 
 function AnalyticsView({ data }: { data: WorkspaceData }) {
+  const operationalProjects = data.projects.filter((project) => !project.isTest && !project.archivedAt);
+  const operationalProjectIds = new Set(operationalProjects.map((project) => project.id));
   const phaseCounts = phases.map((phase) => ({
     phase,
-    count: data.projects.filter((project) => project.lifecyclePhase === phase).length,
+    count: operationalProjects.filter((project) => project.lifecyclePhase === phase).length,
   }));
   const max = Math.max(1, ...phaseCounts.map((item) => item.count));
   return (
     <section className="page-stack">
-      {data.projects.length === 0 ? (
+      {operationalProjects.length === 0 ? (
         <section className="os-panel tall-empty">
           <EmptyState icon={BarChart3} title="Analytics will grow with your studio" body="No fabricated charts are shown. Real trends appear after projects, appointments, approvals, and outcomes are recorded." />
         </section>
       ) : (
         <>
           <section className="stats-grid">
-            <StatCard icon={UsersRound} label="CLIENTS" value={data.clients.length} detail="Saved client records" />
-            <StatCard icon={FolderKanban} label="PROJECTS" value={data.projects.length} detail="Across every lifecycle phase" />
-            <StatCard icon={CalendarDays} label="APPOINTMENTS" value={data.appointments.length} detail="Recorded schedule commitments" />
-            <StatCard icon={ShieldCheck} label="APPROVALS" value={data.approvals.length} detail="Client and owner decisions" />
+            <StatCard icon={UsersRound} label="CLIENTS" value={data.clients.filter((client) => !client.archivedAt).length} detail="Active relationship records" />
+            <StatCard icon={FolderKanban} label="PROJECTS" value={operationalProjects.length} detail="Real, non-archived projects" />
+            <StatCard icon={CalendarDays} label="APPOINTMENTS" value={data.appointments.filter((item) => !item.projectId || operationalProjectIds.has(item.projectId)).length} detail="Operational schedule commitments" />
+            <StatCard icon={ShieldCheck} label="APPROVALS" value={data.approvals.filter((item) => !item.projectId || operationalProjectIds.has(item.projectId)).length} detail="Operational client and owner decisions" />
           </section>
           <section className="os-panel lifecycle-analytics">
             <PanelTitle eyebrow="PROJECT DISTRIBUTION" title="Lifecycle activity" />
@@ -2730,9 +2793,11 @@ function AnalyticsView({ data }: { data: WorkspaceData }) {
 function FinanceView({ data, refresh, notify }: { data: WorkspaceData; refresh: () => Promise<void>; notify: (message: string, error?: boolean) => void }) {
   const [showCreate, setShowCreate] = useState(false);
   const [saving, setSaving] = useState(false);
-  const paid = data.paymentRequests.reduce((sum, item) => sum + item.amountPaidCents, 0);
-  const refunded = data.paymentRequests.reduce((sum, item) => sum + item.amountRefundedCents, 0);
-  const outstanding = data.paymentRequests.filter((item) => ["approved", "open"].includes(item.status)).reduce((sum, item) => sum + item.amountCents, 0);
+  const operationalProjectIds = new Set(data.projects.filter((project) => !project.isTest && !project.archivedAt).map((project) => project.id));
+  const operationalPayments = data.paymentRequests.filter((payment) => operationalProjectIds.has(payment.projectId));
+  const paid = operationalPayments.reduce((sum, item) => sum + item.amountPaidCents, 0);
+  const refunded = operationalPayments.reduce((sum, item) => sum + item.amountRefundedCents, 0);
+  const outstanding = operationalPayments.filter((item) => ["approved", "open"].includes(item.status)).reduce((sum, item) => sum + item.amountCents, 0);
 
   async function perform(action: "approve" | "void" | "refund", payment: PaymentRecord) {
     if (action === "void" && !window.confirm(`Void ${payment.title}? The client will no longer be able to pay it.`)) return;
@@ -2771,15 +2836,15 @@ function FinanceView({ data, refresh, notify }: { data: WorkspaceData; refresh: 
 
   return <section className="finance-view">
     <div className="finance-heading"><div><p className="eyebrow gold">STRIPE PAYMENT LEDGER</p><h2>Finance Center</h2><p>Owner-approved requests, secure hosted checkout, and webhook-confirmed outcomes.</p></div><button className="gold-button" onClick={() => setShowCreate((value) => !value)}><Plus size={16} /> {showCreate ? "Close" : "New payment request"}</button></div>
-    <div className="finance-metrics"><article><small>COLLECTED</small><strong>{formatMoney(paid)}</strong></article><article><small>OUTSTANDING</small><strong>{formatMoney(outstanding)}</strong></article><article><small>REFUNDED</small><strong>{formatMoney(refunded)}</strong></article><article><small>REQUESTS</small><strong>{data.paymentRequests.length}</strong></article></div>
+    <div className="finance-metrics"><article><small>COLLECTED</small><strong>{formatMoney(paid)}</strong></article><article><small>OUTSTANDING</small><strong>{formatMoney(outstanding)}</strong></article><article><small>REFUNDED</small><strong>{formatMoney(refunded)}</strong></article><article><small>REQUESTS</small><strong>{operationalPayments.length}</strong></article></div>
     {showCreate && <form className="os-panel modal-form finance-form" onSubmit={createPayment}>
       <PanelTitle eyebrow="OWNER APPROVAL REQUIRED" title="Create a draft payment request" />
-      <div className="field-row"><label><span>PROJECT *</span><select name="projectId" required defaultValue=""><option value="" disabled>Select a client project</option>{data.projects.filter((item) => item.clientId).map((item) => <option value={item.id} key={item.id}>{item.title} · {projectClient(item)}</option>)}</select></label><label><span>TYPE</span><select name="kind" defaultValue="deposit"><option value="deposit">Deposit</option><option value="invoice">Invoice</option><option value="balance">Balance</option><option value="other">Other</option></select></label></div>
+      <div className="field-row"><label><span>PROJECT *</span><select name="projectId" required defaultValue=""><option value="" disabled>Select a client project</option>{data.projects.filter((item) => item.clientId && !item.isTest && !item.archivedAt).map((item) => <option value={item.id} key={item.id}>{item.title} · {projectClient(item)}</option>)}</select></label><label><span>TYPE</span><select name="kind" defaultValue="deposit"><option value="deposit">Deposit</option><option value="invoice">Invoice</option><option value="balance">Balance</option><option value="other">Other</option></select></label></div>
       <div className="field-row"><label><span>TITLE *</span><input name="title" required maxLength={120} placeholder="Project deposit" /></label><label><span>AMOUNT *</span><input name="amount" type="number" min="0.50" max="100000" step="0.01" required placeholder="250.00" /></label></div>
       <label><span>DESCRIPTION</span><textarea name="description" maxLength={500} rows={2} placeholder="What this payment covers" /></label><label><span>DUE DATE</span><input name="dueAt" type="date" /></label>
       <button className="gold-button" disabled={saving}>{saving ? "Saving draft..." : "Save draft"}</button>
     </form>}
-    <section className="os-panel payment-list">{data.paymentRequests.length ? data.paymentRequests.map((payment) => {
+    <section className="os-panel payment-list">{operationalPayments.length ? operationalPayments.map((payment) => {
       const project = data.projects.find((item) => item.id === payment.projectId);
       return <article key={payment.id}><div><span className={cn("status-badge", payment.status)}>{payment.status.replaceAll("_", " ")}</span><h3>{payment.title}</h3><p>{project?.title || "Project"} · {project ? projectClient(project) : "Client"}</p><small>{payment.kind} · Created {formatDate(payment.createdAt)}{payment.dueAt ? ` · Due ${formatDate(payment.dueAt)}` : ""}</small></div><div className="payment-amount"><strong>{formatMoney(payment.amountCents)}</strong>{payment.amountRefundedCents > 0 && <small>{formatMoney(payment.amountRefundedCents)} refunded</small>}<div>{payment.status === "draft" && <button className="gold-button" onClick={() => void perform("approve", payment)}><Check size={14} /> Approve</button>}{["approved", "open", "expired", "failed"].includes(payment.status) && <button className="outline-button" onClick={() => void perform("void", payment)}>Void</button>}{["paid", "partially_refunded"].includes(payment.status) && <button className="outline-button" onClick={() => void perform("refund", payment)}>Refund</button>}</div></div></article>;
     }) : <EmptyState icon={CreditCard} title="No payment requests yet" body="Create a draft from a real client project. The client will only see it after you approve it." />}</section>
@@ -2810,10 +2875,12 @@ function ModuleView({
   const [activeTab, setActiveTab] = useState(config.labels[0]);
   const Icon = config.icon;
   const records = useMemo(() => {
+    const operationalProjects = data.projects.filter((project) => !project.isTest && !project.archivedAt);
+    const operationalProjectIds = new Set(operationalProjects.map((project) => project.id));
     if (type === "knowledge") {
       if (activeTab === "Techniques") {
         const tags = new Map<string, number>();
-        data.projects.forEach((project) =>
+        operationalProjects.forEach((project) =>
           projectTags(project).forEach((tag) =>
             tags.set(tag, (tags.get(tag) || 0) + 1),
           ),
@@ -2826,7 +2893,7 @@ function ModuleView({
         }));
       }
       if (activeTab === "Lessons") {
-        return data.projects
+        return operationalProjects
           .filter(
             (project) =>
               project.lifecyclePhase === "complete" && project.summary,
@@ -2839,14 +2906,14 @@ function ModuleView({
           }));
       }
       if (activeTab === "References") {
-        return data.assets.map((asset) => ({
+        return data.assets.filter((asset) => !asset.projectId || operationalProjectIds.has(asset.projectId)).map((asset) => ({
           id: asset.id,
           title: asset.originalName,
           detail: `${formatBytes(asset.byteSize)} · ${asset.sourceType.replaceAll("_", " ")}`,
           meta: formatDate(asset.createdAt),
         }));
       }
-      return data.projects
+      return operationalProjects
         .filter((project) => project.summary || project.nextAction)
         .map((project) => ({
           id: project.id,
@@ -2871,7 +2938,7 @@ function ModuleView({
           }));
       }
       if (activeTab === "Schedule") {
-        return data.projects
+        return operationalProjects
           .filter((project) => project.lifecyclePhase === "complete")
           .map((project) => ({
             id: project.id,
@@ -2884,7 +2951,7 @@ function ModuleView({
       return imageAssets
         .filter((asset) => {
           if (!draftMode) return true;
-          const project = data.projects.find(
+          const project = operationalProjects.find(
             (item) => item.id === asset.projectId,
           );
           return project?.lifecyclePhase !== "complete";
@@ -2893,7 +2960,7 @@ function ModuleView({
           id: asset.id,
           title: asset.originalName,
           detail:
-            data.projects.find((project) => project.id === asset.projectId)
+            operationalProjects.find((project) => project.id === asset.projectId)
               ?.title || "Unassigned media",
           meta: draftMode ? "Potential draft source" : "Available media source",
         }));
@@ -2934,7 +3001,7 @@ function ModuleView({
             body={`${config.body} The ${activeTab.toLowerCase()} filter is active.`}
           />
         )}
-        <div className="module-integrity"><ShieldCheck size={16} /> Real workspace data only · {data.projects.length} live projects available as sources</div>
+        <div className="module-integrity"><ShieldCheck size={16} /> Real workspace data only · {data.projects.filter((project) => !project.isTest && !project.archivedAt).length} operational projects available as sources</div>
       </section>
     </section>
   );
@@ -4431,7 +4498,7 @@ export function LegacyApp({
         <div className="owner-content">
           {view === "dashboard" && <Dashboard data={data} firstName={actualFirstName} briefing={briefing} generating={generating} onGenerate={generateBriefing} onClient={() => setModal("client")} onProject={() => setModal("project")} onAppointment={() => setModal("appointment")} onView={setView} />}
           {view === "projects" && <ProjectsView data={data} onCreate={() => setModal("project")} refresh={load} notify={notify} />}
-          {view === "clients" && <ClientsView data={data} onCreate={() => setModal("client")} onInvite={setInviteClient} />}
+          {view === "clients" && <ClientsView data={data} onCreate={() => setModal("client")} onInvite={setInviteClient} refresh={load} notify={notify} onView={setView} />}
           {view === "calendar" && <CalendarView data={data} onCreate={() => setModal("appointment")} />}
           {view === "inbox" && <InboxView data={data} onSent={load} notify={notify} />}
           {view === "design" && <DesignStudio data={data} refresh={load} notify={notify} />}

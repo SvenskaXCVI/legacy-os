@@ -259,6 +259,7 @@ async function materializeWorkflowEvent(
         .get()
     : null;
   const projectName = project?.title || "Client workflow";
+  if (project && (project.isTest || project.archivedAt)) return;
   const templates: Record<
     string,
     { title: string; body: string; severity?: string }
@@ -421,6 +422,8 @@ async function createOperationalNotifications(workspaceId: string, db: Db) {
           and(
             eq(projects.workspaceId, workspaceId),
             eq(projects.status, "active"),
+            eq(projects.isTest, false),
+            isNull(projects.archivedAt),
           ),
         ),
     ]);

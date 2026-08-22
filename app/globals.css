@@ -55,6 +55,53 @@
   .lifecycle-record-list > article { align-items: stretch; flex-direction: column; }
 }
 
+.client-workspace-panel { padding: 0; overflow: hidden; }
+.client-workspace-hero { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px; border-bottom: 1px solid var(--line); background: linear-gradient(110deg, rgba(205,143,62,.08), transparent 52%); }
+.client-workspace-identity { display: flex; align-items: center; gap: 14px; }
+.client-workspace-identity > span { display: grid; place-items: center; width: 54px; height: 54px; border: 1px solid rgba(205,143,62,.5); border-radius: 50%; color: var(--gold); font-family: var(--font-display); font-size: 1.05rem; background: rgba(205,143,62,.08); }
+.client-workspace-identity h2 { margin: 2px 0 3px; }
+.client-workspace-actions, .relationship-project-actions, .record-cleanup-bar > div { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.client-workspace-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; padding: 16px 22px; }
+.client-workspace-tabs { padding: 0 22px; overflow-x: auto; flex-wrap: nowrap; }
+.client-workspace-panel > .client-grid, .relationship-project-list, .relationship-timeline { margin: 18px 22px; }
+.owner-private-card { border-color: rgba(205,143,62,.28) !important; }
+.owner-private-card h3 { display: flex; align-items: center; gap: 8px; }
+.relationship-project-list { display: grid; gap: 10px; }
+.relationship-project-list > article { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 16px; border: 1px solid var(--line); border-radius: 13px; background: rgba(255,255,255,.018); }
+.relationship-project-list h3 { margin: 8px 0 4px; }
+.relationship-project-list p, .relationship-project-list small { margin: 0; color: var(--muted); }
+.relationship-project-actions select { max-width: 190px; }
+.archived-record { opacity: .66; }
+.test-record { border-style: dashed !important; }
+.danger-text { color: #dc8e83 !important; }
+.relationship-timeline { position: relative; display: grid; gap: 0; }
+.relationship-timeline > article { position: relative; display: grid; grid-template-columns: 18px 1fr; gap: 12px; padding: 0 0 22px; }
+.relationship-timeline > article::before { content: ""; position: absolute; left: 5px; top: 10px; bottom: -2px; width: 1px; background: var(--line); }
+.relationship-timeline > article:last-child::before { display: none; }
+.relationship-timeline > article > span { width: 11px; height: 11px; margin-top: 4px; border: 2px solid var(--gold); border-radius: 50%; background: var(--surface); z-index: 1; }
+.relationship-timeline strong, .relationship-timeline small { display: block; }
+.relationship-timeline p { margin: 4px 0 0; color: var(--muted); }
+.client-workspace-shortcuts { display: flex; gap: 1px; margin-top: 20px; border-top: 1px solid var(--line); background: var(--line); }
+.client-workspace-shortcuts button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; border: 0; background: var(--surface); color: var(--muted); }
+.client-workspace-shortcuts button:hover { color: var(--gold); background: rgba(205,143,62,.06); }
+.record-cleanup-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 13px; border: 1px dashed var(--line); border-radius: 11px; color: var(--muted); }
+.record-cleanup-bar > span { display: flex; align-items: center; gap: 7px; }
+
+@media (max-width: 900px) {
+  .client-workspace-hero, .record-cleanup-bar { align-items: stretch; flex-direction: column; }
+  .client-workspace-stats { grid-template-columns: 1fr 1fr; }
+  .relationship-project-list > article { align-items: stretch; flex-direction: column; }
+  .client-workspace-shortcuts { display: grid; grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 560px) {
+  .client-workspace-stats { grid-template-columns: 1fr; }
+  .client-workspace-panel > .client-grid, .relationship-project-list, .relationship-timeline { margin-left: 12px; margin-right: 12px; }
+  .client-workspace-hero { padding: 16px; }
+  .client-workspace-tabs { padding: 0 12px; }
+  .client-workspace-shortcuts { grid-template-columns: 1fr; }
+}
+
 .finance-view { display: grid; gap: 16px; }
 .finance-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .finance-heading h2 { margin: 3px 0 4px; font-size: clamp(1.55rem, 2.5vw, 2.15rem); }

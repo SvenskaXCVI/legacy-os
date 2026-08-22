@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb } from "../db";
 import {
   aiEvents,
@@ -126,6 +126,7 @@ export async function captureCompletedProject(
     )
     .get();
   if (!project) throw new Error("Completed project was not found");
+  if (project.isTest || project.archivedAt) return null;
 
   const tags = (() => {
     try {
@@ -203,6 +204,8 @@ export async function runLearningCycle(
             and(
               eq(projects.workspaceId, workspaceId),
               eq(projects.lifecyclePhase, "complete"),
+              eq(projects.isTest, false),
+              isNull(projects.archivedAt),
             ),
           ),
         db

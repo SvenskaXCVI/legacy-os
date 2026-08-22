@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "../../../db";
 import {
   aiEvents,
@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       db
         .select()
         .from(projects)
-        .where(eq(projects.workspaceId, WORKSPACE_ID)),
+        .where(and(eq(projects.workspaceId, WORKSPACE_ID), eq(projects.isTest, false), isNull(projects.archivedAt))),
       db
         .select()
         .from(appointments)
@@ -37,12 +37,13 @@ export async function POST(request: Request) {
         .where(eq(approvals.workspaceId, WORKSPACE_ID)),
     ]);
 
+    const operationalProjectIds = new Set(projectRows.map((item) => item.id));
     const pendingApprovals = approvalRows.filter(
-      (item) => item.status === "pending",
+      (item) => item.status === "pending" && (!item.projectId || operationalProjectIds.has(item.projectId)),
     );
     const now = Date.now();
     const upcoming = appointmentRows
-      .filter((item) => new Date(item.startsAt).getTime() >= now)
+      .filter((item) => new Date(item.startsAt).getTime() >= now && (!item.projectId || operationalProjectIds.has(item.projectId)))
       .sort(
         (a, b) =>
           new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),

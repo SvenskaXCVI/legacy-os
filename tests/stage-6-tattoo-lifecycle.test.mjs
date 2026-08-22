@@ -58,10 +58,9 @@ test("Stage 6 migration is additive and preserves existing project data", async 
   database.close();
 });
 
-test("Stage 6 release identity is centralized", async () => {
+test("release identity remains centralized after Stage 6", async () => {
   const version = await read("lib/version.ts");
   const pkg = JSON.parse(await read("package.json"));
-  assert.equal(pkg.version, "0.7.0-alpha.6");
-  assert.match(version, /0\.7\.0-alpha\.6/);
-  assert.match(version, /Stage 6 · Tattoo Lifecycle/);
+  assert.match(version, new RegExp(`LEGACY_OS_VERSION = ["']${pkg.version.replaceAll(".", "\\.")}["']`));
+  assert.match(await read("docs/TATTOO_LIFECYCLE.md"), /Stage 6/);
 });

@@ -1,5 +1,6 @@
+import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "../../../db";
-import { auditEvents, clients } from "../../../db/schema";
+import { auditEvents, clients, projects } from "../../../db/schema";
 import { captureAutomationSignal } from "../../../lib/automation-engine";
 import { actorFrom, jsonError, makeId, requireOwner, routeError, WORKSPACE_ID } from "../_lib";
 
@@ -91,5 +92,36 @@ export async function POST(request: Request) {
     return Response.json({ id: clientId, status: "created" }, { status: 201 });
   } catch (error) {
     return routeError(error, "Unable to create client");
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    await requireOwner(request);
+    const payload = (await request.json()) as {
+      id?: string;
+      action?: "archive" | "restore";
+      reason?: string;
+    };
+    if (!payload.id || !["archive", "restore"].includes(payload.action || "")) {
+      return jsonError("Client and valid archive action are required");
+    }
+    const db = getDb();
+    const client = await db.select().from(clients).where(and(eq(clients.id, payload.id), eq(clients.workspaceId, WORKSPACE_ID))).get();
+    if (!client) return jsonError("Client not found", 404);
+    if (payload.action === "archive") {
+      const activeProject = await db.select({ id: projects.id }).from(projects).where(and(eq(projects.clientId, client.id), eq(projects.workspaceId, WORKSPACE_ID), eq(projects.status, "active"), isNull(projects.archivedAt))).get();
+      if (activeProject) return jsonError("Archive or complete this client's active projects first", 409);
+    }
+    const now = new Date().toISOString();
+    const actor = actorFrom(request);
+    const archived = payload.action === "archive";
+    await db.batch([
+      db.update(clients).set({ status: archived ? "archived" : "active", archivedAt: archived ? now : null, updatedAt: now }).where(eq(clients.id, client.id)),
+      db.insert(auditEvents).values({ id: makeId("audit"), workspaceId: WORKSPACE_ID, actorType: "user", actorId: actor, action: archived ? "client.archived" : "client.restored", targetType: "client", targetId: client.id, riskLevel: "medium", outcome: "succeeded", metadataJson: JSON.stringify({ reason: payload.reason?.trim() || null, softDelete: archived }), occurredAt: now }),
+    ]);
+    return Response.json({ id: client.id, status: archived ? "archived" : "active" });
+  } catch (error) {
+    return routeError(error, "Unable to update client record");
   }
 }

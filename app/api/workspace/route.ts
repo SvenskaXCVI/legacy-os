@@ -127,6 +127,7 @@ export async function GET(request: Request) {
           summary: projects.summary,
           clientSummary: projects.clientSummary,
           isTest: projects.isTest,
+          archivedAt: projects.archivedAt,
           createdAt: projects.createdAt,
           updatedAt: projects.updatedAt,
         })
