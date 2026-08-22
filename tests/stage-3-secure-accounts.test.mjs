@@ -72,11 +72,11 @@ test("current publishable keys are supported without any secret-role credential"
   assert.match(runbook, /Never add a Supabase secret key or `service_role` key/);
 });
 
-test("Stage 3 release identity is centralized for every footer", async () => {
+test("release identity remains centralized after Stage 3", async () => {
   const version = await read("lib/version.ts");
   const pkg = JSON.parse(await read("package.json"));
 
-  assert.match(version, /LEGACY_OS_VERSION = "0\.5\.0-alpha\.3"/);
-  assert.match(version, /Stage 3 · Secure Accounts/);
-  assert.equal(pkg.version, "0.5.0-alpha.3");
+  assert.match(version, /LEGACY_OS_VERSION = "\d+\.\d+\.\d+-alpha\.\d+"/);
+  assert.match(version, /LEGACY_OS_RELEASE/);
+  assert.match(version, new RegExp(pkg.version.replaceAll(".", "\\.")));
 });

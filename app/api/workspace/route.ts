@@ -9,6 +9,7 @@ import {
   clientMessages,
   clients,
   notifications,
+  paymentRequests,
   projectCandidates,
   projects,
   users,
@@ -74,6 +75,7 @@ export async function GET(request: Request) {
       runRows,
       auditRows,
       notificationRows,
+      paymentRows,
     ] = await Promise.all([
       db
         .select()
@@ -174,6 +176,29 @@ export async function GET(request: Request) {
         )
         .orderBy(desc(notifications.createdAt))
         .limit(50),
+      db
+        .select({
+          id: paymentRequests.id,
+          projectId: paymentRequests.projectId,
+          clientId: paymentRequests.clientId,
+          kind: paymentRequests.kind,
+          title: paymentRequests.title,
+          description: paymentRequests.description,
+          amountCents: paymentRequests.amountCents,
+          amountPaidCents: paymentRequests.amountPaidCents,
+          amountRefundedCents: paymentRequests.amountRefundedCents,
+          currency: paymentRequests.currency,
+          status: paymentRequests.status,
+          dueAt: paymentRequests.dueAt,
+          approvedAt: paymentRequests.approvedAt,
+          paidAt: paymentRequests.paidAt,
+          refundedAt: paymentRequests.refundedAt,
+          createdAt: paymentRequests.createdAt,
+          updatedAt: paymentRequests.updatedAt,
+        })
+        .from(paymentRequests)
+        .where(eq(paymentRequests.workspaceId, WORKSPACE_ID))
+        .orderBy(desc(paymentRequests.createdAt)),
     ]);
 
     return Response.json({
@@ -189,6 +214,7 @@ export async function GET(request: Request) {
       aiRuns: runRows,
       auditEvents: auditRows,
       notifications: notificationRows,
+      paymentRequests: paymentRows,
     });
   } catch (error) {
     return routeError(error, "Unable to load workspace");

@@ -11,6 +11,7 @@ import {
   projectCandidates,
   projects,
   projectUpdates,
+  paymentRequests,
   workspaces,
 } from "../../../db/schema";
 import {
@@ -106,7 +107,7 @@ export async function GET(request: Request) {
       ]);
 
     const projectIds = projectRows.map((project) => project.id);
-    const [approvalRows, assetRows, updateRows] = projectIds.length
+    const [approvalRows, assetRows, updateRows, paymentRows] = projectIds.length
       ? await Promise.all([
           db
             .select({
@@ -165,8 +166,35 @@ export async function GET(request: Request) {
               ),
             )
             .orderBy(desc(projectUpdates.createdAt)),
+          db
+            .select({
+              id: paymentRequests.id,
+              projectId: paymentRequests.projectId,
+              clientId: paymentRequests.clientId,
+              kind: paymentRequests.kind,
+              title: paymentRequests.title,
+              description: paymentRequests.description,
+              amountCents: paymentRequests.amountCents,
+              amountPaidCents: paymentRequests.amountPaidCents,
+              amountRefundedCents: paymentRequests.amountRefundedCents,
+              currency: paymentRequests.currency,
+              status: paymentRequests.status,
+              dueAt: paymentRequests.dueAt,
+              approvedAt: paymentRequests.approvedAt,
+              paidAt: paymentRequests.paidAt,
+              refundedAt: paymentRequests.refundedAt,
+              createdAt: paymentRequests.createdAt,
+              updatedAt: paymentRequests.updatedAt,
+            })
+            .from(paymentRequests)
+            .where(and(
+              eq(paymentRequests.clientId, access.clientId),
+              eq(paymentRequests.workspaceId, access.workspaceId),
+              inArray(paymentRequests.status, ["approved", "open", "paid", "refund_pending", "partially_refunded", "refunded"]),
+            ))
+            .orderBy(desc(paymentRequests.createdAt)),
         ])
-      : [[], [], []];
+      : [[], [], [], []];
     const candidateRows = await db
       .select({
         id: projectCandidates.id,
@@ -211,6 +239,7 @@ export async function GET(request: Request) {
       assets: assetRows,
       updates: updateRows,
       candidates: candidateRows,
+      paymentRequests: paymentRows,
       access: {
         expiresAt: access.invitation?.expiresAt ?? null,
         hint: access.invitation?.tokenHint ?? "verified-account",

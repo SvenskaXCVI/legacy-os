@@ -5,6 +5,7 @@ import { workspaces } from "../../../db/schema";
 import { eq } from "drizzle-orm";
 import { authConfiguration, WORKSPACE_ID } from "../_lib";
 import { LEGACY_OS_RELEASE, LEGACY_OS_VERSION } from "../../../lib/version";
+import { stripeConfiguration } from "../../../lib/stripe";
 
 export async function GET() {
   const checkedAt = new Date().toISOString();
@@ -24,6 +25,7 @@ export async function GET() {
         env.AI_API_KEY?.trim() &&
         env.AI_MODEL?.trim(),
     );
+    const stripe = stripeConfiguration();
     return Response.json({
       status: "healthy",
       version: LEGACY_OS_VERSION,
@@ -51,12 +53,22 @@ export async function GET() {
         instagram_connection: auth.instagramConnection
           ? "configured"
           : "configuration required",
+        payments: stripe.configured
+          ? stripe.testMode
+            ? "Stripe test mode ready"
+            : stripe.liveEnabled
+              ? "Stripe live mode enabled"
+              : "live mode locked"
+          : "configuration required",
       },
       readiness: {
         ownerPrivateAlpha: true,
         externalClientAlpha: auth.externalClientReady,
         modelProviderConfigured: modelConfigured,
         instagramConfigured: auth.instagramConnection,
+        stripeConfigured: stripe.configured,
+        stripeTestMode: stripe.testMode,
+        stripeLiveEnabled: stripe.liveEnabled,
         lastAutomationAt: workspace?.lastAutomationAt || null,
       },
     });

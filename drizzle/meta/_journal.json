@@ -43,6 +43,13 @@
       "when": 1787359653151,
       "tag": "0005_tiresome_calypso",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1787361922471,
+      "tag": "0006_fine_madame_web",
+      "breakpoints": true
     }
   ]
 }

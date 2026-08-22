@@ -24,6 +24,35 @@
   --serif: Georgia, "Times New Roman", serif;
 }
 
+.finance-view { display: grid; gap: 16px; }
+.finance-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.finance-heading h2 { margin: 3px 0 4px; font-size: clamp(1.55rem, 2.5vw, 2.15rem); }
+.finance-heading > div > p:last-child { color: var(--muted); margin: 0; }
+.finance-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.finance-metrics article { border: 1px solid var(--line); background: var(--panel); border-radius: 10px; padding: 17px; display: grid; gap: 7px; }
+.finance-metrics small { color: var(--muted); letter-spacing: .09em; }
+.finance-metrics strong { font-size: 1.5rem; font-weight: 500; }
+.finance-form { max-width: 880px; display: grid; gap: 14px; }
+.payment-list, .portal-payment-list { display: grid; gap: 0; }
+.payment-list > article, .portal-payment-list > article { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 18px; border-bottom: 1px solid var(--line); }
+.payment-list > article:last-child, .portal-payment-list > article:last-child { border-bottom: 0; }
+.payment-list h3, .portal-payment-list h3 { margin: 8px 0 4px; }
+.payment-list p, .portal-payment-list p { color: var(--muted); margin: 0 0 5px; }
+.payment-list small, .portal-payment-list small { color: var(--muted); }
+.payment-amount { margin-left: auto; min-width: 170px; display: grid; justify-items: end; gap: 8px; text-align: right; }
+.payment-amount > strong { color: var(--gold-light); font-size: 1.25rem; }
+.payment-amount > div { display: flex; gap: 8px; }
+.payment-safety { display: flex; align-items: center; gap: 12px; border: 1px solid rgba(201, 145, 75, .26); border-radius: 9px; padding: 13px 15px; margin-bottom: 12px; color: var(--muted); }
+.payment-safety svg { color: var(--gold); flex: 0 0 auto; }
+.payment-safety p { margin: 0; }
+
+@media (max-width: 850px) {
+  .finance-heading { align-items: stretch; flex-direction: column; }
+  .finance-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .payment-list > article, .portal-payment-list > article { align-items: flex-start; flex-direction: column; }
+  .payment-amount { min-width: 0; width: 100%; justify-items: start; text-align: left; }
+}
+
 * {
   box-sizing: border-box;
 }

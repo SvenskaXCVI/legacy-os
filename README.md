@@ -22,6 +22,8 @@ appointments, approvals, analytics, or financial records are inserted.
 - Expiring, revocable, hashed client access links and invitation-bound client
   account creation.
 - Client, project, appointment, message, approval, and private R2 file flows.
+- Owner-approved Stripe deposits and invoices, client-hosted Checkout, signed
+  webhook settlement, refunds, receipts, and an auditable payment ledger.
 - Project lifecycle from consult through design, approval, session, healing,
   and completion.
 - A daily Chief of Staff briefing built from live workspace state.
@@ -53,6 +55,7 @@ the queue.
 - Optional Supabase Auth
 - Optional OpenAI-compatible model adapter
 - Optional Instagram professional-account adapter
+- Optional Stripe Checkout and webhook adapter
 
 ## Local development
 
@@ -94,6 +97,7 @@ owner code must be configured only in the hosting environment and never committe
 - [Entity relationship diagram](docs/ERD.md)
 - [Identity and access](docs/IDENTITY_AND_ACCESS.md)
 - [Supabase account rollout](docs/SUPABASE_ROLLOUT.md)
+- [Stripe alpha rollout](docs/STRIPE_ROLLOUT.md)
 - [Intelligence and autonomy](docs/INTELLIGENCE_AND_AUTONOMY.md)
 - [Operations runbook](docs/OPERATIONS_RUNBOOK.md)
 - [Deployment and sharing](docs/DEPLOYMENT.md)

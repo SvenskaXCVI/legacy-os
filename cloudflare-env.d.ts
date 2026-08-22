@@ -15,6 +15,10 @@ declare module "cloudflare:workers" {
     INSTAGRAM_CLIENT_SECRET?: string;
     INSTAGRAM_REDIRECT_URI?: string;
     SOCIAL_TOKEN_ENCRYPTION_KEY?: string;
+    STRIPE_RESTRICTED_KEY?: string;
+    STRIPE_SECRET_KEY?: string;
+    STRIPE_WEBHOOK_SECRET?: string;
+    STRIPE_LIVE_PAYMENTS_ENABLED?: string;
   };
 }
 

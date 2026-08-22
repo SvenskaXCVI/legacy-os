@@ -1,7 +1,7 @@
 # Legacy OS API Contract
 
 Base path: `/api`  
-Current version: alpha v0.3
+Current version: alpha v0.6
 Encoding: JSON UTF-8
 
 ## Identity
@@ -35,6 +35,9 @@ authorization boundary for the deployed application.
   decision.
 - `POST /api/briefing` prioritizes live workspace state and writes a complete
   observable run.
+- `GET|POST /api/payments` lists owner-scoped payment records or creates,
+  approves, voids, and refunds a payment request. Financial mutations require
+  verified owner access and write audit events.
 
 ## Client portal
 
@@ -47,6 +50,10 @@ authorization boundary for the deployed application.
 - `GET|POST /api/files` uploads project media to R2 or retrieves an authorized
   asset. Uploads are limited to 25 MB, reject executable/active-content
   formats, and receive a SHA-256 integrity hash.
+- `POST /api/payments/checkout` creates or reuses a Stripe-hosted Checkout
+  Session only for an approved request belonging to the authenticated client.
+- `POST /api/payments/webhook` verifies Stripe's signature, deduplicates the
+  provider event, and updates the authoritative payment ledger.
 
 ## Approval decisions
 
@@ -70,6 +77,6 @@ portal token hashes, or client-sensitive content.
 ## Planned routes
 
 Future routes will add dedicated tattoo-session capture, structured healing,
-payments, content publishing, full-text search, and direct knowledge graph
+content publishing, full-text search, and direct knowledge graph
 editing. Their lifecycle checkpoints already generate internal workflow
 guidance but do not fabricate domain records that have not been entered.

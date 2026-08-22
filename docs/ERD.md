@@ -1,6 +1,6 @@
 # Legacy OS Entity Relationship Diagram
 
-This diagram represents the implemented foundation schema. Additional tattoo-session, healing, payment, and content-publication tables should be introduced as their workflow specifications enter implementation.
+This diagram represents the implemented foundation schema. Additional tattoo-session, healing, and content-publication tables should be introduced as their workflow specifications enter implementation.
 
 ```mermaid
 erDiagram
@@ -29,6 +29,10 @@ erDiagram
     CLIENTS ||--o{ CLIENT_MESSAGES : exchanges
     PROJECTS ||--o{ CLIENT_MESSAGES : contextualizes
     PROJECTS ||--o{ PROJECT_UPDATES : publishes
+    CLIENTS ||--o{ PAYMENT_CUSTOMERS : links
+    CLIENTS ||--o{ PAYMENT_REQUESTS : receives
+    PROJECTS ||--o{ PAYMENT_REQUESTS : bills
+    PAYMENT_REQUESTS ||--o{ PAYMENT_EVENTS : verified_by
 
     WORKSPACES {
       text id PK
@@ -103,5 +107,28 @@ erDiagram
       text target_id
       text outcome
       text correlation_id
+    }
+
+    PAYMENT_REQUESTS {
+      text id PK
+      text workspace_id FK
+      text project_id FK
+      text client_id FK
+      text kind
+      integer amount_cents
+      integer amount_paid_cents
+      integer amount_refunded_cents
+      text status
+      text stripe_checkout_session_id
+      text stripe_payment_intent_id
+    }
+
+    PAYMENT_EVENTS {
+      text id PK
+      text payment_request_id FK
+      text external_event_id
+      text event_type
+      text payload_digest
+      text status
     }
 ```

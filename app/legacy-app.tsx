@@ -135,6 +135,26 @@ type ProjectRecord = {
   updatedAt: string;
 };
 
+type PaymentRecord = {
+  id: string;
+  projectId: string;
+  clientId: string;
+  kind: string;
+  title: string;
+  description: string | null;
+  amountCents: number;
+  amountPaidCents: number;
+  amountRefundedCents: number;
+  currency: string;
+  status: string;
+  dueAt: string | null;
+  approvedAt: string | null;
+  paidAt: string | null;
+  refundedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type AppointmentRecord = {
   id: string;
   clientId: string | null;
@@ -272,6 +292,7 @@ type WorkspaceData = {
   aiRuns: RunRecord[];
   auditEvents: AuditRecord[];
   notifications: NotificationRecord[];
+  paymentRequests: PaymentRecord[];
 };
 
 type PortalData = {
@@ -283,6 +304,7 @@ type PortalData = {
   messages: MessageRecord[];
   assets: AssetRecord[];
   candidates: ProjectCandidateRecord[];
+  paymentRequests: PaymentRecord[];
   updates: Array<{
     id: string;
     projectId: string;
@@ -2495,11 +2517,70 @@ function AnalyticsView({ data }: { data: WorkspaceData }) {
   );
 }
 
+function FinanceView({ data, refresh, notify }: { data: WorkspaceData; refresh: () => Promise<void>; notify: (message: string, error?: boolean) => void }) {
+  const [showCreate, setShowCreate] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const paid = data.paymentRequests.reduce((sum, item) => sum + item.amountPaidCents, 0);
+  const refunded = data.paymentRequests.reduce((sum, item) => sum + item.amountRefundedCents, 0);
+  const outstanding = data.paymentRequests.filter((item) => ["approved", "open"].includes(item.status)).reduce((sum, item) => sum + item.amountCents, 0);
+
+  async function perform(action: "approve" | "void" | "refund", payment: PaymentRecord) {
+    if (action === "void" && !window.confirm(`Void ${payment.title}? The client will no longer be able to pay it.`)) return;
+    let refundAmountCents: number | undefined;
+    let reason: string | undefined;
+    if (action === "refund") {
+      const refundable = payment.amountPaidCents - payment.amountRefundedCents;
+      const amount = window.prompt(`Refund amount in dollars (maximum ${(refundable / 100).toFixed(2)}):`, (refundable / 100).toFixed(2));
+      if (amount == null) return;
+      refundAmountCents = Math.round(Number(amount) * 100);
+      reason = window.prompt("Reason for the refund:", "Client-requested refund") || "Owner-approved refund";
+      if (!window.confirm(`Refund ${(refundAmountCents / 100).toLocaleString(undefined, { style: "currency", currency: "USD" })}?`)) return;
+    }
+    try {
+      await api("/api/payments", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ action, id: payment.id, refundAmountCents, reason }) });
+      notify(action === "approve" ? "Payment request approved and visible to the client." : action === "void" ? "Payment request voided." : "Refund submitted to Stripe; the verified webhook will finalize the ledger.");
+      await refresh();
+    } catch (error) { notify(error instanceof Error ? error.message : "Unable to update payment", true); }
+  }
+
+  async function createPayment(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (saving) return;
+    setSaving(true);
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form));
+    try {
+      await api("/api/payments", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
+        action: "create", projectId: values.projectId, kind: values.kind, title: values.title,
+        description: values.description, amount: Number(values.amount), dueAt: values.dueAt || null, requestKey: crypto.randomUUID(),
+      }) });
+      form.reset(); setShowCreate(false); notify("Draft payment request created. Approve it when the details are correct."); await refresh();
+    } catch (error) { notify(error instanceof Error ? error.message : "Unable to create payment request", true); }
+    finally { setSaving(false); }
+  }
+
+  return <section className="finance-view">
+    <div className="finance-heading"><div><p className="eyebrow gold">STRIPE PAYMENT LEDGER</p><h2>Finance Center</h2><p>Owner-approved requests, secure hosted checkout, and webhook-confirmed outcomes.</p></div><button className="gold-button" onClick={() => setShowCreate((value) => !value)}><Plus size={16} /> {showCreate ? "Close" : "New payment request"}</button></div>
+    <div className="finance-metrics"><article><small>COLLECTED</small><strong>{formatMoney(paid)}</strong></article><article><small>OUTSTANDING</small><strong>{formatMoney(outstanding)}</strong></article><article><small>REFUNDED</small><strong>{formatMoney(refunded)}</strong></article><article><small>REQUESTS</small><strong>{data.paymentRequests.length}</strong></article></div>
+    {showCreate && <form className="os-panel modal-form finance-form" onSubmit={createPayment}>
+      <PanelTitle eyebrow="OWNER APPROVAL REQUIRED" title="Create a draft payment request" />
+      <div className="field-row"><label><span>PROJECT *</span><select name="projectId" required defaultValue=""><option value="" disabled>Select a client project</option>{data.projects.filter((item) => item.clientId).map((item) => <option value={item.id} key={item.id}>{item.title} · {projectClient(item)}</option>)}</select></label><label><span>TYPE</span><select name="kind" defaultValue="deposit"><option value="deposit">Deposit</option><option value="invoice">Invoice</option><option value="balance">Balance</option><option value="other">Other</option></select></label></div>
+      <div className="field-row"><label><span>TITLE *</span><input name="title" required maxLength={120} placeholder="Project deposit" /></label><label><span>AMOUNT *</span><input name="amount" type="number" min="0.50" max="100000" step="0.01" required placeholder="250.00" /></label></div>
+      <label><span>DESCRIPTION</span><textarea name="description" maxLength={500} rows={2} placeholder="What this payment covers" /></label><label><span>DUE DATE</span><input name="dueAt" type="date" /></label>
+      <button className="gold-button" disabled={saving}>{saving ? "Saving draft..." : "Save draft"}</button>
+    </form>}
+    <section className="os-panel payment-list">{data.paymentRequests.length ? data.paymentRequests.map((payment) => {
+      const project = data.projects.find((item) => item.id === payment.projectId);
+      return <article key={payment.id}><div><span className={cn("status-badge", payment.status)}>{payment.status.replaceAll("_", " ")}</span><h3>{payment.title}</h3><p>{project?.title || "Project"} · {project ? projectClient(project) : "Client"}</p><small>{payment.kind} · Created {formatDate(payment.createdAt)}{payment.dueAt ? ` · Due ${formatDate(payment.dueAt)}` : ""}</small></div><div className="payment-amount"><strong>{formatMoney(payment.amountCents)}</strong>{payment.amountRefundedCents > 0 && <small>{formatMoney(payment.amountRefundedCents)} refunded</small>}<div>{payment.status === "draft" && <button className="gold-button" onClick={() => void perform("approve", payment)}><Check size={14} /> Approve</button>}{["approved", "open", "expired", "failed"].includes(payment.status) && <button className="outline-button" onClick={() => void perform("void", payment)}>Void</button>}{["paid", "partially_refunded"].includes(payment.status) && <button className="outline-button" onClick={() => void perform("refund", payment)}>Refund</button>}</div></div></article>;
+    }) : <EmptyState icon={CreditCard} title="No payment requests yet" body="Create a draft from a real client project. The client will only see it after you approve it." />}</section>
+  </section>;
+}
+
 function ModuleView({
   type,
   data,
 }: {
-  type: "knowledge" | "content" | "finances";
+  type: "knowledge" | "content";
   data: WorkspaceData;
 }) {
   const config = {
@@ -2514,12 +2595,6 @@ function ModuleView({
       title: "No content is queued",
       body: "Completed sessions and healed outcomes can become reels, posts, captions, and portfolio entries after you add project media.",
       labels: ["Select", "Draft", "Approve", "Schedule"],
-    },
-    finances: {
-      icon: CreditCard,
-      title: "No financial records yet",
-      body: "Deposits, invoices, and revenue will appear only after a real project has a financial event.",
-      labels: ["Deposits", "Invoices", "Payments", "Reports"],
     },
   }[type];
   const [activeTab, setActiveTab] = useState(config.labels[0]);
@@ -2611,22 +2686,6 @@ function ModuleView({
             data.projects.find((project) => project.id === asset.projectId)
               ?.title || "Unassigned media",
           meta: draftMode ? "Potential draft source" : "Available media source",
-        }));
-    }
-    if (activeTab === "Invoices" || activeTab === "Reports") {
-      return data.projects
-        .filter(
-          (project) =>
-            project.budgetMinCents != null || project.budgetMaxCents != null,
-        )
-        .map((project) => ({
-          id: project.id,
-          title: project.title,
-          detail: `${formatMoney(project.budgetMinCents)} – ${formatMoney(project.budgetMaxCents)}`,
-          meta:
-            activeTab === "Reports"
-              ? `${project.lifecyclePhase} · ${projectClient(project)}`
-              : "Budget range; invoice not issued",
         }));
     }
     return [];
@@ -3385,13 +3444,14 @@ function ClientPortal({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [tab, setTab] = useState<
-    "overview" | "intake" | "messages" | "approvals" | "files" | "privacy"
+    "overview" | "intake" | "messages" | "approvals" | "files" | "payments" | "privacy"
   >("overview");
   const [projectId, setProjectId] = useState("");
   const [notice, setNotice] = useState("");
   const [social, setSocial] = useState<SocialAccessData | null>(null);
   const [intakeKey, setIntakeKey] = useState(() => crypto.randomUUID());
   const [submittingIntake, setSubmittingIntake] = useState(false);
+  const [payingId, setPayingId] = useState("");
 
   const load = useCallback(async () => {
     try {
@@ -3431,6 +3491,17 @@ function ClientPortal({
     };
   }, [token]);
 
+  useEffect(() => {
+    const paymentResult = new URLSearchParams(window.location.search).get("payment");
+    if (!paymentResult) return;
+    const handle = window.setTimeout(() => {
+      setTab("payments");
+      setNotice(paymentResult === "success" ? "Payment submitted. Verified status will appear as soon as Stripe confirms it." : "Checkout was cancelled. No payment was recorded.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }, 0);
+    return () => window.clearTimeout(handle);
+  }, []);
+
   const loadSocial = useCallback(async () => {
     try {
       setSocial(
@@ -3456,6 +3527,7 @@ function ClientPortal({
   const messages = data?.messages.filter((item) => !project || !item.projectId || item.projectId === project.id) || [];
   const approvals = data?.approvals.filter((item) => !project || item.projectId === project.id) || [];
   const files = data?.assets.filter((item) => !project || item.projectId === project.id) || [];
+  const payments = data?.paymentRequests.filter((item) => !project || item.projectId === project.id) || [];
 
   async function submitProjectIntake(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3550,6 +3622,21 @@ function ClientPortal({
           ? downloadError.message
           : "Unable to download file",
       );
+    }
+  }
+
+  async function openCheckout(payment: PaymentRecord) {
+    setPayingId(payment.id);
+    try {
+      const result = await api<{ url: string }>("/api/payments/checkout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token, paymentRequestId: payment.id }),
+      });
+      window.location.assign(result.url);
+    } catch (checkoutError) {
+      setNotice(checkoutError instanceof Error ? checkoutError.message : "Unable to open secure checkout");
+      setPayingId("");
     }
   }
 
@@ -3663,6 +3750,11 @@ function ClientPortal({
       title: "No project files yet",
       body: "References and shared documents need a connected project so they remain correctly scoped.",
     },
+    payments: {
+      icon: CreditCard,
+      title: "No payment requests yet",
+      body: "Approved deposits and invoices will appear here when your artist connects them to a project.",
+    },
     privacy: {
       icon: LockKeyhole,
       title: "Your privacy boundary is active",
@@ -3676,7 +3768,7 @@ function ClientPortal({
       <header className="client-header">
         <Brand />
         <nav>
-          {(["overview", "intake", "messages", "approvals", "files", "privacy"] as const).map((item) => (
+          {(["overview", "intake", "messages", "approvals", "files", "payments", "privacy"] as const).map((item) => (
             <button className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>{item === "intake" ? "new project" : item}</button>
           ))}
         </nav>
@@ -3780,6 +3872,7 @@ function ClientPortal({
                   <button onClick={() => setTab("messages")}><MessageSquareText size={20} /><span><strong>Message artist</strong><small>Ask a question or add context</small></span><ArrowRight size={15} /></button>
                   <button onClick={() => setTab("files")}><Upload size={20} /><span><strong>Share reference</strong><small>Upload an image or document</small></span><ArrowRight size={15} /></button>
                   <button onClick={() => setTab("approvals")}><ShieldCheck size={20} /><span><strong>Review approvals</strong><small>{approvals.filter((item) => item.status === "pending").length} waiting</small></span><ArrowRight size={15} /></button>
+                  <button onClick={() => setTab("payments")}><CreditCard size={20} /><span><strong>Payments</strong><small>{payments.filter((item) => ["approved", "open"].includes(item.status)).length} ready</small></span><ArrowRight size={15} /></button>
                   <button onClick={() => setTab("intake")}><Sparkles size={20} /><span><strong>Plan another project</strong><small>Send a structured request</small></span><ArrowRight size={15} /></button>
                 </section>
               </div>
@@ -3822,6 +3915,17 @@ function ClientPortal({
                 </section>
                 <form className="client-card portal-upload" onSubmit={upload}><Upload size={28} /><h3>Share a reference</h3><p>Upload an image or document up to 25 MB.</p><input type="file" name="file" required /><button className="gold-button" type="submit"><Upload size={15} /> Upload file</button></form>
               </div>
+            )}
+
+            {tab === "payments" && (
+              <section className="client-card client-payments">
+                <PanelTitle eyebrow="SECURE CHECKOUT" title="Payments and receipts" />
+                <div className="payment-safety"><ShieldCheck size={20} /><p><strong>Card details are entered on Stripe.</strong> Legacy OS records only verified payment status and receipt details.</p></div>
+                {payments.length ? <div className="portal-payment-list">{payments.map((payment) => {
+                  const balance = Math.max(0, payment.amountPaidCents - payment.amountRefundedCents);
+                  return <article key={payment.id}><div><span className={cn("status-badge", payment.status)}>{payment.status.replaceAll("_", " ")}</span><h3>{payment.title}</h3><p>{payment.description || `${payment.kind} for ${project?.title || "your project"}`}</p><small>{payment.dueAt ? `Due ${formatDate(payment.dueAt)}` : `Created ${formatDate(payment.createdAt)}`}</small></div><div className="payment-amount"><strong>{formatMoney(payment.amountCents)}</strong>{payment.status === "paid" && <small>{formatMoney(balance)} paid</small>}{payment.amountRefundedCents > 0 && <small>{formatMoney(payment.amountRefundedCents)} refunded</small>}{["approved", "open"].includes(payment.status) && <button className="gold-button" disabled={payingId === payment.id} onClick={() => void openCheckout(payment)}><LockKeyhole size={14} /> {payingId === payment.id ? "Opening..." : "Pay securely"}</button>}</div></article>;
+                })}</div> : <EmptyState icon={CreditCard} title="No payment requests" body="Your artist has not issued a deposit or invoice for this project." />}
+              </section>
             )}
 
             {tab === "privacy" && (
@@ -3940,10 +4044,18 @@ export function LegacyApp({
 
   useEffect(() => {
     const handle = window.setTimeout(() => {
-      const token = new URLSearchParams(window.location.search).get("portal");
+      const params = new URLSearchParams(window.location.search);
+      const token = params.get("portal");
       if (token) {
+        window.sessionStorage.setItem("legacy_client_invitation", token);
         setPortalToken(token);
         setMode("portal");
+      } else if (params.has("payment")) {
+        const storedToken = window.sessionStorage.getItem("legacy_client_invitation");
+        if (storedToken) {
+          setPortalToken(storedToken);
+          setMode("portal");
+        }
       }
       void load();
     }, 0);
@@ -4044,11 +4156,10 @@ export function LegacyApp({
           {view === "chief" && <ChiefView data={data} briefing={briefing} generating={generating} onGenerate={generateBriefing} />}
           {view === "operations" && <OperationsView data={data} />}
           {view === "analytics" && <AnalyticsView data={data} />}
-          {(view === "knowledge" ||
-            view === "content" ||
-            view === "finances") && (
+          {(view === "knowledge" || view === "content") && (
             <ModuleView key={view} type={view} data={data} />
           )}
+          {view === "finances" && <FinanceView data={data} refresh={load} notify={notify} />}
           {view === "settings" && <SettingsView data={data} notify={notify} refresh={load} onView={setView} />}
         </div>
         <footer className="owner-footer"><span>LEGACY OS</span><p>Built for creators. Designed to last.</p><span className="release-version">v{LEGACY_OS_VERSION} · {LEGACY_OS_RELEASE}</span><span><i /> CORE SYSTEMS OPERATIONAL</span></footer>

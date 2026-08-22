@@ -1,5 +1,15 @@
 # Legacy OS release history
 
+## 0.6.0-alpha.4 — 2026-08-21
+
+- Added owner-created, owner-approved deposits, invoices, balances, and other payment requests.
+- Added client-scoped Stripe-hosted Checkout without exposing payment credentials to Legacy OS.
+- Added signed, idempotent Stripe webhook processing as the authoritative payment ledger.
+- Added partial/full refund controls, audited financial actions, and payment outcome learning signals.
+- Added owner Finance Center metrics and client payment/receipt history.
+- Added a live-payment safety lock; Stage 4 remains in Stripe test mode for alpha testing.
+- Added three additive payment tables without changing existing client or project records.
+
 ## 0.5.0-alpha.3 — 2026-08-21
 
 - Added verified-email password recovery with a dedicated secure reset screen.

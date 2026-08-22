@@ -1,2 +1,2 @@
-export const LEGACY_OS_VERSION = "0.5.0-alpha.3";
-export const LEGACY_OS_RELEASE = "Stage 3 · Secure Accounts";
+export const LEGACY_OS_VERSION = "0.6.0-alpha.4";
+export const LEGACY_OS_RELEASE = "Stage 4 · Payments";

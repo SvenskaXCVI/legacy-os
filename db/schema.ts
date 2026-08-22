@@ -129,6 +129,93 @@ export const projects = sqliteTable(
   ],
 );
 
+export const paymentCustomers = sqliteTable(
+  "payment_customers",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    clientId: text("client_id").notNull().references(() => clients.id),
+    provider: text("provider").notNull().default("stripe"),
+    externalCustomerId: text("external_customer_id").notNull(),
+    emailAtLink: text("email_at_link"),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("payment_customers_workspace_client_provider_uq").on(
+      table.workspaceId,
+      table.clientId,
+      table.provider,
+    ),
+    uniqueIndex("payment_customers_external_uq").on(table.externalCustomerId),
+  ],
+);
+
+export const paymentRequests = sqliteTable(
+  "payment_requests",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    projectId: text("project_id").notNull().references(() => projects.id),
+    clientId: text("client_id").notNull().references(() => clients.id),
+    kind: text("kind").notNull().default("deposit"),
+    title: text("title").notNull(),
+    description: text("description"),
+    amountCents: integer("amount_cents").notNull(),
+    currency: text("currency").notNull().default("usd"),
+    status: text("status").notNull().default("draft"),
+    amountPaidCents: integer("amount_paid_cents").notNull().default(0),
+    amountRefundedCents: integer("amount_refunded_cents").notNull().default(0),
+    dueAt: text("due_at"),
+    requestKey: text("request_key").notNull(),
+    stripeCheckoutSessionId: text("stripe_checkout_session_id"),
+    stripePaymentIntentId: text("stripe_payment_intent_id"),
+    checkoutUrl: text("checkout_url"),
+    checkoutExpiresAt: text("checkout_expires_at"),
+    checkoutAttempt: integer("checkout_attempt").notNull().default(0),
+    approvedBy: text("approved_by"),
+    approvedAt: text("approved_at"),
+    paidAt: text("paid_at"),
+    refundedAt: text("refunded_at"),
+    createdAt: timestamp("created_at"),
+    updatedAt: timestamp("updated_at"),
+  },
+  (table) => [
+    uniqueIndex("payment_requests_workspace_key_uq").on(table.workspaceId, table.requestKey),
+    uniqueIndex("payment_requests_checkout_session_uq").on(table.stripeCheckoutSessionId),
+    index("payment_requests_workspace_status_idx").on(table.workspaceId, table.status),
+    index("payment_requests_client_status_idx").on(table.clientId, table.status),
+    index("payment_requests_project_idx").on(table.projectId),
+    index("payment_requests_intent_idx").on(table.stripePaymentIntentId),
+  ],
+);
+
+export const paymentEvents = sqliteTable(
+  "payment_events",
+  {
+    id: text("id").primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => workspaces.id),
+    paymentRequestId: text("payment_request_id").references(() => paymentRequests.id),
+    provider: text("provider").notNull().default("stripe"),
+    externalEventId: text("external_event_id").notNull(),
+    eventType: text("event_type").notNull(),
+    externalObjectId: text("external_object_id"),
+    status: text("status").notNull().default("received"),
+    amountCents: integer("amount_cents"),
+    currency: text("currency"),
+    payloadDigest: text("payload_digest").notNull(),
+    error: text("error"),
+    processedAt: text("processed_at"),
+    createdAt: timestamp("created_at"),
+  },
+  (table) => [
+    uniqueIndex("payment_events_external_uq").on(table.externalEventId),
+    index("payment_events_request_idx").on(table.paymentRequestId),
+    index("payment_events_status_idx").on(table.workspaceId, table.status),
+  ],
+);
+
 export const projectCandidates = sqliteTable(
   "project_candidates",
   {
