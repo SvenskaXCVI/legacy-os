@@ -11,6 +11,7 @@ import {
   consentGrants,
   contentCandidates,
   healingCheckins,
+  knowledgeItems,
   notifications,
   paymentRequests,
   projectCandidates,
@@ -76,6 +77,7 @@ export async function GET(request: Request) {
       approvalRows,
       messageRows,
       assetRows,
+      knowledgeRows,
       runRows,
       auditRows,
       notificationRows,
@@ -163,6 +165,23 @@ export async function GET(request: Request) {
         .orderBy(desc(assets.createdAt))
         .limit(100),
       db
+        .select({
+          id: knowledgeItems.id,
+          projectId: knowledgeItems.projectId,
+          itemType: knowledgeItems.itemType,
+          title: knowledgeItems.title,
+          content: knowledgeItems.content,
+          summary: knowledgeItems.summary,
+          tagsJson: knowledgeItems.tagsJson,
+          confidenceBps: knowledgeItems.confidenceBps,
+          verificationStatus: knowledgeItems.verificationStatus,
+          createdAt: knowledgeItems.createdAt,
+        })
+        .from(knowledgeItems)
+        .where(eq(knowledgeItems.workspaceId, WORKSPACE_ID))
+        .orderBy(desc(knowledgeItems.updatedAt))
+        .limit(100),
+      db
         .select()
         .from(aiRuns)
         .where(eq(aiRuns.workspaceId, WORKSPACE_ID))
@@ -224,6 +243,7 @@ export async function GET(request: Request) {
       approvals: approvalRows,
       messages: messageRows,
       assets: assetRows,
+      knowledgeItems: knowledgeRows,
       aiRuns: runRows,
       auditEvents: auditRows,
       notifications: notificationRows,

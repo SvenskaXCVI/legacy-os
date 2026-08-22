@@ -43,7 +43,7 @@ test("notifications reopen for new activity and route to exact work context", as
   assert.match(automation, /`inbox:\$\{clientId/);
   assert.match(automation, /`design:\$\{projectId/);
   assert.match(ui, /type NavigationTarget/);
-  assert.match(ui, /onNavigate\(\{ view: item\.view, id: item\.targetId \}\)/);
+  assert.match(ui, /onNavigate\(\{ view: item\.view, id:/);
   assert.match(ui, /notificationCandidates\.filter/);
 });
 
@@ -57,11 +57,10 @@ test("owner and client interfaces expose read receipts and structured revision r
   assert.match(ui, /approval\.decisionReason/);
 });
 
-test("Stage 9 release identity is centralized", async () => {
+test("Stage 9 release documentation remains present after later stages", async () => {
   const version = await read("lib/version.ts");
   const pkg = JSON.parse(await read("package.json"));
-  assert.equal(pkg.version, "0.7.0-alpha.9");
-  assert.match(version, /0\.7\.0-alpha\.9/);
-  assert.match(version, /Stage 9 · Connected Client Actions/);
+  assert.match(pkg.version, /^0\.7\.0-alpha\.\d+$/);
+  assert.match(version, new RegExp(pkg.version.replaceAll(".", "\\.")));
   assert.match(await read("docs/CONNECTED_CLIENT_ACTIONS.md"), /Secure message round trip/);
 });

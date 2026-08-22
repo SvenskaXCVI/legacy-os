@@ -278,6 +278,19 @@ type AssetRecord = {
   createdAt: string;
 };
 
+type KnowledgeRecord = {
+  id: string;
+  projectId: string | null;
+  itemType: string;
+  title: string;
+  content: string;
+  summary: string | null;
+  tagsJson: string;
+  confidenceBps: number | null;
+  verificationStatus: string;
+  createdAt: string;
+};
+
 type RunRecord = {
   id: string;
   agentName: string;
@@ -361,6 +374,7 @@ type WorkspaceData = {
   approvals: ApprovalRecord[];
   messages: MessageRecord[];
   assets: AssetRecord[];
+  knowledgeItems: KnowledgeRecord[];
   aiRuns: RunRecord[];
   auditEvents: AuditRecord[];
   notifications: NotificationRecord[];
@@ -1012,38 +1026,135 @@ function OwnerHeader({
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [renderedAt] = useState(() => Date.now());
   const normalized = query.trim().toLowerCase();
-  const results = [
+  const clientLabel = (clientId?: string | null) =>
+    fullName(data.clients.find((client) => client.id === clientId));
+  const projectLabel = (projectId?: string | null) =>
+    data.projects.find((project) => project.id === projectId)?.title || "Unlinked project";
+  const searchCandidates: Array<{
+    id: string;
+    targetId?: string;
+    label: string;
+    detail: string;
+    view: OwnerView;
+    type: string;
+    searchText: string;
+  }> = [
     ...data.clients.map((client) => ({
       id: client.id,
       targetId: client.id,
       label: fullName(client),
-      detail: client.email || "Client record",
+      detail: `${client.email || "No email"} · ${client.status}${client.archivedAt ? " · archived" : ""}`,
       view: "clients" as OwnerView,
       type: "Client",
+      searchText: `${client.phone || ""} ${client.instagramHandle || ""} ${client.tiktokHandle || ""} ${client.notes || ""} ${client.preferredChannel || ""}`,
     })),
     ...data.projects.map((project) => ({
       id: project.id,
       targetId: project.id,
       label: project.title,
-      detail: `${projectClient(project)} · ${project.lifecyclePhase}`,
+      detail: `${projectClient(project)} · ${project.lifecyclePhase}${project.archivedAt ? " · archived" : project.isTest ? " · test" : ""}`,
       view: "projects" as OwnerView,
       type: "Project",
+      searchText: `${project.summary || ""} ${project.clientSummary || ""} ${project.nextAction || ""} ${project.placement || ""} ${project.sizeDescription || ""} ${project.styleTagsJson}`,
     })),
     ...data.assets.map((asset) => ({
       id: asset.id,
       targetId: asset.projectId || undefined,
       label: asset.originalName,
-      detail: `${asset.sourceType.replaceAll("_", " ")} · ${formatBytes(asset.byteSize)}`,
+      detail: `${projectLabel(asset.projectId)} · ${asset.sourceType.replaceAll("_", " ")} · ${formatBytes(asset.byteSize)}`,
       view: "design" as OwnerView,
       type: "File",
+      searchText: `${asset.mediaType} ${asset.mimeType} ${asset.assetRole || ""} ${asset.rightsStatus || ""}`,
     })),
-  ].filter(
-    (item) =>
-      !normalized ||
-      `${item.label} ${item.detail} ${item.type}`
-        .toLowerCase()
-        .includes(normalized),
-  );
+    ...data.appointments.map((appointment) => ({
+      id: appointment.id,
+      targetId: appointment.id,
+      label: appointment.appointmentType,
+      detail: `${clientLabel(appointment.clientId)} · ${projectLabel(appointment.projectId)} · ${formatDate(appointment.startsAt, true)}`,
+      view: "calendar" as OwnerView,
+      type: "Appointment",
+      searchText: `${appointment.status} ${appointment.location || ""} ${appointment.notes || ""}`,
+    })),
+    ...data.messages.map((message) => ({
+      id: message.id,
+      targetId: message.clientId,
+      label: `${clientLabel(message.clientId)} message`,
+      detail: `${message.senderType} · ${message.body.slice(0, 110)}`,
+      view: "inbox" as OwnerView,
+      type: "Message",
+      searchText: `${message.body} ${projectLabel(message.projectId)} ${message.status}`,
+    })),
+    ...data.approvals.map((approval) => ({
+      id: approval.id,
+      targetId: approval.projectId || undefined,
+      label: approval.subject,
+      detail: `${projectLabel(approval.projectId)} · ${approval.status} · ${approval.riskLevel} risk`,
+      view: "design" as OwnerView,
+      type: "Approval",
+      searchText: `${approval.summary} ${approval.category} ${approval.decisionReason || ""}`,
+    })),
+    ...data.paymentRequests.map((payment) => ({
+      id: payment.id,
+      label: payment.title,
+      detail: `${clientLabel(payment.clientId)} · ${projectLabel(payment.projectId)} · ${formatMoney(payment.amountCents)} · ${payment.status}`,
+      view: "finances" as OwnerView,
+      type: "Payment",
+      searchText: `${payment.description || ""} ${payment.kind} ${payment.currency}`,
+    })),
+    ...data.tattooSessions.map((session) => ({
+      id: session.id,
+      label: `${projectLabel(session.projectId)} · Session ${session.sessionNumber}`,
+      detail: `${clientLabel(session.clientId)} · ${session.status}`,
+      view: "operations" as OwnerView,
+      type: "Session",
+      searchText: `${session.clientVisibleSummary || ""} ${session.techniqueNotes || ""} ${session.needleSetup || ""} ${session.inkSetup || ""}`,
+    })),
+    ...data.healingCheckins.map((checkin) => ({
+      id: checkin.id,
+      label: `${projectLabel(checkin.projectId)} · Day ${checkin.checkpointDay} healing`,
+      detail: `${clientLabel(checkin.clientId)} · ${checkin.status}${checkin.concernFlag ? " · concern flagged" : ""}`,
+      view: "operations" as OwnerView,
+      type: "Healing",
+      searchText: `${checkin.clientNotes || ""} ${checkin.studioNotes || ""} ${checkin.ownerResponse || ""}`,
+    })),
+    ...data.contentCandidates.map((candidate) => ({
+      id: candidate.id,
+      label: candidate.title,
+      detail: `${projectLabel(candidate.projectId)} · ${candidate.format} · ${candidate.status.replaceAll("_", " ")}`,
+      view: "content" as OwnerView,
+      type: "Content",
+      searchText: `${candidate.captionDraft || ""} ${candidate.rightsStatus} ${candidate.consentStatus}`,
+    })),
+    ...data.projectCandidates.map((candidate) => ({
+      id: candidate.id,
+      targetId: candidate.proposedProjectId || undefined,
+      label: candidate.requestedTitle,
+      detail: `${clientLabel(candidate.clientId)} · intake · ${candidate.status.replaceAll("_", " ")}`,
+      view: "projects" as OwnerView,
+      type: "Intake",
+      searchText: `${candidate.concept} ${candidate.placement || ""} ${candidate.sizeDescription || ""} ${candidate.referencesSummary || ""} ${candidate.constraints || ""} ${candidate.styleTagsJson}`,
+    })),
+    ...data.knowledgeItems.map((item) => ({
+      id: item.id,
+      label: item.title,
+      detail: `${item.itemType.replaceAll("_", " ")} · ${item.verificationStatus}${item.confidenceBps == null ? "" : ` · ${Math.round(item.confidenceBps / 100)}% confidence`}`,
+      view: "knowledge" as OwnerView,
+      type: "Knowledge",
+      searchText: `${item.summary || ""} ${item.content} ${item.tagsJson} ${projectLabel(item.projectId)}`,
+    })),
+  ];
+  const results = normalized.length < 2
+    ? []
+    : searchCandidates
+      .map((item) => {
+        const label = item.label.toLowerCase();
+        const type = item.type.toLowerCase();
+        const haystack = `${item.label} ${item.detail} ${item.type} ${item.searchText}`.toLowerCase();
+        const score = label === normalized ? 100 : label.startsWith(normalized) ? 80 : type === normalized ? 70 : label.includes(normalized) ? 60 : haystack.includes(normalized) ? 30 : 0;
+        return { ...item, score };
+      })
+      .filter((item) => item.score > 0)
+      .sort((left, right) => right.score - left.score || left.label.localeCompare(right.label));
   const persistedNotifications = data.notifications.map((item) => {
     const [destination, targetId] = item.actionUrl?.split(":") || [];
     const destinationMap: Record<string, OwnerView> = {
@@ -1236,16 +1347,22 @@ function OwnerHeader({
                 autoFocus
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search clients, projects, or files..."
+                placeholder="Search clients, projects, messages, appointments, knowledge..."
               />
             </label>
             <div className="search-results">
-              {results.length ? (
+              {normalized.length < 2 ? (
+                <EmptyState
+                  icon={Search}
+                  title="Search the complete workspace"
+                  body="Enter at least two characters to search clients, projects, messages, appointments, files, payments, sessions, healing, content, intake, and knowledge."
+                />
+              ) : results.length ? (
                 results.slice(0, 20).map((item) => (
                   <button
                     key={`${item.type}-${item.id}`}
                     onClick={() => {
-                      onNavigate({ view: item.view, id: item.targetId });
+                      onNavigate({ view: item.view, id: "targetId" in item ? item.targetId : undefined });
                       setSearchOpen(false);
                       setQuery("");
                     }}
@@ -1262,7 +1379,7 @@ function OwnerHeader({
                 <EmptyState
                   icon={Search}
                   title="No matching records"
-                  body="Try a client name, project title, or file name."
+                  body="Try a name, title, message phrase, appointment type, payment, or knowledge term."
                 />
               )}
             </div>
@@ -2072,10 +2189,20 @@ function ClientsView({
 function CalendarView({
   data,
   onCreate,
+  targetId,
 }: {
   data: WorkspaceData;
   onCreate: () => void;
+  targetId?: string;
 }) {
+  useEffect(() => {
+    if (!targetId) return;
+    document.getElementById(`appointment-${targetId}`)?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  }, [targetId]);
+
   return (
     <section className="page-stack">
       <div className="section-toolbar">
@@ -2106,7 +2233,7 @@ function CalendarView({
                 (item) => item.id === appointment.projectId,
               );
               return (
-                <article key={appointment.id}>
+                <article id={`appointment-${appointment.id}`} className={cn(targetId === appointment.id && "focused-record")} key={appointment.id}>
                   <div className="calendar-date">
                     <strong>{new Date(appointment.startsAt).getDate()}</strong>
                     <span>{new Date(appointment.startsAt).toLocaleString("en-US", { month: "short" })}</span>
@@ -2848,42 +2975,150 @@ function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refres
   );
 }
 
-function AnalyticsView({ data }: { data: WorkspaceData }) {
+function AnalyticsView({ data, onNavigate }: { data: WorkspaceData; onNavigate: (target: NavigationTarget) => void }) {
+  type AnalyticsRecord = {
+    id: string;
+    title: string;
+    detail: string;
+    meta: string;
+    target: NavigationTarget;
+  };
+  type AnalyticsMetric = {
+    id: string;
+    lens: "overview" | "financial" | "workflow";
+    label: string;
+    value: string | number;
+    detail: string;
+    icon: LucideIcon;
+    records: AnalyticsRecord[];
+  };
+  const [lens, setLens] = useState<AnalyticsMetric["lens"]>("overview");
+  const [selectedMetricId, setSelectedMetricId] = useState("active_projects");
   const operationalProjects = data.projects.filter((project) => !project.isTest && !project.archivedAt);
   const operationalProjectIds = new Set(operationalProjects.map((project) => project.id));
+  const operationalClients = data.clients.filter((client) => !client.archivedAt);
+  const operationalAppointments = data.appointments.filter((item) => !item.projectId || operationalProjectIds.has(item.projectId));
+  const operationalApprovals = data.approvals.filter((item) => !item.projectId || operationalProjectIds.has(item.projectId));
+  const operationalPayments = data.paymentRequests.filter((item) => operationalProjectIds.has(item.projectId));
+  const operationalSessions = data.tattooSessions.filter((item) => operationalProjectIds.has(item.projectId));
+  const operationalHealing = data.healingCheckins.filter((item) => operationalProjectIds.has(item.projectId));
+  const operationalContent = data.contentCandidates.filter((item) => operationalProjectIds.has(item.projectId));
+  const clientName = (clientId?: string | null) => fullName(data.clients.find((client) => client.id === clientId));
+  const projectName = (projectId?: string | null) => data.projects.find((project) => project.id === projectId)?.title || "Unlinked project";
+  const projectRecords = (projects: ProjectRecord[]): AnalyticsRecord[] => projects.map((project) => ({
+    id: project.id,
+    title: project.title,
+    detail: `${projectClient(project)} · ${project.lifecyclePhase}`,
+    meta: project.nextAction || project.status,
+    target: { view: "projects", id: project.id },
+  }));
+  const metrics: AnalyticsMetric[] = [
+    {
+      id: "active_projects", lens: "overview", label: "ACTIVE PROJECTS", value: operationalProjects.length,
+      detail: "Real, non-archived projects", icon: FolderKanban, records: projectRecords(operationalProjects),
+    },
+    {
+      id: "active_clients", lens: "overview", label: "ACTIVE CLIENTS", value: operationalClients.length,
+      detail: "Non-archived relationship records", icon: UsersRound,
+      records: operationalClients.map((client) => ({ id: client.id, title: fullName(client), detail: client.email || "No email saved", meta: client.status, target: { view: "clients", id: client.id } })),
+    },
+    {
+      id: "appointments", lens: "overview", label: "APPOINTMENTS", value: operationalAppointments.length,
+      detail: "Operational schedule commitments", icon: CalendarDays,
+      records: operationalAppointments.map((item) => ({ id: item.id, title: item.appointmentType, detail: `${clientName(item.clientId)} · ${formatDate(item.startsAt, true)}`, meta: `${projectName(item.projectId)} · ${item.status}`, target: { view: "calendar", id: item.id } })),
+    },
+    {
+      id: "pending_approvals", lens: "overview", label: "PENDING APPROVALS", value: operationalApprovals.filter((item) => item.status === "pending").length,
+      detail: "Decisions currently waiting", icon: ShieldCheck,
+      records: operationalApprovals.filter((item) => item.status === "pending").map((item) => ({ id: item.id, title: item.subject, detail: projectName(item.projectId), meta: `${item.category} · ${item.riskLevel} risk`, target: { view: "design", id: item.projectId || undefined } })),
+    },
+    {
+      id: "collected", lens: "financial", label: "COLLECTED", value: formatMoney(operationalPayments.reduce((sum, item) => sum + item.amountPaidCents - item.amountRefundedCents, 0)),
+      detail: "Verified payments after refunds", icon: CircleDollarSign,
+      records: operationalPayments.filter((item) => item.amountPaidCents > 0).map((item) => ({ id: item.id, title: item.title, detail: `${clientName(item.clientId)} · ${formatMoney(item.amountPaidCents - item.amountRefundedCents)}`, meta: `${projectName(item.projectId)} · ${item.status}`, target: { view: "finances", id: item.id } })),
+    },
+    {
+      id: "outstanding", lens: "financial", label: "OUTSTANDING", value: formatMoney(operationalPayments.filter((item) => ["approved", "open"].includes(item.status)).reduce((sum, item) => sum + Math.max(0, item.amountCents - item.amountPaidCents), 0)),
+      detail: "Approved or open unpaid balances", icon: CreditCard,
+      records: operationalPayments.filter((item) => ["approved", "open"].includes(item.status)).map((item) => ({ id: item.id, title: item.title, detail: `${clientName(item.clientId)} · ${formatMoney(Math.max(0, item.amountCents - item.amountPaidCents))} remaining`, meta: `${projectName(item.projectId)} · ${item.status}`, target: { view: "finances", id: item.id } })),
+    },
+    {
+      id: "refunds", lens: "financial", label: "REFUNDED", value: formatMoney(operationalPayments.reduce((sum, item) => sum + item.amountRefundedCents, 0)),
+      detail: "Webhook-confirmed refund ledger", icon: ArrowLeft,
+      records: operationalPayments.filter((item) => item.amountRefundedCents > 0).map((item) => ({ id: item.id, title: item.title, detail: `${clientName(item.clientId)} · ${formatMoney(item.amountRefundedCents)} refunded`, meta: `${projectName(item.projectId)} · ${item.status}`, target: { view: "finances", id: item.id } })),
+    },
+    {
+      id: "payment_requests", lens: "financial", label: "PAYMENT REQUESTS", value: operationalPayments.length,
+      detail: "Draft through settled requests", icon: FileText,
+      records: operationalPayments.map((item) => ({ id: item.id, title: item.title, detail: `${clientName(item.clientId)} · ${formatMoney(item.amountCents)}`, meta: `${projectName(item.projectId)} · ${item.status}`, target: { view: "finances", id: item.id } })),
+    },
+    {
+      id: "sessions", lens: "workflow", label: "TATTOO SESSIONS", value: operationalSessions.length,
+      detail: "Planned and completed session records", icon: Activity,
+      records: operationalSessions.map((item) => ({ id: item.id, title: `${projectName(item.projectId)} · Session ${item.sessionNumber}`, detail: clientName(item.clientId), meta: item.status, target: { view: "operations", id: item.id } })),
+    },
+    {
+      id: "healing", lens: "workflow", label: "HEALING CHECK-INS", value: operationalHealing.length,
+      detail: "Scheduled and submitted outcomes", icon: HeartHandshake,
+      records: operationalHealing.map((item) => ({ id: item.id, title: `${projectName(item.projectId)} · Day ${item.checkpointDay}`, detail: clientName(item.clientId), meta: `${item.status}${item.concernFlag ? " · concern flagged" : ""}`, target: { view: "operations", id: item.id } })),
+    },
+    {
+      id: "content", lens: "workflow", label: "CONTENT DRAFTS", value: operationalContent.length,
+      detail: "Consent- and rights-gated candidates", icon: ImageIcon,
+      records: operationalContent.map((item) => ({ id: item.id, title: item.title, detail: `${projectName(item.projectId)} · ${item.format}`, meta: item.status.replaceAll("_", " "), target: { view: "content", id: item.id } })),
+    },
+    {
+      id: "intake", lens: "workflow", label: "INTAKE REQUESTS", value: data.projectCandidates.length,
+      detail: "Client-submitted project candidates", icon: Inbox,
+      records: data.projectCandidates.map((item) => ({ id: item.id, title: item.requestedTitle, detail: `${clientName(item.clientId)} · ${item.placement || "Placement not set"}`, meta: item.status.replaceAll("_", " "), target: { view: "projects", id: item.proposedProjectId || undefined } })),
+    },
+  ];
+  const lensMetrics = metrics.filter((metric) => metric.lens === lens);
+  const selectedMetric = metrics.find((metric) => metric.id === selectedMetricId) || lensMetrics[0];
   const phaseCounts = phases.map((phase) => ({
     phase,
-    count: operationalProjects.filter((project) => project.lifecyclePhase === phase).length,
+    projects: operationalProjects.filter((project) => project.lifecyclePhase === phase),
   }));
-  const max = Math.max(1, ...phaseCounts.map((item) => item.count));
+  const max = Math.max(1, ...phaseCounts.map((item) => item.projects.length));
+  function chooseLens(nextLens: AnalyticsMetric["lens"]) {
+    setLens(nextLens);
+    setSelectedMetricId(metrics.find((metric) => metric.lens === nextLens)?.id || "active_projects");
+  }
   return (
     <section className="page-stack">
-      {operationalProjects.length === 0 ? (
-        <section className="os-panel tall-empty">
-          <EmptyState icon={BarChart3} title="Analytics will grow with your studio" body="No fabricated charts are shown. Real trends appear after projects, appointments, approvals, and outcomes are recorded." />
-        </section>
-      ) : (
-        <>
-          <section className="stats-grid">
-            <StatCard icon={UsersRound} label="CLIENTS" value={data.clients.filter((client) => !client.archivedAt).length} detail="Active relationship records" />
-            <StatCard icon={FolderKanban} label="PROJECTS" value={operationalProjects.length} detail="Real, non-archived projects" />
-            <StatCard icon={CalendarDays} label="APPOINTMENTS" value={data.appointments.filter((item) => !item.projectId || operationalProjectIds.has(item.projectId)).length} detail="Operational schedule commitments" />
-            <StatCard icon={ShieldCheck} label="APPROVALS" value={data.approvals.filter((item) => !item.projectId || operationalProjectIds.has(item.projectId)).length} detail="Operational client and owner decisions" />
-          </section>
+      <div className="analytics-tabs" role="tablist" aria-label="Analytics view">
+        {(["overview", "financial", "workflow"] as const).map((item) => <button role="tab" aria-selected={lens === item} className={cn(lens === item && "active")} key={item} onClick={() => chooseLens(item)}>{item}</button>)}
+      </div>
+      <section className="stats-grid analytics-metrics">
+        {lensMetrics.map((metric) => {
+          const Icon = metric.icon;
+          return <button className={cn("stat-card analytics-metric", selectedMetric?.id === metric.id && "active")} aria-pressed={selectedMetric?.id === metric.id} key={metric.id} onClick={() => setSelectedMetricId(metric.id)}><div><p>{metric.label}</p><strong>{metric.value}</strong><small>{metric.detail}</small></div><span><Icon size={19} strokeWidth={1.5} /></span></button>;
+        })}
+      </section>
+      <div className="analytics-workspace">
+        {lens === "overview" && operationalProjects.length > 0 && (
           <section className="os-panel lifecycle-analytics">
             <PanelTitle eyebrow="PROJECT DISTRIBUTION" title="Lifecycle activity" />
             <div className="bar-chart">
               {phaseCounts.map((item) => (
-                <div key={item.phase}>
-                  <span><i style={{ height: `${Math.max(4, (item.count / max) * 100)}%` }} /></span>
-                  <strong>{item.count}</strong>
+                <button key={item.phase} aria-label={`Show ${item.projects.length} ${item.phase} projects`} onClick={() => setSelectedMetricId(`phase:${item.phase}`)}>
+                  <span><i style={{ height: `${Math.max(4, (item.projects.length / max) * 100)}%` }} /></span>
+                  <strong>{item.projects.length}</strong>
                   <small>{item.phase}</small>
-                </div>
+                </button>
               ))}
             </div>
           </section>
-        </>
-      )}
+        )}
+        <section className="os-panel analytics-detail">
+          <PanelTitle eyebrow="SOURCE RECORDS" title={selectedMetricId.startsWith("phase:") ? `${selectedMetricId.split(":")[1]} projects` : selectedMetric?.label || "Analytics evidence"} />
+          <p className="analytics-integrity"><ShieldCheck size={14} /> Counts are calculated from current workspace records. Test and archived projects are excluded.</p>
+          <div className="analytics-record-list">
+            {(selectedMetricId.startsWith("phase:") ? projectRecords(phaseCounts.find((item) => item.phase === selectedMetricId.split(":")[1])?.projects || []) : selectedMetric?.records || []).map((record) => <article key={record.id}><div><strong>{record.title}</strong><p>{record.detail}</p><small>{record.meta}</small></div><button className="text-button" onClick={() => onNavigate(record.target)}>Open <ArrowRight size={13} /></button></article>)}
+            {(selectedMetricId.startsWith("phase:") ? phaseCounts.find((item) => item.phase === selectedMetricId.split(":")[1])?.projects.length === 0 : !selectedMetric?.records.length) && <EmptyState icon={BarChart3} title="No source records in this view" body="This metric is zero because the workspace has no matching operational records yet." />}
+          </div>
+        </section>
+      </div>
     </section>
   );
 }
@@ -4662,12 +4897,12 @@ export function LegacyApp({
           {view === "dashboard" && <Dashboard data={data} firstName={actualFirstName} briefing={briefing} generating={generating} onGenerate={generateBriefing} onClient={() => setModal("client")} onProject={() => setModal("project")} onAppointment={() => setModal("appointment")} onView={(nextView) => navigate({ view: nextView })} />}
           {view === "projects" && <ProjectsView key={navigationTarget.view === "projects" ? navigationTarget.id || "projects" : "projects"} data={data} onCreate={() => setModal("project")} refresh={load} notify={notify} targetId={navigationTarget.view === "projects" ? navigationTarget.id : undefined} />}
           {view === "clients" && <ClientsView key={navigationTarget.view === "clients" ? navigationTarget.id || "clients" : "clients"} data={data} onCreate={() => setModal("client")} onInvite={setInviteClient} refresh={load} notify={notify} onView={(nextView) => navigate({ view: nextView })} targetId={navigationTarget.view === "clients" ? navigationTarget.id : undefined} />}
-          {view === "calendar" && <CalendarView data={data} onCreate={() => setModal("appointment")} />}
+          {view === "calendar" && <CalendarView key={navigationTarget.view === "calendar" ? navigationTarget.id || "calendar" : "calendar"} data={data} onCreate={() => setModal("appointment")} targetId={navigationTarget.view === "calendar" ? navigationTarget.id : undefined} />}
           {view === "inbox" && <InboxView key={navigationTarget.view === "inbox" ? navigationTarget.id || "inbox" : "inbox"} data={data} onSent={load} notify={notify} targetId={navigationTarget.view === "inbox" ? navigationTarget.id : undefined} />}
           {view === "design" && <DesignStudio key={navigationTarget.view === "design" ? navigationTarget.id || "design" : "design"} data={data} refresh={load} notify={notify} targetId={navigationTarget.view === "design" ? navigationTarget.id : undefined} />}
           {view === "chief" && <ChiefView data={data} briefing={briefing} generating={generating} onGenerate={generateBriefing} />}
           {view === "operations" && <OperationsView data={data} refresh={load} notify={notify} />}
-          {view === "analytics" && <AnalyticsView data={data} />}
+          {view === "analytics" && <AnalyticsView data={data} onNavigate={navigate} />}
           {(view === "knowledge" || view === "content") && (
             <ModuleView key={view} type={view} data={data} />
           )}
