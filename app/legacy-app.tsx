@@ -33,12 +33,15 @@ import {
   LockKeyhole,
   Menu,
   MessageSquareText,
+  Moon,
+  Palette,
   Plus,
   Search,
   Send,
   Settings,
   ShieldCheck,
   Sparkles,
+  Sun,
   Upload,
   UserRound,
   UserCog,
@@ -75,6 +78,50 @@ type OwnerView =
   | "settings";
 
 type NavigationTarget = { view: OwnerView; id?: string };
+
+type ThemeMode = "dark" | "light";
+type AccentName = "gold" | "amber" | "coral" | "rose" | "violet" | "blue" | "teal" | "emerald";
+type PersonalizationPreferences = { theme: ThemeMode; accent: AccentName };
+
+const DEFAULT_PERSONALIZATION: PersonalizationPreferences = {
+  theme: "dark",
+  accent: "gold",
+};
+
+const ACCENT_OPTIONS: Array<{ id: AccentName; label: string; color: string }> = [
+  { id: "gold", label: "Legacy Gold", color: "#c7873c" },
+  { id: "amber", label: "Amber", color: "#d99a2b" },
+  { id: "coral", label: "Coral", color: "#d97757" },
+  { id: "rose", label: "Rose", color: "#c9617d" },
+  { id: "violet", label: "Violet", color: "#8b6bd6" },
+  { id: "blue", label: "Blue", color: "#4f86d9" },
+  { id: "teal", label: "Teal", color: "#3c9b95" },
+  { id: "emerald", label: "Emerald", color: "#4d9b68" },
+];
+
+function applyPersonalization(preferences: PersonalizationPreferences) {
+  document.documentElement.dataset.theme = preferences.theme;
+  document.documentElement.dataset.accent = preferences.accent;
+  document.documentElement.style.colorScheme = preferences.theme;
+}
+
+function readPersonalization(): PersonalizationPreferences {
+  if (typeof window === "undefined") return DEFAULT_PERSONALIZATION;
+  const saved = window.localStorage.getItem("legacy_personalization");
+  if (!saved) return DEFAULT_PERSONALIZATION;
+  try {
+    const candidate = JSON.parse(saved) as Partial<PersonalizationPreferences>;
+    return {
+      theme: candidate.theme === "light" ? "light" : "dark",
+      accent: ACCENT_OPTIONS.some((option) => option.id === candidate.accent)
+        ? (candidate.accent as AccentName)
+        : "gold",
+    };
+  } catch {
+    window.localStorage.removeItem("legacy_personalization");
+    return DEFAULT_PERSONALIZATION;
+  }
+}
 
 type ClientRecord = {
   id: string;
@@ -3388,11 +3435,15 @@ function SettingsView({
   notify,
   refresh,
   onView,
+  personalization,
+  onPersonalization,
 }: {
   data: WorkspaceData;
   notify: (message: string, error?: boolean) => void;
   refresh: () => void;
   onView: (view: OwnerView) => void;
+  personalization: PersonalizationPreferences;
+  onPersonalization: (preferences: PersonalizationPreferences) => void;
 }) {
   const [activeTab, setActiveTab] = useState<
     | "workspace"
@@ -3401,6 +3452,7 @@ function SettingsView({
     | "team"
     | "security"
     | "notifications"
+    | "personalization"
   >("workspace");
   const [automation, setAutomation] = useState<AutomationSnapshot | null>(null);
   const [automationBusy, setAutomationBusy] = useState(false);
@@ -3560,6 +3612,12 @@ function SettingsView({
           onClick={() => setActiveTab("notifications")}
         >
           <Bell size={15} /> Notifications
+        </button>
+        <button
+          className={activeTab === "personalization" ? "active" : ""}
+          onClick={() => setActiveTab("personalization")}
+        >
+          <Palette size={15} /> Personalization
         </button>
       </div>
       {activeTab === "workspace" && (
@@ -3794,6 +3852,43 @@ function SettingsView({
             </button>
           ))}
         </section>
+      )}
+      {activeTab === "personalization" && (
+        <div className="settings-grid personalization-grid">
+          <section className="os-panel setting-card personalization-card">
+            <PanelTitle eyebrow="APPEARANCE" title="Light or dark" />
+            <p className="personalization-intro">Choose the workspace appearance that is most comfortable for your environment. Your choice is saved on this device.</p>
+            <div className="theme-choice-grid">
+              <button className={cn(personalization.theme === "dark" && "active")} aria-pressed={personalization.theme === "dark"} onClick={() => onPersonalization({ ...personalization, theme: "dark" })}>
+                <span className="theme-preview dark-preview"><Moon size={20} /></span>
+                <span><strong>Dark</strong><small>Focused, low-light workspace</small></span>
+                {personalization.theme === "dark" && <CheckCircle2 size={18} />}
+              </button>
+              <button className={cn(personalization.theme === "light" && "active")} aria-pressed={personalization.theme === "light"} onClick={() => onPersonalization({ ...personalization, theme: "light" })}>
+                <span className="theme-preview light-preview"><Sun size={20} /></span>
+                <span><strong>Light</strong><small>Bright, high-contrast workspace</small></span>
+                {personalization.theme === "light" && <CheckCircle2 size={18} />}
+              </button>
+            </div>
+          </section>
+          <section className="os-panel setting-card personalization-card">
+            <PanelTitle eyebrow="ACCENT" title="Interface color" />
+            <p className="personalization-intro">Select one of eight curated accents. Status colors keep their operational meaning.</p>
+            <div className="accent-choice-grid">
+              {ACCENT_OPTIONS.map((option) => (
+                <button key={option.id} className={cn(personalization.accent === option.id && "active")} aria-pressed={personalization.accent === option.id} onClick={() => onPersonalization({ ...personalization, accent: option.id })}>
+                  <i style={{ backgroundColor: option.color }} />
+                  <span>{option.label}</span>
+                  {personalization.accent === option.id && <Check size={14} />}
+                </button>
+              ))}
+            </div>
+          </section>
+          <section className="os-panel personalization-preview-card">
+            <div><p className="eyebrow gold">LIVE PREVIEW</p><h3>Legacy OS, shaped for how you work.</h3><p>The selected appearance and accent apply immediately across owner and client views on this device.</p></div>
+            <div className="personalization-preview-actions"><span className="gold-button"><Sparkles size={15} /> Primary action</span><span className="outline-button"><ShieldCheck size={15} /> Secondary action</span></div>
+          </section>
+        </div>
       )}
     </section>
   );
@@ -4808,11 +4903,23 @@ export function LegacyApp({
   const [toast, setToast] = useState<{ message: string; error: boolean } | null>(null);
   const [briefing, setBriefing] = useState<Briefing | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [personalization, setPersonalization] =
+    useState<PersonalizationPreferences>(readPersonalization);
 
   const notify = useCallback((message: string, isError = false) => {
     setToast({ message, error: isError });
     window.setTimeout(() => setToast(null), 4200);
   }, []);
+
+  const updatePersonalization = useCallback(
+    (next: PersonalizationPreferences) => {
+      setPersonalization(next);
+      applyPersonalization(next);
+      window.localStorage.setItem("legacy_personalization", JSON.stringify(next));
+      notify("Appearance saved on this device.");
+    },
+    [notify],
+  );
 
   const load = useCallback(async () => {
     try {
@@ -4949,9 +5056,9 @@ export function LegacyApp({
             <ModuleView key={view} type={view} data={data} />
           )}
           {view === "finances" && <FinanceView data={data} refresh={load} notify={notify} />}
-          {view === "settings" && <SettingsView data={data} notify={notify} refresh={load} onView={(nextView) => navigate({ view: nextView })} />}
+          {view === "settings" && <SettingsView data={data} notify={notify} refresh={load} onView={(nextView) => navigate({ view: nextView })} personalization={personalization} onPersonalization={updatePersonalization} />}
         </div>
-        <footer className="owner-footer"><span>LEGACY OS</span><p>Built for creators. Designed to last.</p><span className="release-version">v{LEGACY_OS_VERSION} · {LEGACY_OS_RELEASE}</span><span><i /> CORE SYSTEMS OPERATIONAL</span></footer>
+        <footer className="owner-footer"><span>LEGACY OS</span><p>Built for creators. Designed to last.</p><span className="daylight-credit"><NextImage src="/daylight-forge.png" alt="Powered by Daylight Forge" width={180} height={48} /></span><span className="release-version">v{LEGACY_OS_VERSION} · {LEGACY_OS_RELEASE}</span><span><i /> CORE SYSTEMS OPERATIONAL</span></footer>
       </main>
 
       {modal === "client" && <ClientForm onClose={() => setModal(null)} onSaved={load} notify={notify} />}

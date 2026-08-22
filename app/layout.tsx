@@ -65,7 +65,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{const p=JSON.parse(localStorage.getItem("legacy_personalization")||"{}");const t=p.theme==="light"?"light":"dark";const a=["gold","amber","coral","rose","violet","blue","teal","emerald"].includes(p.accent)?p.accent:"gold";document.documentElement.dataset.theme=t;document.documentElement.dataset.accent=a;document.documentElement.style.colorScheme=t}catch(e){document.documentElement.dataset.theme="dark";document.documentElement.dataset.accent="gold"}`,
+          }}
+        />
+      </head>
       <body className={`${geistSans.variable} ${geistMono.variable}`}>
         {children}
         <PwaRegister />

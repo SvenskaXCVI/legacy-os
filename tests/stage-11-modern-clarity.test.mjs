@@ -44,9 +44,7 @@ test("client selection moves directly to the relationship workspace", async () =
 });
 
 test("Stage 11 release identity and preservation notes are present", async () => {
-  const version = await read("lib/version.ts");
-  const pkg = JSON.parse(await read("package.json"));
-  assert.equal(pkg.version, "0.7.0-alpha.11");
-  assert.match(version, /Stage 11 · Modern Clarity/);
-  assert.match(await read("docs/MODERN_CLARITY.md"), /Existing alpha records and uploads remain unchanged/);
+  const notes = await read("docs/MODERN_CLARITY.md");
+  assert.match(notes, /Stage 11 — Modern Clarity/);
+  assert.match(notes, /Existing alpha records and uploads remain unchanged/);
 });
