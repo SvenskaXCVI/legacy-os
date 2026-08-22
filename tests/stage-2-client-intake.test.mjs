@@ -83,7 +83,7 @@ test("one release constant is visible in owner, client, and access footers", asy
   const app = await read("app/legacy-app.tsx");
   const access = await read("app/access-shell.tsx");
 
-  assert.match(version, /LEGACY_OS_VERSION = "0\.4\.0-alpha\.2"/);
+  assert.match(version, /LEGACY_OS_VERSION = "\d+\.\d+\.\d+-alpha\.\d+"/);
   assert.match(app, /className="client-footer"[\s\S]*LEGACY_OS_VERSION/);
   assert.match(app, /className="owner-footer"[\s\S]*LEGACY_OS_VERSION/);
   assert.match(access, /<footer>[\s\S]*LEGACY_OS_VERSION[\s\S]*<\/footer>/);

@@ -93,6 +93,7 @@ owner code must be configured only in the hosting environment and never committe
 - [API contract](docs/API.md)
 - [Entity relationship diagram](docs/ERD.md)
 - [Identity and access](docs/IDENTITY_AND_ACCESS.md)
+- [Supabase account rollout](docs/SUPABASE_ROLLOUT.md)
 - [Intelligence and autonomy](docs/INTELLIGENCE_AND_AUTONOMY.md)
 - [Operations runbook](docs/OPERATIONS_RUNBOOK.md)
 - [Deployment and sharing](docs/DEPLOYMENT.md)

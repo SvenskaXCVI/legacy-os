@@ -1,7 +1,9 @@
 import { and, eq, gt, or } from "drizzle-orm";
 import { env } from "cloudflare:workers";
+import { createClient } from "@supabase/supabase-js";
 import { getDb } from "../../db";
 import {
+  auditEvents,
   clients,
   portalInvitations,
   users,
@@ -22,16 +24,15 @@ export function actorFrom(request: Request) {
   );
 }
 
-type SupabaseIdentity = {
-  id: string;
-  email?: string;
-  email_confirmed_at?: string;
-  app_metadata?: { provider?: string; providers?: string[] };
-};
+export function supabasePublicKey() {
+  return String(
+    env.SUPABASE_PUBLISHABLE_KEY || env.SUPABASE_ANON_KEY || "",
+  ).trim();
+}
 
 export function authConfiguration() {
   const supabase =
-    Boolean(env.SUPABASE_URL?.trim()) && Boolean(env.SUPABASE_ANON_KEY?.trim());
+    Boolean(env.SUPABASE_URL?.trim()) && Boolean(supabasePublicKey());
   const ownerAccessCode = Boolean(env.OWNER_ACCESS_CODE_HASH?.trim());
   const ownerAllowlistConfigured = ownerAllowlist().size > 0;
   return {
@@ -62,29 +63,42 @@ async function supabaseIdentity(request: Request) {
   if (authConfiguration().mode !== "supabase") return null;
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) return null;
-  const response = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
-    headers: {
-      authorization,
-      apikey: String(env.SUPABASE_ANON_KEY),
+  const token = authorization.replace(/^Bearer\s+/i, "");
+  const supabase = createClient(
+    String(env.SUPABASE_URL),
+    supabasePublicKey(),
+    {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
     },
-  });
-  if (!response.ok) return null;
-  return (await response.json()) as SupabaseIdentity;
-}
-
-function bearerAssuranceLevel(request: Request) {
-  const token = request.headers
-    .get("authorization")
-    ?.replace(/^Bearer\s+/i, "");
-  if (!token) return null;
-  try {
-    const payload = token.split(".")[1];
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const decoded = atob(normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "="));
-    return (JSON.parse(decoded) as { aal?: string }).aal ?? null;
-  } catch {
+  );
+  const [claimsResult, userResult] = await Promise.all([
+    supabase.auth.getClaims(token),
+    supabase.auth.getUser(token),
+  ]);
+  if (
+    claimsResult.error ||
+    !claimsResult.data?.claims?.sub ||
+    userResult.error ||
+    !userResult.data.user ||
+    claimsResult.data.claims.sub !== userResult.data.user.id
+  ) {
     return null;
   }
+  const user = userResult.data.user;
+  return {
+    id: user.id,
+    email: user.email,
+    email_confirmed_at: user.email_confirmed_at,
+    app_metadata: user.app_metadata,
+    assuranceLevel:
+      typeof claimsResult.data.claims.aal === "string"
+        ? claimsResult.data.claims.aal
+        : undefined,
+  };
 }
 
 function ownerAllowlist() {
@@ -120,7 +134,7 @@ export async function resolveUser(request: Request) {
       identity,
       user: boundUser,
       emailVerified: Boolean(identity.email_confirmed_at),
-      assuranceLevel: bearerAssuranceLevel(request),
+      assuranceLevel: identity.assuranceLevel ?? null,
     };
   }
 
@@ -248,6 +262,10 @@ export async function bootstrapAuthenticatedUser(
   const db = getDb();
   const email = identity.email.toLowerCase();
   const now = new Date().toISOString();
+  const provider =
+    identity.app_metadata?.provider ||
+    identity.app_metadata?.providers?.[0] ||
+    "email";
   const existing = await db
     .select()
     .from(users)
@@ -291,22 +309,38 @@ export async function bootstrapAuthenticatedUser(
         );
       }
     }
-    await db
-      .update(users)
-      .set({
-        authSubject: identity.id,
-        emailVerifiedAt: identity.email_confirmed_at,
-        lastLoginAt: now,
-        updatedAt: now,
-      })
-      .where(eq(users.id, existing.id));
-    return { ...existing, authSubject: identity.id };
+    const wasUnbound = !existing.authSubject;
+    await db.batch([
+      db
+        .update(users)
+        .set({
+          authSubject: identity.id,
+          authProvider: wasUnbound ? provider : existing.authProvider,
+          emailVerifiedAt: identity.email_confirmed_at,
+          lastLoginAt: now,
+          updatedAt: now,
+        })
+        .where(eq(users.id, existing.id)),
+      db.insert(auditEvents).values(
+        await identityAuditValues(request, {
+          actorId: identity.id,
+          action: wasUnbound ? "auth.identity_bound" : "auth.signed_in",
+          targetId: existing.id,
+          riskLevel: wasUnbound ? "medium" : "low",
+          outcome: "success",
+          provider: wasUnbound ? provider : existing.authProvider,
+        }),
+      ),
+    ]);
+    return {
+      ...existing,
+      authSubject: identity.id,
+      authProvider: wasUnbound ? provider : existing.authProvider,
+      emailVerifiedAt: identity.email_confirmed_at,
+      lastLoginAt: now,
+    };
   }
 
-  const provider =
-    identity.app_metadata?.provider ||
-    identity.app_metadata?.providers?.[0] ||
-    "email";
   if (ownerAllowlist().has(email)) {
     const id = makeId("usr");
     const owner = {
@@ -325,7 +359,19 @@ export async function bootstrapAuthenticatedUser(
       createdAt: now,
       updatedAt: now,
     };
-    await db.insert(users).values(owner);
+    await db.batch([
+      db.insert(users).values(owner),
+      db.insert(auditEvents).values(
+        await identityAuditValues(request, {
+          actorId: identity.id,
+          action: "auth.owner_account_created",
+          targetId: id,
+          riskLevel: "high",
+          outcome: "success",
+          provider,
+        }),
+      ),
+    ]);
     return owner;
   }
 
@@ -378,6 +424,16 @@ export async function bootstrapAuthenticatedUser(
       .update(portalInvitations)
       .set({ status: "redeemed", lastUsedAt: now })
       .where(eq(portalInvitations.id, invitation.id)),
+    db.insert(auditEvents).values(
+      await identityAuditValues(request, {
+        actorId: identity.id,
+        action: "auth.client_account_created",
+        targetId: id,
+        riskLevel: "medium",
+        outcome: "success",
+        provider,
+      }),
+    ),
   ]);
   return clientUser;
 }
@@ -404,6 +460,38 @@ export async function sha256(value: string | ArrayBuffer) {
   return [...new Uint8Array(digest)]
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
+}
+
+async function identityAuditValues(
+  request: Request,
+  input: {
+    actorId: string;
+    action: string;
+    targetId: string;
+    riskLevel: string;
+    outcome: string;
+    provider: string;
+  },
+) {
+  const ip =
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "unknown";
+  const userAgent = request.headers.get("user-agent") || "unknown";
+  return {
+    id: makeId("audit"),
+    workspaceId: WORKSPACE_ID,
+    actorType: "supabase_identity",
+    actorId: input.actorId,
+    action: input.action,
+    targetType: "user",
+    targetId: input.targetId,
+    riskLevel: input.riskLevel,
+    outcome: input.outcome,
+    ipHash: await sha256(ip),
+    userAgentHash: await sha256(userAgent),
+    metadataJson: JSON.stringify({ provider: input.provider }),
+  };
 }
 
 function constantTimeEqual(left: string, right: string) {

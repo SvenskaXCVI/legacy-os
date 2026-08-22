@@ -12,7 +12,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
-import { LegacyApp } from "./legacy-app";
+import { LegacyApp, setLegacyApiAccessToken } from "./legacy-app";
 import { LEGACY_OS_RELEASE, LEGACY_OS_VERSION } from "../lib/version";
 
 type PublicAuthConfig = {
@@ -59,12 +59,17 @@ async function json<T>(response: Response) {
 
 export function AccessShell({ ownerName }: { ownerName: string }) {
   const [stage, setStage] = useState<
-    "splash" | "login" | "mfa_enroll" | "mfa_challenge" | "app"
+    | "splash"
+    | "login"
+    | "password_recovery"
+    | "mfa_enroll"
+    | "mfa_challenge"
+    | "app"
   >("splash");
   const [config, setConfig] = useState<PublicAuthConfig | null>(null);
   const [client, setClient] = useState<SupabaseClient | null>(null);
   const [user, setUser] = useState<AccessUser | null>(null);
-  const [authMode, setAuthMode] = useState<"signin" | "signup">("signin");
+  const [authMode, setAuthMode] = useState<"signin" | "signup" | "forgot">("signin");
   const [roleIntent, setRoleIntent] = useState<"owner" | "client">("owner");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -78,6 +83,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
 
   useEffect(() => {
     let active = true;
+    let authSubscription: { unsubscribe: () => void } | null = null;
     void (async () => {
       let resumedSession = false;
       await delay(1350);
@@ -135,17 +141,42 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
             nextConfig.supabaseAnonKey,
           );
           setClient(nextClient);
+          const subscription = nextClient.auth.onAuthStateChange(
+            (event, session) => {
+              if (!active) return;
+              setLegacyApiAccessToken(session?.access_token || null);
+              if (event === "SIGNED_OUT") {
+                setUser(null);
+                setStage("login");
+                return;
+              }
+              if (event === "PASSWORD_RECOVERY") {
+                setUser(null);
+                setError("");
+                setNotice("");
+                setStage("password_recovery");
+              }
+            },
+          );
+          authSubscription = subscription.data.subscription;
           const {
             data: { session },
           } = await nextClient.auth.getSession();
           if (session) {
-            localStorage.setItem("legacy_access_token", session.access_token);
-            await bootstrap(
-              nextClient,
-              portalInvitation ||
-                sessionStorage.getItem("legacy_client_invitation") ||
-                "",
-            );
+            setLegacyApiAccessToken(session.access_token);
+            const recoveryRequested =
+              new URLSearchParams(window.location.search).get("auth") ===
+                "recovery" || window.location.hash.includes("type=recovery");
+            if (recoveryRequested) {
+              setStage("password_recovery");
+            } else {
+              await bootstrap(
+                nextClient,
+                portalInvitation ||
+                  sessionStorage.getItem("legacy_client_invitation") ||
+                  "",
+              );
+            }
             resumedSession = true;
           }
         }
@@ -162,6 +193,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
     })();
     return () => {
       active = false;
+      authSubscription?.unsubscribe();
     };
     // The bootstrap routine intentionally runs only for the restored session
     // discovered during this single initialization pass.
@@ -180,7 +212,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
       data: { session },
     } = await authClient.auth.getSession();
     if (!session) throw new Error("Your session has expired");
-    localStorage.setItem("legacy_access_token", session.access_token);
+    setLegacyApiAccessToken(session.access_token);
     const payload = await json<{ user: AccessUser }>(
       await fetch("/api/auth/bootstrap", {
         method: "POST",
@@ -238,6 +270,18 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
     const email = String(form.get("email") || "").trim();
     const password = String(form.get("password") || "");
     try {
+      if (authMode === "forgot") {
+        const recoveryUrl = new URL(window.location.origin);
+        recoveryUrl.searchParams.set("auth", "recovery");
+        const result = await client.auth.resetPasswordForEmail(email, {
+          redirectTo: recoveryUrl.toString(),
+        });
+        if (result.error) throw result.error;
+        setNotice(
+          "If that verified account exists, a secure password-reset link has been sent.",
+        );
+        return;
+      }
       if (authMode === "signup") {
         if (roleIntent === "client" && invitationToken) {
           sessionStorage.setItem(
@@ -245,10 +289,15 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
             invitationToken,
           );
         }
+        const confirmationUrl = new URL(window.location.origin);
+        confirmationUrl.searchParams.set("auth", "confirmed");
+        if (roleIntent === "client" && invitationToken.trim()) {
+          confirmationUrl.searchParams.set("portal", invitationToken.trim());
+        }
         const result = await client.auth.signUp({
           email,
           password,
-          options: { emailRedirectTo: window.location.origin },
+          options: { emailRedirectTo: confirmationUrl.toString() },
         });
         if (result.error) throw result.error;
         if (!result.data.session) {
@@ -287,9 +336,14 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
         invitationToken.trim(),
       );
     }
+    const callbackUrl = new URL(window.location.origin);
+    callbackUrl.searchParams.set("auth", "oauth");
+    if (roleIntent === "client" && invitationToken.trim()) {
+      callbackUrl.searchParams.set("portal", invitationToken.trim());
+    }
     const result = await client.auth.signInWithOAuth({
       provider: providerName,
-      options: { redirectTo: window.location.origin },
+      options: { redirectTo: callbackUrl.toString() },
     });
     if (result.error) setError(result.error.message);
   }
@@ -314,10 +368,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
       });
       if (verified.error) throw verified.error;
       if (verified.data.access_token) {
-        localStorage.setItem(
-          "legacy_access_token",
-          verified.data.access_token,
-        );
+        setLegacyApiAccessToken(verified.data.access_token);
       }
       setStage("app");
     } catch (verifyError) {
@@ -325,6 +376,46 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
         verifyError instanceof Error
           ? verifyError.message
           : "That verification code was not accepted",
+      );
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function updateRecoveredPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!client) return;
+    setBusy(true);
+    setError("");
+    const form = new FormData(event.currentTarget);
+    const password = String(form.get("password") || "");
+    const confirmation = String(form.get("confirmation") || "");
+    try {
+      if (password.length < 12) {
+        throw new Error("Use at least 12 characters for your new password");
+      }
+      if (password !== confirmation) {
+        throw new Error("The new passwords do not match");
+      }
+      const result = await client.auth.updateUser({ password });
+      if (result.error) throw result.error;
+      const cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete("auth");
+      window.history.replaceState(
+        {},
+        "",
+        `${cleanUrl.pathname}${cleanUrl.search}${cleanUrl.hash}`,
+      );
+      setNotice("Password updated. Complete two-step verification to continue.");
+      await bootstrap(
+        client,
+        sessionStorage.getItem("legacy_client_invitation") || "",
+      );
+    } catch (recoveryError) {
+      setError(
+        recoveryError instanceof Error
+          ? recoveryError.message
+          : "Unable to update this password",
       );
     } finally {
       setBusy(false);
@@ -396,11 +487,17 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
           : "Unable to end this session",
       );
     } finally {
-      localStorage.removeItem("legacy_access_token");
+      setLegacyApiAccessToken(null);
       sessionStorage.removeItem("legacy_client_invitation");
       const cleanUrl = new URL(window.location.href);
-      if (cleanUrl.searchParams.has("portal")) {
+      if (
+        cleanUrl.searchParams.has("portal") ||
+        cleanUrl.searchParams.has("auth") ||
+        cleanUrl.hash
+      ) {
         cleanUrl.searchParams.delete("portal");
+        cleanUrl.searchParams.delete("auth");
+        cleanUrl.hash = "";
         window.history.replaceState(
           {},
           "",
@@ -439,6 +536,63 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
         authenticatedClient={user.role === "client" && Boolean(providerReady)}
         onSignOut={() => void signOut()}
       />
+    );
+  }
+
+  if (stage === "password_recovery") {
+    return (
+      <main className="access-page">
+        <section className="access-card compact-access-card">
+          <Monogram />
+          <p className="eyebrow gold">SECURE ACCOUNT RECOVERY</p>
+          <h1>Choose a new password.</h1>
+          <p>
+            Use a unique password with at least 12 characters. Legacy OS will
+            require your second factor again before opening protected records.
+          </p>
+          <form className="access-form" onSubmit={updateRecoveredPassword}>
+            <label className="access-field">
+              <span>New password</span>
+              <div>
+                <LockKeyhole size={17} />
+                <input
+                  type={passwordVisible ? "text" : "password"}
+                  name="password"
+                  minLength={12}
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+            </label>
+            <label className="access-field">
+              <span>Confirm new password</span>
+              <div>
+                <ShieldCheck size={17} />
+                <input
+                  type={passwordVisible ? "text" : "password"}
+                  name="confirmation"
+                  minLength={12}
+                  autoComplete="new-password"
+                  required
+                />
+              </div>
+            </label>
+            <button
+              type="button"
+              className="text-button"
+              onClick={() => setPasswordVisible((value) => !value)}
+            >
+              {passwordVisible ? <EyeOff size={15} /> : <Eye size={15} />}
+              {passwordVisible ? "Hide passwords" : "Show passwords"}
+            </button>
+            {error && <p className="access-error">{error}</p>}
+            <button className="gold-button wide" disabled={busy}>
+              <ShieldCheck size={16} />
+              {busy ? "Updating securely…" : "Update password"}
+            </button>
+          </form>
+        </section>
+      </main>
     );
   }
 
@@ -486,6 +640,18 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
               {busy ? "Verifying…" : "Verify and continue"}
             </button>
           </form>
+          {stage === "mfa_challenge" && (
+            <div className="mfa-recovery-note">
+              <strong>Lost access to your authenticator?</strong>
+              <p>
+                For security, factors cannot be removed from this screen.
+                Contact the studio administrator for a verified factor reset.
+              </p>
+              <button className="text-button" onClick={() => void signOut()}>
+                Sign out safely
+              </button>
+            </div>
+          )}
         </section>
       </main>
     );
@@ -540,6 +706,12 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
                 Create account
               </button>
             </div>
+            {authMode === "forgot" && (
+              <div className="auth-recovery-heading">
+                <strong>Reset your password</strong>
+                <p>Enter the verified email used for your Legacy OS account.</p>
+              </div>
+            )}
             <form className="access-form" onSubmit={submitEmail}>
               <label className="access-field">
                 <span>Email</span>
@@ -553,36 +725,38 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
                   />
                 </div>
               </label>
-              <label className="access-field">
-                <span>Password</span>
-                <div>
-                  <LockKeyhole size={17} />
-                  <input
-                    type={passwordVisible ? "text" : "password"}
-                    name="password"
-                    autoComplete={
-                      authMode === "signup"
-                        ? "new-password"
-                        : "current-password"
-                    }
-                    minLength={8}
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setPasswordVisible((value) => !value)}
-                    aria-label={
-                      passwordVisible ? "Hide password" : "Show password"
-                    }
-                  >
-                    {passwordVisible ? (
-                      <EyeOff size={16} />
-                    ) : (
-                      <Eye size={16} />
-                    )}
-                  </button>
-                </div>
-              </label>
+              {authMode !== "forgot" && (
+                <label className="access-field">
+                  <span>Password</span>
+                  <div>
+                    <LockKeyhole size={17} />
+                    <input
+                      type={passwordVisible ? "text" : "password"}
+                      name="password"
+                      autoComplete={
+                        authMode === "signup"
+                          ? "new-password"
+                          : "current-password"
+                      }
+                      minLength={authMode === "signup" ? 12 : 8}
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setPasswordVisible((value) => !value)}
+                      aria-label={
+                        passwordVisible ? "Hide password" : "Show password"
+                      }
+                    >
+                      {passwordVisible ? (
+                        <EyeOff size={16} />
+                      ) : (
+                        <Eye size={16} />
+                      )}
+                    </button>
+                  </div>
+                </label>
+              )}
               {roleIntent === "client" && authMode === "signup" && (
                 <label className="access-field">
                   <span>Studio invitation code</span>
@@ -607,14 +781,41 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
               <button className="gold-button wide" disabled={busy}>
                 {busy
                   ? "Securing access…"
-                  : `${authMode === "signup" ? "Create" : "Open"} ${roleLabel}`}
+                  : authMode === "forgot"
+                    ? "Send secure reset link"
+                    : `${authMode === "signup" ? "Create" : "Open"} ${roleLabel}`}
                 <ArrowRight size={16} />
               </button>
+              {authMode === "signin" && (
+                <button
+                  type="button"
+                  className="text-button auth-recovery-link"
+                  onClick={() => {
+                    setAuthMode("forgot");
+                    setError("");
+                    setNotice("");
+                  }}
+                >
+                  Forgot password?
+                </button>
+              )}
+              {authMode === "forgot" && (
+                <button
+                  type="button"
+                  className="text-button auth-recovery-link"
+                  onClick={() => {
+                    setAuthMode("signin");
+                    setError("");
+                  }}
+                >
+                  <ArrowRight size={14} className="reverse-arrow" /> Return to sign in
+                </button>
+              )}
             </form>
-            <div className="auth-divider">
+            {authMode !== "forgot" && <div className="auth-divider">
               <span>OR CONTINUE WITH</span>
-            </div>
-            {roleIntent === "client" && (
+            </div>}
+            {authMode !== "forgot" && roleIntent === "client" && (
               <label className="access-field provider-invitation">
                 <span>Studio invitation code for Google or Apple</span>
                 <div>
@@ -628,7 +829,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
                 </div>
               </label>
             )}
-            <div className="provider-row">
+            {authMode !== "forgot" && <div className="provider-row">
               <button onClick={() => void provider("google")}>Google</button>
               <button onClick={() => void provider("apple")}>Apple</button>
               <button
@@ -641,7 +842,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
               >
                 Instagram
               </button>
-            </div>
+            </div>}
           </>
         ) : config?.mode === "access_code" ? (
           <div className="private-preview">

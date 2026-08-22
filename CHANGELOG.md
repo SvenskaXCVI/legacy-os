@@ -1,5 +1,16 @@
 # Legacy OS release history
 
+## 0.5.0-alpha.3 — 2026-08-21
+
+- Added verified-email password recovery with a dedicated secure reset screen.
+- Added 12-character password requirements for new and recovered accounts.
+- Replaced the duplicate Legacy OS bearer-token copy in local storage with an in-memory API token synchronized from the Supabase session.
+- Added current Supabase claim verification alongside a fresh user lookup before accepting identity or MFA assurance.
+- Added invitation-preserving email and Google/Apple callback URLs for client account linking.
+- Added auditable owner creation, client creation, identity binding, and sign-in events with hashed network and device evidence.
+- Added live owner identity-provider, verification, MFA-policy, and last-login visibility in Settings.
+- Added lost-authenticator guidance that never permits self-service factor removal from an unverified screen.
+
 ## 0.4.0-alpha.2 — 2026-08-21
 
 - Added client-submitted project intake with structured, evidence-backed extraction.
@@ -16,4 +27,3 @@
 - Added immutable design-version approval snapshots.
 - Added idempotent project creation and safer content eligibility controls.
 - Added alpha data migration and regression coverage.
-

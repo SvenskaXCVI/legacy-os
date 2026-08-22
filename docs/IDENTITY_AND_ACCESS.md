@@ -18,6 +18,8 @@ When Supabase is configured, Legacy OS supports:
 - TOTP enrollment and challenge;
 - Google and Apple OAuth;
 - AAL2 enforcement for protected owner and client operations.
+- verified-session password recovery followed by renewed AAL2 enforcement;
+- signed account creation, binding, and sign-in events in the audit ledger.
 
 Instagram is intentionally excluded as an identity provider. It is connected separately through explicit project-data consent.
 
@@ -34,4 +36,4 @@ Client signup requires an unexpired portal invitation. After the verified email 
 
 ## Required environment variables
 
-See `.env.example`. Provider secrets are runtime values and must never be committed.
+See `.env.example` and `docs/SUPABASE_ROLLOUT.md`. Prefer a Supabase publishable key. Provider secrets are runtime values and must never be committed; a Supabase secret or `service_role` key is neither required nor permitted in the browser application.

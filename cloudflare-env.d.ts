@@ -3,6 +3,7 @@ declare module "cloudflare:workers" {
     DB: D1Database;
     MEDIA: R2Bucket;
     SUPABASE_URL?: string;
+    SUPABASE_PUBLISHABLE_KEY?: string;
     SUPABASE_ANON_KEY?: string;
     OWNER_EMAILS?: string;
     OWNER_ACCESS_CODE_HASH?: string;

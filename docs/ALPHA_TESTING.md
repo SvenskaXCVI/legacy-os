@@ -12,7 +12,10 @@ real personal, health, payment, or social-account data.
 - [ ] Client signup without an invitation is rejected.
 - [ ] A client invitation cannot open another client's records or files.
 - [ ] A revoked or expired invitation returns an access error.
-- [ ] Sign out removes the local access token and returns to the login screen.
+- [ ] Sign out clears the in-memory Legacy OS API token, ends the Supabase session, and returns to the login screen.
+- [ ] Password recovery accepts only the emailed recovery session, requires a 12-character replacement, and returns to MFA.
+- [ ] Google and Apple callbacks preserve the intended client invitation without changing the server-assigned role.
+- [ ] Account creation, identity binding, and sign-in events appear in the audit ledger with no raw IP address or bearer token.
 
 ## Owner workflow
 

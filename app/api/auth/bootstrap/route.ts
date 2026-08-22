@@ -20,8 +20,13 @@ export async function GET(request: Request) {
             role: access.user.role,
             clientId: access.user.clientId,
             mfaRequired: access.user.mfaRequired,
+            authProvider: access.user.authProvider,
+            emailVerifiedAt: access.user.emailVerifiedAt,
+            lastLoginAt: access.user.lastLoginAt,
+            status: access.user.status,
           }
         : null,
+      assuranceLevel: access?.assuranceLevel ?? null,
     });
   } catch (error) {
     return jsonError(
@@ -48,6 +53,10 @@ export async function POST(request: Request) {
         role: user.role,
         clientId: user.clientId,
         mfaRequired: user.mfaRequired,
+        authProvider: user.authProvider,
+        emailVerifiedAt: user.emailVerifiedAt,
+        lastLoginAt: user.lastLoginAt,
+        status: user.status,
       },
     });
   } catch (error) {
@@ -58,4 +67,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

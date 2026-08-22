@@ -256,6 +256,11 @@ type WorkspaceData = {
     email: string;
     displayName: string;
     role: string;
+    authProvider: string;
+    emailVerifiedAt: string | null;
+    mfaRequired: boolean;
+    lastLoginAt: string | null;
+    status: string;
   } | null;
   clients: ClientRecord[];
   projects: ProjectRecord[];
@@ -528,14 +533,16 @@ function projectTags(project: ProjectRecord) {
   }
 }
 
+let activeApiAccessToken: string | null = null;
+
+export function setLegacyApiAccessToken(token: string | null) {
+  activeApiAccessToken = token;
+}
+
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers);
-  const token =
-    typeof window === "undefined"
-      ? null
-      : window.localStorage.getItem("legacy_access_token");
-  if (token && !headers.has("authorization")) {
-    headers.set("authorization", `Bearer ${token}`);
+  if (activeApiAccessToken && !headers.has("authorization")) {
+    headers.set("authorization", `Bearer ${activeApiAccessToken}`);
   }
   const response = await fetch(path, { ...init, headers });
   const data = (await response.json()) as T & {
@@ -552,8 +559,9 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
 async function downloadAsset(asset: AssetRecord, portalToken?: string) {
   const headers = new Headers();
-  const accessToken = window.localStorage.getItem("legacy_access_token");
-  if (accessToken) headers.set("authorization", `Bearer ${accessToken}`);
+  if (activeApiAccessToken) {
+    headers.set("authorization", `Bearer ${activeApiAccessToken}`);
+  }
   const token =
     portalToken && portalToken !== "__authenticated__"
       ? `&token=${encodeURIComponent(portalToken)}`
@@ -2993,6 +3001,12 @@ function SettingsView({
                 <small>Full workspace access. Client records remain server isolated.</small>
               </div>
             </div>
+            <div className="account-security-facts">
+              <p><strong>Identity provider</strong><span>{data.owner?.authProvider || "private preview"}</span></p>
+              <p><strong>Email verification</strong><span>{data.owner?.emailVerifiedAt ? "Verified" : "Preview only"}</span></p>
+              <p><strong>Two-step policy</strong><span>{data.owner?.mfaRequired ? "Required" : "Not active in preview"}</span></p>
+              <p><strong>Last sign-in</strong><span>{formatDate(data.owner?.lastLoginAt, true)}</span></p>
+            </div>
           </section>
           <section className="os-panel setting-card settings-copy-card">
             <PanelTitle eyebrow="CLIENT ISOLATION" title="Separate access boundary" />
@@ -3036,10 +3050,12 @@ function SettingsView({
           <section className="os-panel setting-card settings-copy-card">
             <PanelTitle eyebrow="ACCESS POLICY" title="Identity protection" />
             <div className="security-list">
-              <p><Check size={15} /> Verified email for configured accounts</p>
-              <p><Check size={15} /> TOTP two-step verification</p>
+              <p><Check size={15} /> {data.owner?.emailVerifiedAt ? "Owner email verified" : "Verified email required when Supabase is enabled"}</p>
+              <p><Check size={15} /> {data.owner?.mfaRequired ? "TOTP two-step verification required" : "TOTP activates with account authentication"}</p>
               <p><Check size={15} /> Server-enforced owner and client roles</p>
               <p><Check size={15} /> Revocable, expiring client access links</p>
+              <p><Check size={15} /> Password recovery returns through a verified Supabase session</p>
+              <p><Check size={15} /> Authentication events are hashed and written to the audit ledger</p>
             </div>
           </section>
         </div>

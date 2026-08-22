@@ -17,12 +17,14 @@ uses a Cloudflare Worker, D1, and R2 through OpenAI Sites.
 ## Runtime configuration
 
 Configure the values documented in `.env.example` as hosting secrets. For an
-account-based external alpha, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and
+account-based external alpha, `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and
 `OWNER_EMAILS` are required. Enable verified email, TOTP MFA, and only the OAuth
 providers that have complete redirect configuration. The temporary public
 client-link build instead uses `OWNER_ACCESS_CODE_HASH` to protect owner
 operations while client access remains scoped by revocable portal invitations.
 Store only the SHA-256 hash as a protected hosting secret; never commit the code.
+
+Follow `docs/SUPABASE_ROLLOUT.md` before enabling account authentication. Do not configure a Supabase secret or `service_role` key in Legacy OS.
 
 AI and Instagram credentials are optional integrations. Without an external AI
 provider, deterministic Legacy OS policy, evidence, briefing, workflow, and
