@@ -1,5 +1,15 @@
 # Legacy OS release history
 
+## 0.7.0-alpha.29 — 2026-08-22
+
+- Reorganized AI Operations into six focused workspaces—Overview, Automations, Intelligence, AI Workforce, Learning, and Activity—without removing any capability.
+- Added a concise AI Operations overview that exposes live counts and routes directly to each operational area.
+- Standardized typography, spacing, cards, buttons, selects, date/time inputs, text fields, and responsive field rows across owner and client pages.
+- Replaced raw memory event identifiers and JSON with readable summaries while retaining evidence and provenance in an expandable disclosure.
+- Tightened scheduling, knowledge, activity, and other empty states so content stays centered and does not consume unnecessary page height.
+- Added desktop and mobile overflow protection, balanced grids, clear section dividers, and consistent responsive behavior throughout the application.
+- This release is presentation-only and does not add a migration, change the database schema, or modify existing alpha-user records.
+
 ## 0.7.0-alpha.28 — 2026-08-22
 
 - Production hotfix: bounded audit-capture backfill lookups to safe database parameter batches, moved historical capture and memory maintenance to the always-on worker, and prevented internal database or provider errors from being rendered in the owner interface.

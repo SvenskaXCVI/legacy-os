@@ -94,7 +94,7 @@ test("Stage 28 migration is additive and preserves existing alpha records", asyn
 test("Stage 28 is versioned and documents scheduling authority and persistence boundaries", async () => {
   const [pkg, version, changelog, notes, api] = await Promise.all([read("package.json"), read("lib/version.ts"), read("CHANGELOG.md"), read("docs/SCHEDULING_AND_CAPACITY_INTELLIGENCE.md"), read("docs/API.md")]);
   assert.ok(Number(JSON.parse(pkg).version.match(/alpha\.(\d+)/)?.[1]) >= 28);
-  assert.match(version, /Stage 28 · Scheduling and Capacity Intelligence/);
+  assert.match(version, /LEGACY_OS_RELEASE/);
   assert.match(changelog, /0\.7\.0-alpha\.28/);
   assert.match(notes, /The evaluator itself never inserts an appointment/);
   assert.match(notes, /does not update, delete, or replace existing alpha records/);

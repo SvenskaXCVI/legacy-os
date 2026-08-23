@@ -3699,6 +3699,7 @@ function ChiefView({
 
 function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refresh: () => Promise<void>; notify: (message: string, error?: boolean) => void }) {
   const [saving, setSaving] = useState(false);
+  const [operationsSection, setOperationsSection] = useState<"overview" | "automations" | "intelligence" | "workforce" | "learning" | "activity">("overview");
   const succeeded = data.aiRuns.filter((run) => run.status === "succeeded").length;
   const successRate = data.aiRuns.length
     ? Math.round((succeeded / data.aiRuns.length) * 100)
@@ -3947,8 +3948,16 @@ function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refres
     ["client", "Client"], ["design", "Design"], ["knowledge", "Knowledge"], ["operations", "Operations"],
     ["scheduling", "Scheduling"], ["finance", "Finance"], ["content", "Content"], ["analytics", "Analytics"],
   ] as const;
+  const operationsSections = [
+    { id: "overview", label: "Overview", icon: LayoutDashboard },
+    { id: "automations", label: "Automations", icon: WandSparkles },
+    { id: "intelligence", label: "Intelligence", icon: BrainCircuit },
+    { id: "workforce", label: "AI workforce", icon: UsersRound },
+    { id: "learning", label: "Learning", icon: BookOpen },
+    { id: "activity", label: "Activity", icon: Activity },
+  ] as const;
   return (
-    <section className="page-stack">
+    <section className="page-stack operations-workspace">
       <div className="operations-banner">
         <div>
           <p className="eyebrow gold">GLASS BOX OBSERVABILITY</p>
@@ -3957,12 +3966,40 @@ function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refres
         </div>
         <div className="capture-chip"><ShieldCheck size={18} /><span><small>CAPTURE POLICY</small><strong>Metadata only</strong></span></div>
       </div>
+      <nav className="operations-section-tabs" aria-label="AI Operations sections">
+        {operationsSections.map(({ id, label, icon: Icon }) => (
+          <button key={id} type="button" className={cn(operationsSection === id && "active")} aria-current={operationsSection === id ? "page" : undefined} onClick={() => setOperationsSection(id)}>
+            <Icon size={16} />
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
+      {operationsSection === "overview" && <>
       <section className="stats-grid operations-stats">
         <StatCard icon={Bot} label="RECORDED RUNS" value={data.aiRuns.length} detail="All time in this workspace" />
         <StatCard icon={Gauge} label="SUCCESS RATE" value={`${successRate}%`} detail={data.aiRuns.length ? "Calculated from completed runs" : "Waiting for first run"} />
         <StatCard icon={Clock3} label="LAST RUN" value={data.aiRuns[0] ? formatDate(data.aiRuns[0].createdAt, true) : "None"} detail="Most recent automation event" />
         <StatCard icon={Activity} label="AUDIT EVENTS" value={data.auditEvents.length} detail="Recent owner, client, and system actions" />
       </section>
+      <section className="operations-overview-grid" aria-label="AI Operations workspace map">
+        {operationsSections.slice(1).map(({ id, label, icon: Icon }) => {
+          const details = ({
+            automations: { value: `${data.automationPlaybooks.filter((item) => item.enabled).length} active`, body: "Playbooks, authority boundaries, and controlled execution." },
+            intelligence: { value: `${data.specialistEvaluations.length} evaluations`, body: "Evidence-backed analysis across eight specialist domains." },
+            workforce: { value: `${data.agentDefinitions.filter((item) => item.status === "active").length} agents online`, body: "Delegated work, connector status, and approval gates." },
+            learning: { value: `${data.captureEvents.length} signals`, body: "Capture, session outcomes, craft patterns, and content safety." },
+            activity: { value: `${data.aiRuns.length} runs`, body: "Model activity and the human-readable audit trail." },
+          } as const)[id as Exclude<typeof id, "overview">];
+          if (!details) return null;
+          return <button type="button" key={id} onClick={() => setOperationsSection(id)}>
+            <span className="operations-overview-icon"><Icon size={19} /></span>
+            <span><small>{label}</small><strong>{details.value}</strong><p>{details.body}</p></span>
+            <ArrowRight size={16} />
+          </button>;
+        })}
+      </section>
+      </>}
+      {operationsSection === "automations" && <>
       <section className="os-panel playbook-operations-panel">
         <div className="agent-operations-heading">
           <PanelTitle eyebrow="PRODUCTION AUTOMATIONS" title="Tattoo workflows run as observable playbooks" />
@@ -4016,6 +4053,8 @@ function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refres
           {data.authorityDecisions.length ? data.authorityDecisions.slice(0, 8).map((decision) => <article key={decision.id}><span className={cn("authority-decision", decision.decision)}>{decision.decision.replaceAll("_", " ")}</span><div><strong>{data.toolDefinitions.find((tool) => tool.toolKey === decision.toolKey)?.displayName || decision.toolKey.replaceAll("_", " ")}</strong><small>{decision.actorId || decision.actorType} · {formatDate(decision.evaluatedAt, true)}</small><p>{decision.reason}</p></div></article>) : <EmptyState icon={ShieldCheck} title="No authority decisions yet" body="The first delegated task or connector action will create an inspectable policy decision here." />}
         </div>
       </section>
+      </>}
+      {operationsSection === "intelligence" && <>
       <section className="os-panel agent-operations-panel">
         <div className="agent-operations-heading">
           <PanelTitle eyebrow="SPECIALIST INTELLIGENCE" title="Eight domains, one professional state" />
@@ -4044,6 +4083,8 @@ function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refres
           })}
         </div>
       </section>
+      </>}
+      {operationsSection === "workforce" && <>
       <section className="os-panel agent-operations-panel">
         <div className="agent-operations-heading">
           <PanelTitle eyebrow="AI STAFF OPERATIONS" title="Delegate with evidence, scope, and control" />
@@ -4113,6 +4154,8 @@ function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refres
           </div>
         </div>
       </section>
+      </>}
+      {operationsSection === "learning" && <>
       <section className="os-panel universal-capture-panel">
         <div className="universal-capture-intro">
           <PanelTitle eyebrow="UNIVERSAL CAPTURE" title="One stream for everything the studio learns" />
@@ -4256,6 +4299,8 @@ function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refres
           {!data.contentCandidates.length && <EmptyState icon={FileText} title="No content candidates" body="Only rights-cleared, client-consented assets can become drafts. Publication remains a separate approval-gated action." />}
         </div>
       </section>
+      </>}
+      {operationsSection === "activity" && <>
       <div className="operations-grid">
         <section className="os-panel table-panel">
           <PanelTitle eyebrow="AI RUN LEDGER" title="Model activity" />
@@ -4289,6 +4334,7 @@ function OperationsView({ data, refresh, notify }: { data: WorkspaceData; refres
           )}
         </aside>
       </div>
+      </>}
     </section>
   );
 }
@@ -4530,20 +4576,47 @@ function ModuleView({
   const [activeTab, setActiveTab] = useState(config.labels[0]);
   const [memoryBusy, setMemoryBusy] = useState(false);
   const Icon = config.icon;
-  const records = useMemo<Array<{ id: string; title: string; detail: string; meta: string; memory?: MemoryRecord }>>(() => {
+  const records = useMemo<Array<{ id: string; title: string; detail: string; meta: string; sourceCount?: number; memory?: MemoryRecord }>>(() => {
     const operationalProjects = data.projects.filter((project) => !project.isTest && !project.archivedAt);
     const operationalProjectIds = new Set(operationalProjects.map((project) => project.id));
     if (type === "knowledge") {
       if (activeTab === "Memory") {
         return data.memoryRecords
           .filter((memory) => memory.status === "active")
-          .map((memory) => ({
-            id: memory.id,
-            title: memory.title,
-            detail: memory.content,
-            meta: `${memory.scopeType} · ${memory.memoryType.replaceAll("_", " ")} · ${Math.round(memory.confidenceBps / 100)}% · ${memory.verificationStatus.replaceAll("_", " ")} · v${memory.version}`,
-            memory,
-          }));
+          .map((memory) => {
+            const readableTitle = memory.title
+              .replace(/[_.]+/g, " ")
+              .replace(/\s+/g, " ")
+              .trim()
+              .replace(/^./, (letter) => letter.toUpperCase());
+            const metadata = (() => {
+              const match = memory.content.match(/\{[\s\S]*\}/);
+              if (!match) return {} as Record<string, unknown>;
+              try { return JSON.parse(match[0]) as Record<string, unknown>; } catch { return {} as Record<string, unknown>; }
+            })();
+            const sourceCount = (() => {
+              try { return (JSON.parse(memory.sourceCaptureIdsJson) as string[]).length; } catch { return 0; }
+            })();
+            const targetType = typeof metadata.targetType === "string" ? metadata.targetType.replaceAll("_", " ") : memory.scopeType;
+            const outcome = typeof metadata.outcome === "string" ? metadata.outcome.replaceAll("_", " ") : null;
+            const plainContent = memory.content
+              .replace(/(?:Source|Evidence):[\s\S]*$/i, "")
+              .replace(/[_.]+/g, " ")
+              .replace(/\s+/g, " ")
+              .trim()
+              .replace(/^./, (letter) => letter.toUpperCase());
+            const detail = plainContent.length > readableTitle.length + 12
+              ? plainContent
+              : `${readableTitle} was recorded as ${targetType} evidence${outcome ? ` with a ${outcome} outcome` : ""}.`;
+            return {
+              id: memory.id,
+              title: readableTitle,
+              detail,
+              meta: `${memory.scopeType} · ${memory.memoryType.replaceAll("_", " ")} · ${Math.round(memory.confidenceBps / 100)}% confidence · ${memory.verificationStatus.replaceAll("_", " ")}`,
+              sourceCount,
+              memory,
+            };
+          });
       }
       if (activeTab === "Techniques") {
         const tags = new Map<string, number>();
@@ -4697,10 +4770,17 @@ function ModuleView({
                   <p>{record.detail}</p>
                   <small>{record.meta}</small>
                   {record.memory && (
-                    <div className="memory-actions">
-                      <button className="text-button" disabled={memoryBusy || record.memory.verificationStatus === "owner_verified"} onClick={() => void updateMemory(record.memory!, "verify")}><Check size={13} /> {record.memory.verificationStatus === "owner_verified" ? "Verified" : "Verify"}</button>
-                      <button className="text-button danger-text" disabled={memoryBusy} onClick={() => void updateMemory(record.memory!, "revoke")}>Revoke</button>
-                    </div>
+                    <>
+                      <details className="memory-provenance">
+                        <summary>Evidence and provenance</summary>
+                        <span>{record.sourceCount || 0} connected capture{record.sourceCount === 1 ? "" : "s"} · reinforced {formatDate(record.memory.lastReinforcedAt, true)}</span>
+                        <code>{record.memory.memoryKey.replaceAll("_", " ")}</code>
+                      </details>
+                      <div className="memory-actions">
+                        <button className="text-button" disabled={memoryBusy || record.memory.verificationStatus === "owner_verified"} onClick={() => void updateMemory(record.memory!, "verify")}><Check size={13} /> {record.memory.verificationStatus === "owner_verified" ? "Verified" : "Verify"}</button>
+                        <button className="text-button danger-text" disabled={memoryBusy} onClick={() => void updateMemory(record.memory!, "revoke")}>Revoke</button>
+                      </div>
+                    </>
                   )}
                 </div>
               </article>
