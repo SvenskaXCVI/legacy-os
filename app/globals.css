@@ -7828,8 +7828,10 @@ html[data-theme="light"] .owner-footer .daylight-credit-mark {
 
 /* Stage 29 refinement — dashboard card language across dense workspaces */
 .operations-workspace,
+.chief-workspace,
 .scheduling-intelligence-panel,
 .scheduling-control-grid,
+.scheduling-policy-card,
 .design-studio {
   --workspace-card-border: color-mix(in srgb, var(--text) 13%, var(--border));
   --workspace-card-highlight: color-mix(in srgb, var(--accent) 18%, var(--border));
