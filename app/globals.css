@@ -7729,6 +7729,7 @@ html[data-theme="light"] .operations-overview-grid > button:hover {
 .owner-footer .daylight-credit-mark {
   width: 168px;
   height: 36px;
+  background-size: 100% auto;
 }
 
 .owner-footer .release-version {
@@ -7809,8 +7810,8 @@ html[data-theme="light"] .owner-footer .daylight-credit-mark {
     border: 0;
   }
   .owner-footer .daylight-credit-mark {
-    width: 140px;
-    height: 30px;
+    width: 170px;
+    height: 34px;
   }
   .owner-footer > span:last-child {
     display: none;
