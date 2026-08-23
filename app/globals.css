@@ -7833,12 +7833,12 @@ html[data-theme="light"] .owner-footer .daylight-credit-mark {
 .scheduling-control-grid,
 .scheduling-policy-card,
 .design-studio {
-  --workspace-card-border: color-mix(in srgb, var(--text) 13%, var(--border));
-  --workspace-card-highlight: color-mix(in srgb, var(--accent) 18%, var(--border));
+  --workspace-card-border: color-mix(in srgb, var(--accent) 28%, var(--border));
+  --workspace-card-highlight: color-mix(in srgb, var(--accent) 58%, var(--border));
   --workspace-card-surface: linear-gradient(
     145deg,
-    color-mix(in srgb, var(--panel) 91%, var(--text)),
-    color-mix(in srgb, var(--panel) 96%, var(--accent))
+    color-mix(in srgb, var(--panel) 84%, var(--text)),
+    color-mix(in srgb, var(--panel) 92%, var(--accent))
   );
   --workspace-card-shadow: 0 12px 32px rgba(0, 0, 0, .22);
 }
@@ -7859,10 +7859,10 @@ html[data-theme="light"] .owner-footer .daylight-credit-mark {
 .chief-workspace .tool-registry-grid > article,
 .chief-workspace .authority-ledger > article {
   overflow: hidden;
-  border: 1px solid color-mix(in srgb, var(--text) 23%, var(--border));
+  border: 1px solid var(--workspace-card-border);
   border-radius: 14px;
   background: var(--workspace-card-surface);
-  box-shadow: var(--workspace-card-shadow), inset 0 1px color-mix(in srgb, var(--text) 7%, transparent);
+  box-shadow: var(--workspace-card-shadow), inset 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .operations-workspace .playbook-grid > article.playbook-disabled {
