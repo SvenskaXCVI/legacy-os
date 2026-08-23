@@ -7482,6 +7482,11 @@ html[data-theme="light"] .notification-button {
   background: transparent;
 }
 
+.operations-workspace .agent-operations-heading,
+.scheduling-intelligence-panel .scheduling-intelligence-heading {
+  border-bottom-color: var(--workspace-card-border);
+}
+
 .operations-workspace .agent-roster article {
   min-height: 168px;
   border: 1px solid var(--border);
@@ -7818,5 +7823,252 @@ html[data-theme="light"] .owner-footer .daylight-credit-mark {
   }
   .client-footer .release-version {
     justify-self: center;
+  }
+}
+
+/* Stage 29 refinement — dashboard card language across dense workspaces */
+.operations-workspace,
+.scheduling-intelligence-panel,
+.scheduling-control-grid,
+.design-studio {
+  --workspace-card-border: color-mix(in srgb, var(--text) 13%, var(--border));
+  --workspace-card-highlight: color-mix(in srgb, var(--accent) 18%, var(--border));
+  --workspace-card-surface: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--panel-soft) 88%, var(--panel)),
+    var(--panel)
+  );
+  --workspace-card-shadow: 0 10px 30px rgba(0, 0, 0, .09);
+}
+
+/* AI cards now use the same contained, softly elevated treatment as Dashboard. */
+.operations-workspace .agent-roster {
+  gap: 14px;
+  padding: 20px 24px 24px;
+  border-bottom: 1px solid var(--workspace-card-border);
+  background: transparent;
+}
+
+.operations-workspace .agent-roster article,
+.operations-workspace .specialist-domain-card,
+.operations-workspace .playbook-grid > article,
+.operations-workspace .tool-registry-grid > article,
+.operations-workspace .connector-grid > article {
+  overflow: hidden;
+  border: 1px solid var(--workspace-card-border);
+  border-radius: 14px;
+  background: var(--workspace-card-surface);
+  box-shadow: var(--workspace-card-shadow), inset 0 1px rgba(255, 255, 255, .025);
+}
+
+.operations-workspace .agent-roster article {
+  min-height: 176px;
+  padding: 20px;
+}
+
+.operations-workspace .agent-roster article:hover,
+.operations-workspace .specialist-domain-card:hover {
+  border-color: var(--workspace-card-highlight);
+}
+
+.operations-workspace .agent-policy-chip {
+  right: 18px;
+  bottom: 16px;
+}
+
+.operations-workspace .specialist-domain-grid {
+  gap: 14px;
+  padding: 20px 24px 24px;
+  border-top: 1px solid var(--workspace-card-border);
+  background: transparent;
+}
+
+.operations-workspace .specialist-domain-card {
+  min-height: 250px;
+  padding: 20px;
+}
+
+/* Forms are deliberate dashboard-style cards, not loose fields on a canvas. */
+.operations-workspace .agent-task-form,
+.operations-workspace .specialist-run-form,
+.chief-manager-console .chief-command-form {
+  margin: 20px 24px 24px;
+  padding: 20px;
+  border: 1px solid var(--workspace-card-border);
+  border-radius: 14px;
+  background: var(--workspace-card-surface);
+  box-shadow: var(--workspace-card-shadow);
+}
+
+.operations-workspace .agent-task-form,
+.operations-workspace .specialist-run-form {
+  border-bottom: 1px solid var(--workspace-card-border);
+}
+
+.operations-workspace :where(.agent-task-form, .specialist-run-form, .chief-command-form)
+  :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea),
+.scheduling-control-card :where(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  border-color: color-mix(in srgb, var(--text) 20%, var(--border));
+  background: color-mix(in srgb, var(--input) 90%, var(--panel-soft));
+}
+
+.operations-workspace :where(.agent-task-form, .specialist-run-form, .chief-command-form)
+  :where(input, select, textarea):focus,
+.scheduling-control-card :where(input, select, textarea):focus {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+  outline: 0;
+}
+
+/* Clear hand-off line between configuration and its recorded result. */
+.operations-workspace :where(.agent-task-ledger, .connector-operations, .chief-run-ledger, .authority-ledger) {
+  border-top: 1px solid var(--workspace-card-border);
+}
+
+.operations-workspace :where(.agent-task-ledger, .connector-operations, .chief-run-ledger, .authority-ledger)
+  > .capture-stream-heading,
+.scheduling-intelligence-panel .schedule-opportunity-list > .capture-stream-heading {
+  min-height: 60px;
+  padding: 16px 22px;
+  border-bottom: 1px solid var(--workspace-card-border);
+  background: color-mix(in srgb, var(--panel-soft) 84%, var(--panel));
+}
+
+.chief-manager-console .chief-run-ledger {
+  margin-top: 2px;
+}
+
+.chief-manager-console .chief-run-ledger > .empty-state {
+  min-height: 230px;
+}
+
+/* Scheduling metrics are independent cards, matching the Dashboard KPI row. */
+.scheduling-intelligence-panel .scheduling-stat-grid {
+  gap: 12px;
+  padding: 18px 22px;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.scheduling-intelligence-panel .scheduling-stat-grid > span {
+  min-height: 92px;
+  padding: 15px 12px;
+  border: 1px solid var(--workspace-card-border);
+  border-radius: 12px;
+  background: var(--workspace-card-surface);
+  box-shadow: 0 7px 20px rgba(0, 0, 0, .06);
+}
+
+.scheduling-intelligence-panel .scheduling-stat-grid > span:last-child {
+  border-right: 1px solid var(--workspace-card-border);
+}
+
+.scheduling-intelligence-panel .schedule-opportunity-list {
+  border-top: 1px solid var(--workspace-card-border);
+}
+
+.scheduling-intelligence-panel .schedule-opportunity-list > .capture-stream-heading {
+  border-top: 0;
+}
+
+.scheduling-control-grid {
+  padding-top: 2px;
+}
+
+.scheduling-control-card > .panel-title,
+.scheduling-policy-card > .panel-title {
+  border-bottom: 1px solid var(--workspace-card-border);
+  background: color-mix(in srgb, var(--panel-soft) 80%, var(--panel));
+}
+
+.scheduling-control-card > .modal-form {
+  gap: 14px;
+  padding: 20px;
+  border-bottom: 1px solid var(--workspace-card-border);
+}
+
+.scheduling-control-card .capacity-window-list,
+.scheduling-policy-card .scheduling-policy-form {
+  border-top: 1px solid color-mix(in srgb, var(--text) 9%, var(--border));
+}
+
+.scheduling-control-card .field-row {
+  gap: 14px;
+}
+
+.scheduling-control-card .capacity-window-list article,
+.schedule-opportunity-list > article {
+  border-color: var(--workspace-card-border);
+}
+
+/* The Design Studio uploader is a compact dashboard card with aligned controls. */
+.design-studio .upload-box {
+  gap: 9px;
+  margin: 12px;
+  padding: 18px 14px;
+  border: 1px solid var(--workspace-card-highlight);
+  border-radius: 12px;
+  background: var(--workspace-card-surface);
+  box-shadow: 0 7px 20px rgba(0, 0, 0, .06);
+}
+
+.design-studio .upload-box strong,
+.design-studio .upload-box small {
+  margin: 0;
+}
+
+.design-studio .upload-box input[type="file"] {
+  min-height: 46px;
+  margin: 2px 0 0;
+  padding: 6px;
+  border: 1px solid color-mix(in srgb, var(--text) 20%, var(--border));
+  border-radius: 10px;
+  background: var(--input);
+  font-size: .78rem;
+}
+
+.design-studio .upload-box label {
+  gap: 7px;
+}
+
+.design-studio .upload-box .outline-button {
+  min-width: 132px;
+  margin-top: 3px;
+  align-self: center;
+}
+
+html[data-theme="light"] :where(
+  .operations-workspace .agent-roster article,
+  .operations-workspace .specialist-domain-card,
+  .operations-workspace .agent-task-form,
+  .operations-workspace .specialist-run-form,
+  .chief-manager-console .chief-command-form,
+  .scheduling-intelligence-panel .scheduling-stat-grid > span,
+  .design-studio .upload-box
+) {
+  background: var(--light-surface);
+  box-shadow: 0 10px 28px rgba(32, 38, 35, .08);
+}
+
+@media (max-width: 700px) {
+  .operations-workspace .agent-task-form,
+  .operations-workspace .specialist-run-form,
+  .chief-manager-console .chief-command-form {
+    margin: 14px;
+    padding: 16px;
+  }
+
+  .operations-workspace .specialist-domain-grid,
+  .operations-workspace .agent-roster {
+    padding: 14px;
+  }
+
+  .scheduling-intelligence-panel .scheduling-stat-grid {
+    gap: 9px;
+    padding: 14px;
+  }
+
+  .scheduling-intelligence-panel .scheduling-stat-grid > span {
+    min-height: 82px;
   }
 }

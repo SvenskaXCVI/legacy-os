@@ -39,6 +39,17 @@ test("scheduling and module empty states use compact, centered layouts", async (
   assert.match(css, /place-items:\s*center/);
 });
 
+test("dense workspaces reuse the dashboard card language and visible section dividers", async () => {
+  const css = await read("app/globals.css");
+  assert.match(css, /--workspace-card-surface/);
+  assert.match(css, /\.operations-workspace \.agent-roster article/);
+  assert.match(css, /\.operations-workspace \.specialist-domain-card/);
+  assert.match(css, /\.chief-manager-console \.chief-command-form/);
+  assert.match(css, /\.scheduling-intelligence-panel \.scheduling-stat-grid > span/);
+  assert.match(css, /\.design-studio \.upload-box/);
+  assert.match(css, /border-top:\s*1px solid var\(--workspace-card-border\)/);
+});
+
 test("Stage 29 is explicitly data-safe and versioned", async () => {
   const [version, pkgRaw, changelog] = await Promise.all([
     read("lib/version.ts"),
