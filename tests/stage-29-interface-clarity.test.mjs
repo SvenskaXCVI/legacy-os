@@ -42,6 +42,9 @@ test("scheduling and module empty states use compact, centered layouts", async (
 test("dense workspaces reuse the dashboard card language and visible section dividers", async () => {
   const css = await read("app/globals.css");
   assert.match(css, /--workspace-card-surface/);
+  assert.match(css, /--accent:\s*var\(--gold\)/);
+  assert.match(css, /--border:\s*var\(--line\)/);
+  assert.match(css, /--text:\s*var\(--paper\)/);
   assert.match(css, /\.operations-workspace \.agent-roster article/);
   assert.match(css, /\.operations-workspace \.specialist-domain-card/);
   assert.match(css, /\.chief-manager-console \.chief-command-form/);

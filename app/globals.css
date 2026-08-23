@@ -27,6 +27,17 @@
   --serif: Georgia, "Times New Roman", serif;
   --font-display: var(--display);
   --surface: var(--panel);
+  /* Shared semantic aliases used by the newer operational workspaces. */
+  --accent: var(--gold);
+  --accent-border: var(--line-strong);
+  --border: var(--line);
+  --text: var(--paper);
+  --panel-soft: var(--panel-2);
+  --input: var(--panel-2);
+  --success: var(--green);
+  --warning: var(--gold-bright);
+  --danger: var(--red);
+  --info: var(--blue);
 }
 
 .lifecycle-operations-grid { align-items: start; }
