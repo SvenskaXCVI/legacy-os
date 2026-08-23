@@ -7837,10 +7837,10 @@ html[data-theme="light"] .owner-footer .daylight-credit-mark {
   --workspace-card-highlight: color-mix(in srgb, var(--accent) 18%, var(--border));
   --workspace-card-surface: linear-gradient(
     145deg,
-    color-mix(in srgb, var(--panel-soft) 88%, var(--panel)),
-    var(--panel)
+    color-mix(in srgb, var(--panel) 91%, var(--text)),
+    color-mix(in srgb, var(--panel) 96%, var(--accent))
   );
-  --workspace-card-shadow: 0 10px 30px rgba(0, 0, 0, .09);
+  --workspace-card-shadow: 0 12px 32px rgba(0, 0, 0, .22);
 }
 
 /* AI cards now use the same contained, softly elevated treatment as Dashboard. */
@@ -7855,12 +7855,50 @@ html[data-theme="light"] .owner-footer .daylight-credit-mark {
 .operations-workspace .specialist-domain-card,
 .operations-workspace .playbook-grid > article,
 .operations-workspace .tool-registry-grid > article,
-.operations-workspace .connector-grid > article {
+.operations-workspace .connector-grid > article,
+.chief-workspace .tool-registry-grid > article,
+.chief-workspace .authority-ledger > article {
   overflow: hidden;
-  border: 1px solid var(--workspace-card-border);
+  border: 1px solid color-mix(in srgb, var(--text) 23%, var(--border));
   border-radius: 14px;
   background: var(--workspace-card-surface);
-  box-shadow: var(--workspace-card-shadow), inset 0 1px rgba(255, 255, 255, .025);
+  box-shadow: var(--workspace-card-shadow), inset 0 1px color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.operations-workspace .playbook-grid > article.playbook-disabled {
+  opacity: .82;
+}
+
+.operations-workspace .playbook-grid > article:hover,
+.operations-workspace .tool-registry-grid > article:hover,
+.chief-workspace .tool-registry-grid > article:hover {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+}
+
+.operations-workspace .playbook-triggers span,
+.operations-workspace .tool-registry-grid footer span,
+.chief-workspace .tool-registry-grid footer span {
+  border-color: color-mix(in srgb, var(--text) 17%, var(--border));
+  background: color-mix(in srgb, var(--panel) 86%, transparent);
+}
+
+.chief-workspace .authority-summary {
+  gap: 8px;
+  padding: 14px 24px;
+  border-block-color: var(--workspace-card-border);
+  background: color-mix(in srgb, var(--panel-soft) 68%, var(--panel));
+}
+
+.chief-workspace .authority-summary div {
+  min-height: 76px;
+  border: 1px solid color-mix(in srgb, var(--text) 18%, var(--border));
+  border-radius: 11px;
+  background: var(--workspace-card-surface);
+  box-shadow: 0 7px 20px rgba(0, 0, 0, .12);
+}
+
+.chief-workspace .authority-summary div:last-child {
+  border-right: 1px solid color-mix(in srgb, var(--text) 18%, var(--border));
 }
 
 .operations-workspace .agent-roster article {
@@ -8046,9 +8084,12 @@ html[data-theme="light"] :where(
   .operations-workspace .specialist-run-form,
   .chief-manager-console .chief-command-form,
   .scheduling-intelligence-panel .scheduling-stat-grid > span,
-  .design-studio .upload-box
+  .design-studio .upload-box,
+  .chief-workspace .tool-registry-grid > article,
+  .chief-workspace .authority-ledger > article,
+  .chief-workspace .authority-summary div
 ) {
-  background: var(--light-surface);
+  background: linear-gradient(145deg, #fffefa, color-mix(in srgb, var(--light-surface) 95%, var(--accent)));
   box-shadow: 0 10px 28px rgba(32, 38, 35, .08);
 }
 

@@ -45,6 +45,8 @@ test("dense workspaces reuse the dashboard card language and visible section div
   assert.match(css, /\.operations-workspace \.agent-roster article/);
   assert.match(css, /\.operations-workspace \.specialist-domain-card/);
   assert.match(css, /\.chief-manager-console \.chief-command-form/);
+  assert.match(css, /\.chief-workspace \.tool-registry-grid > article/);
+  assert.match(css, /color-mix\(in srgb, var\(--text\) 23%, var\(--border\)\)/);
   assert.match(css, /\.scheduling-intelligence-panel \.scheduling-stat-grid > span/);
   assert.match(css, /\.design-studio \.upload-box/);
   assert.match(css, /border-top:\s*1px solid var\(--workspace-card-border\)/);
