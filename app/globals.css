@@ -6820,6 +6820,65 @@ html[data-theme="light"] .client-media-showcase {
 
 html[data-theme="light"] .client-media-feature { background: var(--light-surface-muted); }
 html[data-theme="light"] .client-media-showcase > header h3 { color: var(--light-ink); }
+
+/* Stage 30: decisive mutation feedback and context-safe media review */
+.candidate-clarification {
+  display: grid;
+  gap: .45rem;
+  padding: .8rem;
+  border: 1px solid var(--accent-border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+
+.candidate-clarification label,
+.candidate-clarification small {
+  color: var(--muted);
+  font-size: .75rem;
+}
+
+.candidate-confidence-note {
+  display: flex;
+  align-items: center;
+  gap: .45rem;
+  color: var(--warning);
+  font-size: .8rem;
+}
+
+.project-action-guidance {
+  display: grid;
+  gap: .35rem;
+  align-items: start;
+}
+
+.project-action-guidance .text-button {
+  justify-self: start;
+  padding: 0;
+}
+
+.asset-lightbox {
+  display: grid;
+  gap: 1rem;
+}
+
+.asset-lightbox-image {
+  width: 100%;
+  max-height: min(68vh, 760px);
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: #050807;
+}
+
+.asset-lightbox .modal-actions {
+  margin-top: 0;
+}
+
+.design-toolbar label > small {
+  color: var(--muted);
+  font-size: .68rem;
+  margin-top: .25rem;
+}
 html[data-theme="light"] .client-media-caption strong { color: #f7f5ef; }
 html[data-theme="light"] .client-media-caption small { color: #d4d9d5; }
 

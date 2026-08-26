@@ -31,7 +31,8 @@ test("client workspace displays actual secure image uploads with newest first", 
   assert.match(ui, /new Date\(right\.createdAt\).*new Date\(left\.createdAt\)/);
   assert.match(ui, /Newest upload/);
   assert.match(ui, /<AssetPreview asset=\{clientImageAssets\[0\]\}/);
-  assert.match(ui, /downloadAsset\(clientImageAssets\[0\]\)/);
+  assert.match(ui, /setPreviewAsset\(clientImageAssets\[0\]\)/);
+  assert.match(ui, /className="asset-lightbox"/);
   assert.doesNotMatch(ui, /client-media-showcase[\s\S]{0,200}example/i);
 });
 

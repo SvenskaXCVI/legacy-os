@@ -1,5 +1,15 @@
 # Legacy OS release history
 
+## 0.7.0-alpha.30 — 2026-08-26
+
+- Began the second alpha-testing repair program with the highest-risk context and write-integrity findings.
+- Preserved client context when opening Design Studio; project choices are now limited to that client, and clients without projects receive a clear creation path instead of an unrelated default project.
+- Replaced client-media downloads-as-navigation with an in-app lightbox while retaining an explicit original-file download action.
+- Made project-request clarification an intentional two-step composer, and visibly flags low-confidence intake for clarification.
+- Made lifecycle advancement visibly pending and wait for refreshed workspace state before reporting completion.
+- Added frontend submission locking, a stable request key, backend idempotency, and matching-appointment detection to prevent duplicate scheduling from repeated taps or retries.
+- Added one additive appointments column and unique index; no existing alpha records are updated or removed.
+
 ## 0.7.0-alpha.29 — 2026-08-22
 
 - Reorganized AI Operations into six focused workspaces—Overview, Automations, Intelligence, AI Workforce, Learning, and Activity—without removing any capability.

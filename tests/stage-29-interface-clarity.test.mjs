@@ -62,8 +62,8 @@ test("Stage 29 is explicitly data-safe and versioned", async () => {
     read("package.json"),
     read("CHANGELOG.md"),
   ]);
-  assert.match(version, /0\.7\.0-alpha\.29/);
-  assert.equal(JSON.parse(pkgRaw).version, "0.7.0-alpha.29");
+  assert.ok(Number(version.match(/alpha\.(\d+)/)?.[1]) >= 29);
+  assert.ok(Number(JSON.parse(pkgRaw).version.match(/alpha\.(\d+)/)?.[1]) >= 29);
   assert.match(changelog, /presentation-only/);
   assert.match(changelog, /does not add a migration/);
 });

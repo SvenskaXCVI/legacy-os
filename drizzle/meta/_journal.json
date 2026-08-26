@@ -162,6 +162,13 @@
       "when": 1787434356366,
       "tag": "0022_tense_the_professor",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1787770010741,
+      "tag": "0023_complete_molten_man",
+      "breakpoints": true
     }
   ]
 }

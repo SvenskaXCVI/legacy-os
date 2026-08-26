@@ -1293,6 +1293,7 @@ export const appointments = sqliteTable(
     status: text("status").notNull().default("scheduled"),
     location: text("location"),
     notes: text("notes"),
+    requestKey: text("request_key"),
     createdBy: text("created_by"),
     createdAt: timestamp("created_at"),
     updatedAt: timestamp("updated_at"),
@@ -1304,6 +1305,10 @@ export const appointments = sqliteTable(
     ),
     index("appointments_client_idx").on(table.clientId),
     index("appointments_project_idx").on(table.projectId),
+    uniqueIndex("appointments_workspace_request_key_uq").on(
+      table.workspaceId,
+      table.requestKey,
+    ),
   ],
 );
 

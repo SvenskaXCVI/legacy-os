@@ -20,6 +20,7 @@ export async function POST(request: Request) {
       endsAt?: string;
       location?: string;
       notes?: string;
+      requestKey?: string;
     };
     if (!payload.clientId || !payload.startsAt) {
       return jsonError("Client and start time are required");
@@ -28,6 +29,22 @@ export async function POST(request: Request) {
     const now = new Date().toISOString();
     const actor = actorFrom(request);
     const db = getDb();
+    const requestKey = payload.requestKey?.trim() || null;
+    if (requestKey) {
+      const prior = await db
+        .select({ id: appointments.id, status: appointments.status })
+        .from(appointments)
+        .where(
+          and(
+            eq(appointments.workspaceId, WORKSPACE_ID),
+            eq(appointments.requestKey, requestKey),
+          ),
+        )
+        .get();
+      if (prior) {
+        return Response.json({ ...prior, idempotent: true });
+      }
+    }
     const client = await db
       .select({ id: clients.id })
       .from(clients)
@@ -53,6 +70,27 @@ export async function POST(request: Request) {
         .get();
       if (!project) return jsonError("Project not found for this client", 404);
     }
+    const matchingAppointment = await db
+      .select({ id: appointments.id })
+      .from(appointments)
+      .where(
+        and(
+          eq(appointments.workspaceId, WORKSPACE_ID),
+          eq(appointments.clientId, payload.clientId),
+          eq(appointments.startsAt, payload.startsAt),
+          eq(
+            appointments.appointmentType,
+            payload.appointmentType || "session",
+          ),
+        ),
+      )
+      .get();
+    if (matchingAppointment) {
+      return jsonError(
+        "A matching appointment already exists for this client and start time. Open the calendar to review it before scheduling another.",
+        409,
+      );
+    }
     await db.batch([
       db.insert(appointments).values({
         id: appointmentId,
@@ -64,6 +102,7 @@ export async function POST(request: Request) {
         endsAt: payload.endsAt || null,
         location: payload.location?.trim() || null,
         notes: payload.notes?.trim() || null,
+        requestKey,
         createdBy: actor,
         createdAt: now,
         updatedAt: now,
