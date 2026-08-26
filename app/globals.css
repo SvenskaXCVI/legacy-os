@@ -71,6 +71,97 @@
   .lifecycle-record-list > article { align-items: stretch; flex-direction: column; }
 }
 
+/* Stage 32 — actionability and evidence drill-downs */
+.stat-card-action,
+.detail-box-action {
+  width: 100%;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stat-card-action:hover,
+.stat-card-action:focus-visible,
+.detail-box-action:hover,
+.detail-box-action:focus-visible {
+  border-color: var(--line-strong);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--gold) 18%, transparent), 0 12px 28px rgba(0, 0, 0, .16);
+  transform: translateY(-1px);
+}
+
+.project-rows > button {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 37px minmax(130px, 1.3fr) 72px minmax(80px, .8fr) minmax(110px, 1fr) 16px;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-bottom: 1px solid rgba(201, 158, 97, 0.09);
+  background: transparent;
+  padding: 10px 14px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.project-rows > button:hover,
+.project-rows > button:focus-visible { background: color-mix(in srgb, var(--gold) 6%, transparent); }
+.project-rows > button > strong { overflow: hidden; color: var(--muted); font-size: .75rem; font-weight: 450; text-overflow: ellipsis; white-space: nowrap; }
+
+.journey-milestones > button {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 8px;
+  min-height: 76px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  background: transparent;
+  padding: 12px;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.journey-milestones > button:nth-child(4n) { border-right: 0; }
+.journey-milestones > button:hover,
+.journey-milestones > button:focus-visible { background: color-mix(in srgb, var(--gold) 7%, transparent); }
+.journey-milestones > button > span { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--line); border-radius: 50%; color: var(--muted-2); }
+.journey-milestones > button > div { display: grid; align-content: start; gap: 4px; }
+.journey-milestones > button.complete > span { border-color: color-mix(in srgb, var(--green) 58%, var(--line)); color: var(--green); }
+.journey-milestones > button.current { background: color-mix(in srgb, var(--gold) 7%, transparent); }
+.journey-milestones > button.current > span { border-color: var(--line-strong); color: var(--gold-bright); }
+.journey-milestones > button.waived { opacity: .8; border-style: dashed; }
+.journey-milestones > button.waived > span { color: var(--info); }
+
+.action-summary-card { align-content: start; }
+.action-summary-card > button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: transparent;
+  padding: 10px 0;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.action-summary-card > button:hover { color: var(--gold-bright); }
+.client-card a { color: var(--text); text-decoration-color: color-mix(in srgb, var(--gold) 45%, transparent); text-underline-offset: 3px; }
+.archive-blocker { display: grid; gap: 14px; color: var(--text); }
+.archive-blocker > svg { color: var(--warning); }
+.calendar-toolbar-actions,
+.calendar-range-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.calendar-toolbar-actions .filter-tabs,
+.calendar-range-toolbar .filter-tabs { margin: 0; }
+.calendar-range-toolbar { padding: 16px 18px; border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel-soft) 82%, var(--panel)); }
+.calendar-range-toolbar h3 { margin: 4px 0 0; }
+.calendar-primary-surface { min-height: 420px; }
+.project-action-guidance > span { display: grid; gap: 5px; }
+
 .client-workspace-panel { padding: 0; overflow: hidden; }
 .client-workspace-hero { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 22px; border-bottom: 1px solid var(--line); background: linear-gradient(110deg, rgba(205,143,62,.08), transparent 52%); }
 .client-workspace-identity { display: flex; align-items: center; gap: 14px; }
@@ -108,6 +199,10 @@
   .client-workspace-stats { grid-template-columns: 1fr 1fr; }
   .relationship-project-list > article { align-items: stretch; flex-direction: column; }
   .client-workspace-shortcuts { display: grid; grid-template-columns: 1fr 1fr; }
+  .project-rows > button { grid-template-columns: 37px minmax(120px, 1fr) 76px 16px; }
+  .project-rows > button .project-progress,
+  .project-rows > button > strong { display: none; }
+  .calendar-toolbar-actions { align-items: stretch; flex-direction: column; }
 }
 
 @media (max-width: 560px) {
@@ -116,6 +211,12 @@
   .client-workspace-hero { padding: 16px; }
   .client-workspace-tabs { padding: 0 12px; }
   .client-workspace-shortcuts { grid-template-columns: 1fr; }
+  .calendar-range-toolbar { align-items: stretch; flex-direction: column; }
+  .calendar-range-toolbar .filter-tabs,
+  .calendar-toolbar-actions .filter-tabs { width: 100%; overflow-x: auto; }
+  .calendar-range-toolbar .filter-tabs button,
+  .calendar-toolbar-actions .filter-tabs button { flex: 1 0 auto; justify-content: center; }
+  .journey-milestones > button { border-right: 0; }
 }
 
 .finance-view { display: grid; gap: 16px; }
@@ -6879,6 +6980,36 @@ html[data-theme="light"] .client-media-showcase > header h3 { color: var(--light
   font-size: .68rem;
   margin-top: .25rem;
 }
+
+.historical-project-fields {
+  display: grid;
+  gap: .65rem;
+  padding: .85rem;
+  border: 1px solid var(--accent-border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+
+.form-guidance,
+.historical-project-banner {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+}
+
+.form-guidance { color: var(--muted); font-size: .76rem; }
+
+.historical-project-banner {
+  padding: .8rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--panel-soft);
+}
+
+.historical-project-banner > div { display: grid; gap: .2rem; flex: 1; }
+.historical-project-banner span { color: var(--muted); font-size: .75rem; }
+.journey-milestones article.waived { opacity: .78; border-style: dashed; }
+.journey-milestones article.waived > span { color: var(--info); }
 html[data-theme="light"] .client-media-caption strong { color: #f7f5ef; }
 html[data-theme="light"] .client-media-caption small { color: #d4d9d5; }
 

@@ -1,4 +1,4 @@
-export type JourneyMilestoneStatus = "complete" | "current" | "blocked";
+export type JourneyMilestoneStatus = "complete" | "waived" | "current" | "blocked";
 
 export type JourneyMilestone = {
   id: string;
@@ -18,6 +18,7 @@ type ProjectInput = {
   budgetMinCents: number | null;
   budgetMaxCents: number | null;
   status: string;
+  originMode?: string;
 };
 
 type JourneyInputs = {
@@ -95,12 +96,24 @@ export function buildTattooJourney(input: JourneyInputs) {
     { id: "complete", label: "Complete", done: completed, detail: completed ? "Lifecycle closed and learning queued" : "Close only after operational outcomes are complete", evidence: completed ? [project.id] : [] },
   ];
 
-  const firstIncomplete = facts.findIndex((item) => !item.done);
+  const phaseOrder = ["consult", "design", "approval", "session", "healing", "complete"];
+  const currentPhaseIndex = phaseOrder.indexOf(project.lifecyclePhase);
+  const requiredBeforePhase: Record<string, string> = {
+    inquiry: "consult", qualification: "design", project: "design", references: "design",
+    design: "approval", approval: "session", quote: "session", deposit: "session", appointment: "session",
+    session: "healing", payment: "complete", healing: "complete", content: "complete", outcome: "complete",
+    knowledge: "complete", complete: "complete",
+  };
+  const isWaived = (item: (typeof facts)[number]) =>
+    project.originMode === "imported" &&
+    !item.done &&
+    currentPhaseIndex >= phaseOrder.indexOf(requiredBeforePhase[item.id] || "complete");
+  const firstIncomplete = facts.findIndex((item) => !item.done && !isWaived(item));
   const milestones: JourneyMilestone[] = facts.map((item, index) => ({
     id: item.id,
     label: item.label,
-    status: item.done ? "complete" : index === firstIncomplete ? "current" : "blocked",
-    detail: item.detail,
+    status: item.done ? "complete" : isWaived(item) ? "waived" : index === firstIncomplete ? "current" : "blocked",
+    detail: isWaived(item) ? "Historical evidence unavailable · imported record" : item.detail,
     evidenceIds: item.evidence,
   }));
 
@@ -114,11 +127,11 @@ export function buildTattooJourney(input: JourneyInputs) {
   };
   const blockers = (requiredByPhase[nextPhase || ""] || [])
     .map((id) => milestones.find((item) => item.id === id))
-    .filter((item): item is JourneyMilestone => Boolean(item && item.status !== "complete"));
+    .filter((item): item is JourneyMilestone => Boolean(item && !["complete", "waived"].includes(item.status)));
 
   return {
     projectId: project.id,
-    progressPercent: Math.round((facts.filter((item) => item.done).length / facts.length) * 100),
+    progressPercent: Math.round((milestones.filter((item) => ["complete", "waived"].includes(item.status)).length / facts.length) * 100),
     milestones,
     nextAction: milestones[firstIncomplete]?.detail || "Project journey complete",
     nextPhase,

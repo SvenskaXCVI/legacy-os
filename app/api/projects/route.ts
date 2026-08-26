@@ -37,11 +37,31 @@ export async function POST(request: Request) {
       budgetMax?: number;
       targetDate?: string;
       nextAction?: string;
+      originMode?: "new" | "imported";
+      historicalStartedAt?: string;
+      lifecyclePhase?: string;
+      financialClassification?: string;
     };
     if (!payload.clientId || !payload.title?.trim()) {
       return jsonError("A client and project title are required");
     }
     const db = getDb();
+    const originMode = payload.originMode === "imported" ? "imported" : "new";
+    const allowedPhases = ["consult", "design", "approval", "session", "healing", "complete"];
+    const lifecyclePhase = originMode === "imported" && allowedPhases.includes(payload.lifecyclePhase || "")
+      ? payload.lifecyclePhase!
+      : "consult";
+    const financialClassifications = new Set(["paid", "complimentary", "trade", "promotional", "gift", "internal_test"]);
+    const financialClassification = financialClassifications.has(payload.financialClassification || "")
+      ? payload.financialClassification!
+      : "paid";
+    const historicalDate = payload.historicalStartedAt ? new Date(payload.historicalStartedAt) : null;
+    const historicalStartedAt = originMode === "imported" && historicalDate && !Number.isNaN(historicalDate.getTime())
+      ? historicalDate.toISOString()
+      : null;
+    if (originMode === "imported" && !historicalStartedAt) {
+      return jsonError("Historical projects need the date the work originally began");
+    }
     const requestKey = payload.requestKey?.trim() || null;
     if (requestKey) {
       const prior = await db
@@ -83,7 +103,8 @@ export async function POST(request: Request) {
         workspaceId: WORKSPACE_ID,
         clientId: payload.clientId,
         title: payload.title.trim(),
-        lifecyclePhase: "consult",
+        lifecyclePhase,
+        status: lifecyclePhase === "complete" ? "completed" : "active",
         placement: payload.placement?.trim() || null,
         styleTagsJson: JSON.stringify(
           payload.style
@@ -93,6 +114,9 @@ export async function POST(request: Request) {
         ),
         summary: payload.summary?.trim() || null,
         clientSummary: payload.clientSummary?.trim() || null,
+        originMode,
+        historicalStartedAt,
+        financialClassification,
         requestKey,
         budgetMinCents:
           typeof payload.budgetMin === "number"
@@ -103,7 +127,7 @@ export async function POST(request: Request) {
             ? Math.round(payload.budgetMax * 100)
             : null,
         targetDate: payload.targetDate || null,
-        nextAction: payload.nextAction?.trim() || "Complete project intake",
+        nextAction: payload.nextAction?.trim() || (originMode === "imported" ? `Review imported ${lifecyclePhase} record` : "Complete project intake"),
         createdAt: now,
         updatedAt: now,
       }),
@@ -112,16 +136,16 @@ export async function POST(request: Request) {
         workspaceId: WORKSPACE_ID,
         actorType: "user",
         actorId: actor,
-        action: "project.created",
+        action: originMode === "imported" ? "project.imported" : "project.created",
         targetType: "project",
         targetId: projectId,
         riskLevel: "low",
         outcome: "succeeded",
-        metadataJson: JSON.stringify({ clientId: payload.clientId }),
-        occurredAt: now,
+        metadataJson: JSON.stringify({ clientId: payload.clientId, originMode, recordedAt: now, financialClassification }),
+        occurredAt: historicalStartedAt || now,
       }),
     ]);
-    await captureAutomationSignal(
+    if (originMode === "new") await captureAutomationSignal(
       {
         workspaceId: WORKSPACE_ID,
         eventType: "project_created",
@@ -132,7 +156,7 @@ export async function POST(request: Request) {
         category: "workflow",
         signalKey: "project.created",
         value: {
-          lifecyclePhase: "consult",
+          lifecyclePhase,
           placement: payload.placement?.trim() || null,
           styleTags:
             payload.style

@@ -58,6 +58,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import NextImage from "next/image";
@@ -184,8 +185,12 @@ type ProjectRecord = {
   nextActionAt: string | null;
   summary: string | null;
   clientSummary?: string | null;
+  originMode?: string;
+  historicalStartedAt?: string | null;
+  financialClassification?: string;
   isTest?: boolean;
   archivedAt?: string | null;
+  createdAt: string;
   updatedAt: string;
 };
 
@@ -219,6 +224,7 @@ type AppointmentRecord = {
   status: string;
   location: string | null;
   notes: string | null;
+  createdAt: string;
 };
 
 type TattooSessionRecord = {
@@ -392,7 +398,7 @@ type ProjectJourneyRecord = {
   milestones: Array<{
     id: string;
     label: string;
-    status: "complete" | "current" | "blocked";
+    status: "complete" | "waived" | "current" | "blocked";
     detail: string;
     evidenceIds: string[];
   }>;
@@ -1122,6 +1128,19 @@ function projectClient(project: ProjectRecord) {
   return name || "Unassigned client";
 }
 
+function formatPhone(value?: string | null) {
+  if (!value) return "No phone saved";
+  const digits = value.replace(/\D/g, "");
+  const local = digits.length === 11 && digits.startsWith("1") ? digits.slice(1) : digits;
+  return local.length === 10
+    ? `(${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`
+    : value;
+}
+
+function cleanSocialHandle(value?: string | null) {
+  return value?.trim().replace(/^@+/, "") || "";
+}
+
 function formatDate(value?: string | null, includeTime = false) {
   if (!value) return "Not scheduled";
   const date = new Date(value);
@@ -1591,6 +1610,7 @@ function OwnerHeader({
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const notificationAnchorRef = useRef<HTMLDivElement | null>(null);
   const [renderedAt] = useState(() => Date.now());
   const normalized = query.trim().toLowerCase();
   const clientLabel = (clientId?: string | null) =>
@@ -1814,6 +1834,16 @@ function OwnerHeader({
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
   }, []);
+  useEffect(() => {
+    if (!notificationsOpen) return;
+    function closeOutside(event: PointerEvent) {
+      if (!notificationAnchorRef.current?.contains(event.target as Node)) {
+        setNotificationsOpen(false);
+      }
+    }
+    window.addEventListener("pointerdown", closeOutside);
+    return () => window.removeEventListener("pointerdown", closeOutside);
+  }, [notificationsOpen]);
   return (
     <>
       <header className="owner-header">
@@ -1834,7 +1864,7 @@ function OwnerHeader({
           <span>Search anything...</span>
           <kbd>⌘ K</kbd>
         </button>
-        <div className="notification-anchor">
+        <div className="notification-anchor" ref={notificationAnchorRef}>
           <button
             className="icon-button"
             aria-label="Notifications"
@@ -2006,14 +2036,15 @@ function StatCard({
   label,
   value,
   detail,
+  onClick,
 }: {
   icon: LucideIcon;
   label: string;
   value: string | number;
   detail: string;
+  onClick?: () => void;
 }) {
-  return (
-    <article className="stat-card">
+  const contents = <>
       <div>
         <p>{label}</p>
         <strong>{value}</strong>
@@ -2022,8 +2053,8 @@ function StatCard({
       <span>
         <Icon size={19} strokeWidth={1.5} />
       </span>
-    </article>
-  );
+    </>;
+  return onClick ? <button type="button" className="stat-card stat-card-action" onClick={onClick}>{contents}</button> : <article className="stat-card">{contents}</article>;
 }
 
 function Dashboard({
@@ -2045,7 +2076,7 @@ function Dashboard({
   onClient: () => void;
   onProject: () => void;
   onAppointment: () => void;
-  onView: (view: OwnerView) => void;
+  onView: (view: OwnerView, id?: string) => void;
 }) {
   const upcoming = data.appointments
     .filter((item) => !["completed", "cancelled"].includes(item.status) && (!item.projectId || data.projects.some((project) => project.id === item.projectId && !project.isTest && !project.archivedAt)))
@@ -2085,24 +2116,28 @@ function Dashboard({
           label="ACTIVE PROJECTS"
           value={activeProjects.length}
           detail="Across the tattoo lifecycle"
+          onClick={() => onView("projects")}
         />
         <StatCard
           icon={CalendarDays}
           label="UPCOMING APPOINTMENTS"
           value={upcoming.length}
           detail="From the current schedule"
+          onClick={() => onView("calendar")}
         />
         <StatCard
           icon={ShieldCheck}
           label="APPROVALS WAITING"
           value={pending.length}
           detail="Human judgment remains final"
+          onClick={() => onView("design")}
         />
         <StatCard
           icon={MessageSquareText}
           label="CLIENT MESSAGES"
           value={unread.length}
           detail="Awaiting an owner response"
+          onClick={() => onView("inbox")}
         />
       </section>
 
@@ -2192,7 +2227,7 @@ function Dashboard({
               {activeProjects.slice(0, 5).map((project) => {
                 const phaseIndex = Math.max(0, phases.indexOf(project.lifecyclePhase));
                 return (
-                  <article key={project.id}>
+                  <button type="button" key={project.id} onClick={() => onView("projects", project.id)}>
                     <div className="project-avatar">
                       {project.title.slice(0, 1).toUpperCase()}
                     </div>
@@ -2206,7 +2241,7 @@ function Dashboard({
                     </div>
                     <strong>{project.nextAction || "Choose next action"}</strong>
                     <ArrowRight size={15} />
-                  </article>
+                  </button>
                 );
               })}
             </div>
@@ -2307,6 +2342,7 @@ function ProjectsView({
   const [clarifyingCandidate, setClarifyingCandidate] = useState<string | null>(null);
   const [advancing, setAdvancing] = useState(false);
   const [savingCleanup, setSavingCleanup] = useState(false);
+  const [archiveBlocker, setArchiveBlocker] = useState("");
   const reviewCandidates = data.projectCandidates.filter((candidate) =>
     ["pending_review", "needs_details"].includes(candidate.status),
   );
@@ -2367,8 +2403,18 @@ function ProjectsView({
       notify(action === "archive" ? "Project archived and removed from operational intelligence." : action === "mark_test" ? "Project marked as test data and removed from operational intelligence." : "Project restored to operational records.");
       refresh();
     } catch (error) {
-      notify(error instanceof Error ? error.message : "Unable to update project", true);
+      const message = error instanceof Error ? error.message : "Unable to update project";
+      if (action === "archive") setArchiveBlocker(message);
+      notify(message, true);
     } finally { setSavingCleanup(false); }
+  }
+  function milestoneTarget(id: string): NavigationTarget {
+    if (["references", "design", "approval"].includes(id)) return { view: "design", id: project?.id, clientId: project?.clientId || undefined };
+    if (["quote", "deposit", "payment"].includes(id)) return { view: "finances", id: project?.id };
+    if (id === "appointment") return { view: "calendar" };
+    if (id === "content") return { view: "content", id: project?.id };
+    if (id === "knowledge") return { view: "knowledge", id: project?.id };
+    return { view: "operations", id: project?.id };
   }
 
   async function reviewCandidate(
@@ -2513,7 +2559,7 @@ function ProjectsView({
               </div>
               <Lifecycle phase={project.lifecyclePhase} />
               <div className="detail-grid">
-                <DetailBox label="Next action" value={project.nextAction || "Not set"} />
+                <DetailBox label="Owner next action" value={project.nextAction || "Not set"} />
                 <DetailBox label="Target date" value={formatDate(project.targetDate)} />
                 <DetailBox
                   label="Budget"
@@ -2521,6 +2567,7 @@ function ProjectsView({
                 />
                 <DetailBox label="Updated" value={formatDate(project.updatedAt, true)} />
               </div>
+              {project.originMode === "imported" && <div className="historical-project-banner"><Clock3 size={16} /><div><strong>Imported historical project</strong><span>Work began {formatDate(project.historicalStartedAt)} · Recorded later in Legacy OS · Missing earlier evidence is labeled unavailable, never invented.</span></div><span className="status-badge">{project.financialClassification?.replaceAll("_", " ") || "paid"}</span></div>}
               <article className="project-brief">
                 <p className="eyebrow">PROJECT BRIEF</p>
                 <p>{project.summary || "No project brief has been added yet."}</p>
@@ -2539,19 +2586,19 @@ function ProjectsView({
                   </div>
                   <div className="journey-milestones">
                     {journey.milestones.map((milestone) => (
-                      <article className={milestone.status} key={milestone.id}>
-                        <span>{milestone.status === "complete" ? <Check size={13} /> : milestone.status === "current" ? <ArrowRight size={13} /> : <Clock3 size={13} />}</span>
+                      <button type="button" className={milestone.status} key={milestone.id} onClick={() => onNavigate(milestoneTarget(milestone.id))}>
+                        <span>{milestone.status === "complete" ? <Check size={13} /> : milestone.status === "waived" ? <ShieldCheck size={13} /> : milestone.status === "current" ? <ArrowRight size={13} /> : <Clock3 size={13} />}</span>
                         <div>
                           <strong>{milestone.label}</strong>
                           <small>{milestone.detail}</small>
                         </div>
-                      </article>
+                      </button>
                     ))}
                   </div>
                 </section>
               )}
               <div className="project-detail-actions">
-                <div className="project-action-guidance"><span>
+                <div className="project-action-guidance"><span><small className="eyebrow">{journey?.canAdvance ? "WORKFLOW READY" : "LIFECYCLE BLOCKER"}</small>
                   {project.lifecyclePhase === "complete"
                     ? "Learning captured from this completed project."
                     : journey?.canAdvance
@@ -2575,6 +2622,7 @@ function ProjectsView({
           )}
         </div>
       )}
+      {archiveBlocker && <Modal eyebrow="ARCHIVE BLOCKED" title="Resolve linked work before archiving" onClose={() => setArchiveBlocker("")}><div className="archive-blocker"><AlertCircle size={22} /><p>{archiveBlocker}</p><small>Legacy OS preserves the record and shows the exact dependency instead of silently hiding active work.</small><div className="modal-actions"><button type="button" className="text-button" onClick={() => setArchiveBlocker("")}>Close</button><button type="button" className="gold-button" onClick={() => { setArchiveBlocker(""); onNavigate({ view: "operations", id: project?.id }); }}>Open lifecycle operations <ArrowRight size={14} /></button></div></div></Modal>}
     </section>
   );
 }
@@ -2593,13 +2641,12 @@ function Lifecycle({ phase }: { phase: string }) {
   );
 }
 
-function DetailBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="detail-box">
+function DetailBox({ label, value, onClick }: { label: string; value: string; onClick?: () => void }) {
+  const contents = <>
       <small>{label}</small>
       <strong>{value}</strong>
-    </div>
-  );
+    </>;
+  return onClick ? <button type="button" className="detail-box detail-box-action" onClick={onClick}>{contents}</button> : <div className="detail-box">{contents}</div>;
 }
 
 function ClientsView({
@@ -2654,11 +2701,14 @@ function ClientsView({
   const totalPaid = clientPayments.reduce((sum, payment) => sum + payment.amountPaidCents - payment.amountRefundedCents, 0);
   const totalOutstanding = clientPayments.filter((payment) => ["approved", "open"].includes(payment.status)).reduce((sum, payment) => sum + Math.max(0, payment.amountCents - payment.amountPaidCents), 0);
   const timeline = [
-    ...clientMessages.map((item) => ({ id: item.id, at: item.createdAt, type: "Message", title: item.senderType === "client" ? "Client sent a message" : "Studio sent a message", detail: item.body })),
-    ...clientAppointments.map((item) => ({ id: item.id, at: item.startsAt, type: "Appointment", title: item.appointmentType, detail: item.location || item.status })),
-    ...clientAssets.map((item) => ({ id: item.id, at: item.createdAt, type: "File", title: item.originalName, detail: item.assetRole?.replaceAll("_", " ") || item.mediaType })),
-    ...clientApprovals.map((item) => ({ id: item.id, at: item.createdAt, type: "Approval", title: item.subject, detail: item.status })),
-    ...clientSessions.map((item) => ({ id: item.id, at: item.createdAt, type: "Session", title: `Tattoo session ${item.sessionNumber}`, detail: item.status })),
+    ...(selectedClient ? [{ id: selectedClient.id, at: selectedClient.createdAt, recordedAt: selectedClient.createdAt, type: "Relationship", title: "Client record created", detail: "Client relationship began in Legacy OS" }] : []),
+    ...(selectedClient?.notes ? [{ id: `${selectedClient.id}-private-note`, at: selectedClient.updatedAt, recordedAt: selectedClient.updatedAt, type: "Private note", title: "Private studio note updated", detail: "Owner-only context was saved" }] : []),
+    ...clientProjects.map((item) => ({ id: item.id, at: item.originMode === "imported" && item.historicalStartedAt ? item.historicalStartedAt : item.createdAt, recordedAt: item.createdAt, type: item.originMode === "imported" ? "Historical project" : "Project", title: item.title, detail: item.originMode === "imported" ? `Imported at ${item.lifecyclePhase} phase · earlier evidence may be unavailable` : `Project created · ${item.lifecyclePhase} phase` })),
+    ...clientMessages.map((item) => ({ id: item.id, at: item.createdAt, recordedAt: item.createdAt, type: "Message", title: item.senderType === "client" ? "Client sent a message" : "Studio sent a message", detail: item.body })),
+    ...clientAppointments.map((item) => ({ id: item.id, at: item.startsAt, recordedAt: item.createdAt, type: "Appointment", title: item.appointmentType, detail: item.location || item.status })),
+    ...clientAssets.map((item) => ({ id: item.id, at: item.createdAt, recordedAt: item.createdAt, type: "File", title: item.originalName, detail: item.assetRole?.replaceAll("_", " ") || item.mediaType })),
+    ...clientApprovals.map((item) => ({ id: item.id, at: item.createdAt, recordedAt: item.createdAt, type: "Approval", title: item.subject, detail: item.status })),
+    ...clientSessions.map((item) => ({ id: item.id, at: item.createdAt, recordedAt: item.createdAt, type: "Session", title: `Tattoo session ${item.sessionNumber}`, detail: item.status })),
   ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
   function openClientWorkspace(clientId: string) {
@@ -2790,10 +2840,10 @@ function ClientsView({
               <div className="client-workspace-actions"><button className="outline-button" onClick={() => onInvite(selectedClient)}><Link2 size={14} /> Client access</button>{selectedClient.status === "archived" ? <button className="gold-button" disabled={saving} onClick={() => void clientAction("restore")}>Restore client</button> : <button className="text-button danger-text" disabled={saving} onClick={() => void clientAction("archive")}>Archive client</button>}</div>
             </div>
             <div className="client-workspace-stats">
-              <DetailBox label="Projects" value={String(clientProjects.filter((project) => !project.archivedAt).length)} />
-              <DetailBox label="Lifetime paid" value={formatMoney(totalPaid)} />
-              <DetailBox label="Outstanding" value={formatMoney(totalOutstanding)} />
-              <DetailBox label="Next appointment" value={formatDate(clientAppointments.filter((item) => new Date(item.startsAt).getTime() >= viewOpenedAt).sort((a,b) => a.startsAt.localeCompare(b.startsAt))[0]?.startsAt, true)} />
+              <DetailBox label="Projects" value={String(clientProjects.filter((project) => !project.archivedAt).length)} onClick={() => setWorkspaceTab("projects")} />
+              <DetailBox label="Lifetime paid" value={formatMoney(totalPaid)} onClick={() => setWorkspaceTab("financials")} />
+              <DetailBox label="Outstanding" value={formatMoney(totalOutstanding)} onClick={() => setWorkspaceTab("financials")} />
+              <DetailBox label="Next appointment" value={formatDate(clientAppointments.filter((item) => new Date(item.startsAt).getTime() >= viewOpenedAt).sort((a,b) => a.startsAt.localeCompare(b.startsAt))[0]?.startsAt, true)} onClick={() => onNavigate({ view: "calendar", id: clientAppointments.filter((item) => new Date(item.startsAt).getTime() >= viewOpenedAt).sort((a,b) => a.startsAt.localeCompare(b.startsAt))[0]?.id })} />
             </div>
             <div className="filter-tabs client-workspace-tabs">
               {(["overview", "projects", "timeline", "financials", "privacy"] as const).map((tab) => <button key={tab} className={workspaceTab === tab ? "active" : ""} onClick={() => setWorkspaceTab(tab)}>{tab}</button>)}
@@ -2817,16 +2867,16 @@ function ClientsView({
                 </div> : <div className="client-media-empty"><ImageIcon size={24} /><div><strong>No client images uploaded yet</strong><small>Upload references, body photos, designs, session photos, or healed results in Design Studio.</small></div></div>}
               </section>
               <div className="client-grid">
-                <article className="client-card"><h3>Contact and identity</h3><p>{selectedClient.email || "No email saved"}</p><p>{selectedClient.phone || "No phone saved"}</p><small>Preferred channel: {selectedClient.preferredChannel || "not set"}</small><div className="tag-row">{selectedClient.instagramHandle && <span>@{selectedClient.instagramHandle} · Instagram</span>}{selectedClient.tiktokHandle && <span>@{selectedClient.tiktokHandle} · TikTok</span>}</div></article>
+                <article className="client-card"><h3>Contact and identity</h3><p>{selectedClient.email ? <a href={`mailto:${selectedClient.email}`}>{selectedClient.email}</a> : "No email saved"}</p><p>{selectedClient.phone ? <a href={`tel:${selectedClient.phone.replace(/[^+\d]/g, "")}`}>{formatPhone(selectedClient.phone)}</a> : "No phone saved"}</p><small>Preferred channel: {selectedClient.preferredChannel || "not set"}</small><div className="tag-row">{selectedClient.instagramHandle && <a href={`https://instagram.com/${cleanSocialHandle(selectedClient.instagramHandle)}`} target="_blank" rel="noreferrer">@{cleanSocialHandle(selectedClient.instagramHandle)} · Instagram</a>}{selectedClient.tiktokHandle && <a href={`https://tiktok.com/@${cleanSocialHandle(selectedClient.tiktokHandle)}`} target="_blank" rel="noreferrer">@{cleanSocialHandle(selectedClient.tiktokHandle)} · TikTok</a>}</div></article>
                 <article className="client-card owner-private-card"><h3><LockKeyhole size={16} /> Private studio notes</h3><p>{selectedClient.notes || "No private notes saved."}</p><small>Never returned by the client portal API.</small></article>
-                <article className="client-card"><h3>Relationship activity</h3><p>{clientMessages.length} messages</p><p>{clientAppointments.length} appointments</p><p>{clientAssets.length} files</p><p>{clientSessions.length} tattoo sessions</p></article>
-                <article className="client-card"><h3>Open attention</h3><p>{clientApprovals.filter((item) => item.status === "pending").length} approvals waiting</p><p>{clientHealing.filter((item) => ["submitted", "needs_attention"].includes(item.status)).length} healing reviews</p><p>{data.projectCandidates.filter((candidate) => candidate.clientId === selectedClient.id && ["pending_review", "needs_details"].includes(candidate.status)).length} intake requests</p></article>
+                <article className="client-card action-summary-card"><h3>Relationship activity</h3><button onClick={() => onNavigate({ view: "inbox", id: selectedClient.id })}>{clientMessages.length} messages <ArrowRight size={13} /></button><button onClick={() => onNavigate({ view: "calendar" })}>{clientAppointments.length} appointments <ArrowRight size={13} /></button><button onClick={() => onNavigate({ view: "design", clientId: selectedClient.id })}>{clientAssets.length} files <ArrowRight size={13} /></button><button onClick={() => onNavigate({ view: "operations" })}>{clientSessions.length} tattoo sessions <ArrowRight size={13} /></button></article>
+                <article className="client-card action-summary-card"><h3>Open attention</h3><button onClick={() => onNavigate({ view: "design", id: clientProjects[0]?.id })}>{clientApprovals.filter((item) => item.status === "pending").length} approvals waiting <ArrowRight size={13} /></button><button onClick={() => onNavigate({ view: "operations" })}>{clientHealing.filter((item) => ["submitted", "needs_attention"].includes(item.status)).length} healing reviews <ArrowRight size={13} /></button><button onClick={() => onNavigate({ view: "projects", id: clientProjects[0]?.id })}>{data.projectCandidates.filter((candidate) => candidate.clientId === selectedClient.id && ["pending_review", "needs_details"].includes(candidate.status)).length} intake requests <ArrowRight size={13} /></button></article>
               </div>
             </>}
             {workspaceTab === "projects" && <div className="relationship-project-list">
               {clientProjects.length ? clientProjects.map((project) => <article className={cn(project.archivedAt && "archived-record", project.isTest && "test-record")} key={project.id}><div><span className="phase-pill">{project.lifecyclePhase}</span><h3>{project.title}</h3><p>{project.placement || "Placement not set"} · {project.status}</p><small>{project.isTest ? "Test data · excluded from intelligence" : project.archivedAt ? "Archived · excluded from operations" : project.nextAction || "No next action"}</small></div><div className="relationship-project-actions">{project.archivedAt ? <button className="outline-button" disabled={saving} onClick={() => void projectCleanup(project, "restore")}>Restore</button> : <button className="text-button danger-text" disabled={saving} onClick={() => void projectCleanup(project, "archive")}>Archive</button>}<button className="text-button" disabled={saving} onClick={() => void projectCleanup(project, project.isTest ? "mark_real" : "mark_test")}>{project.isTest ? "Mark real" : "Mark test"}</button>{!project.archivedAt && clientProjects.filter((item) => item.id !== project.id && !item.archivedAt).length > 0 && <select aria-label={`Mark ${project.title} as duplicate of`} defaultValue="" onChange={(event) => { const canonical = event.target.value; if (canonical && window.confirm(`Archive ${project.title} as a duplicate of the selected project?`)) void projectCleanup(project, "archive", canonical); event.target.value = ""; }}><option value="">Archive as duplicate…</option>{clientProjects.filter((item) => item.id !== project.id && !item.archivedAt).map((item) => <option value={item.id} key={item.id}>{item.title}</option>)}</select>}</div></article>) : <EmptyState icon={FolderKanban} title="No projects connected" body="Approved project requests will become part of this relationship workspace." />}
             </div>}
-            {workspaceTab === "timeline" && <div className="relationship-timeline">{timeline.length ? timeline.map((item) => <article key={`${item.type}-${item.id}`}><span /><div><small>{item.type} · {formatDate(item.at, true)}</small><strong>{item.title}</strong><p>{item.detail}</p></div></article>) : <EmptyState icon={Activity} title="No relationship history yet" body="Messages, appointments, files, approvals, and sessions will appear in one timeline." />}</div>}
+            {workspaceTab === "timeline" && <div className="relationship-timeline">{timeline.length ? timeline.map((item) => <article key={`${item.type}-${item.id}`}><span /><div><small>{item.type} · Occurred {formatDate(item.at, true)}{item.recordedAt !== item.at ? ` · Recorded ${formatDate(item.recordedAt, true)}` : ""}</small><strong>{item.title}</strong><p>{item.detail}</p></div></article>) : <EmptyState icon={Activity} title="No relationship history yet" body="Messages, appointments, files, approvals, and sessions will appear in one timeline." />}</div>}
             {workspaceTab === "financials" && <div className="client-grid"><article className="client-card"><h3>Financial relationship</h3><p><strong>{formatMoney(totalPaid)}</strong> collected after refunds</p><p><strong>{formatMoney(totalOutstanding)}</strong> currently outstanding</p><small>Budget ranges are not counted as revenue.</small></article><article className="client-card"><h3>Payment history</h3>{clientPayments.length ? clientPayments.map((payment) => <p key={payment.id}><strong>{payment.title}</strong> · {formatMoney(payment.amountCents)} · {payment.status}</p>) : <p>No payment requests.</p>}<button className="text-button" onClick={() => onNavigate({ view: "finances" })}>Open Finance Center <ArrowRight size={13} /></button></article></div>}
             {workspaceTab === "privacy" && <div className="client-grid"><article className="client-card"><h3>Portal and identity boundary</h3><p>Client access is scoped to this client ID and deliberately shared project fields.</p><button className="outline-button" onClick={() => onInvite(selectedClient)}><Link2 size={14} /> Manage client access</button></article><article className="client-card"><h3>Tattoo media permission</h3><p>{clientConsent ? `Granted ${formatDate(clientConsent.grantedAt)}` : "Not granted"}</p><small>The client controls this permission from their healing workspace.</small></article><article className="client-card"><h3>Internal data boundary</h3><p>Private studio notes, AI reasoning, technique notes, and internal pricing context are owner-only.</p><small>Archiving preserves audit history and revokes operational use.</small></article></div>}
             <div className="client-workspace-shortcuts"><button onClick={() => onNavigate({ view: "inbox", id: selectedClient.id })}><MessageSquareText size={16} /> Open messages</button><button onClick={() => onNavigate({ view: "projects", id: clientProjects[0]?.id })}><FolderKanban size={16} /> Open projects</button><button onClick={() => onNavigate({ view: "calendar" })}><CalendarDays size={16} /> Open calendar</button><button onClick={() => onNavigate({ view: "operations" })}><Activity size={16} /> Open lifecycle</button></div>
@@ -2863,6 +2913,8 @@ function CalendarView({
   targetId?: string;
 }) {
   const [saving, setSaving] = useState(false);
+  const [calendarMode, setCalendarMode] = useState<"calendar" | "intelligence">("calendar");
+  const [calendarRange, setCalendarRange] = useState<"day" | "week" | "month">("week");
   useEffect(() => {
     if (!targetId) return;
     document.getElementById(`appointment-${targetId}`)?.scrollIntoView({
@@ -2915,6 +2967,14 @@ function CalendarView({
   const scheduling = data.schedulingIntelligence;
   const latestRun = scheduling.runs[0];
   const realProjects = data.projects.filter((project) => !project.isTest && !project.archivedAt && project.status === "active");
+  const calendarStart = new Date();
+  calendarStart.setHours(0, 0, 0, 0);
+  const calendarEnd = new Date(calendarStart);
+  calendarEnd.setDate(calendarEnd.getDate() + (calendarRange === "day" ? 1 : calendarRange === "week" ? 7 : 31));
+  const visibleAppointments = data.appointments.filter((appointment) => {
+    const at = new Date(appointment.startsAt).getTime();
+    return at >= calendarStart.getTime() && at < calendarEnd.getTime();
+  });
 
   return (
     <section className="page-stack">
@@ -2923,10 +2983,21 @@ function CalendarView({
           <p className="eyebrow">SCHEDULE</p>
           <h2>Upcoming appointments</h2>
         </div>
-        <button className="gold-button" onClick={onCreate}>
-          <Plus size={16} /> Schedule
-        </button>
+        <div className="calendar-toolbar-actions"><div className="filter-tabs" aria-label="Calendar workspace"><button className={calendarMode === "calendar" ? "active" : ""} onClick={() => setCalendarMode("calendar")}><CalendarDays size={14} /> Calendar</button><button className={calendarMode === "intelligence" ? "active" : ""} onClick={() => setCalendarMode("intelligence")}><BrainCircuit size={14} /> Capacity planning</button></div><button className="gold-button" onClick={onCreate}><Plus size={16} /> Schedule</button></div>
       </div>
+      {calendarMode === "calendar" && <section className="os-panel calendar-surface calendar-primary-surface">
+        <div className="calendar-range-toolbar"><div><p className="eyebrow gold">CALENDAR VIEW</p><h3>{calendarRange === "day" ? "Today" : calendarRange === "week" ? "Next seven days" : "Next 31 days"}</h3></div><div className="filter-tabs">{(["day", "week", "month"] as const).map((range) => <button key={range} className={calendarRange === range ? "active" : ""} onClick={() => setCalendarRange(range)}>{range}</button>)}</div></div>
+        {visibleAppointments.length === 0 ? (
+          <EmptyState icon={CalendarDays} title="Nothing is scheduled" body="Add consultations, tattoo sessions, design reviews, and healing checks." action="Schedule appointment" onAction={onCreate} />
+        ) : (
+          <div className="calendar-list">{visibleAppointments.map((appointment) => {
+            const client = data.clients.find((item) => item.id === appointment.clientId);
+            const project = data.projects.find((item) => item.id === appointment.projectId);
+            return <article id={`appointment-${appointment.id}`} className={cn(targetId === appointment.id && "focused-record")} key={appointment.id}><div className="calendar-date"><strong>{new Date(appointment.startsAt).getDate()}</strong><span>{new Date(appointment.startsAt).toLocaleString("en-US", { month: "short" })}</span></div><span className="calendar-line" /><div><p>{appointment.appointmentType}</p><strong>{fullName(client)}</strong><small>{project?.title || "No linked project"} · {formatDate(appointment.startsAt, true)}</small></div><span className="status-badge">{appointment.status}</span></article>;
+          })}</div>
+        )}
+      </section>}
+      {calendarMode === "intelligence" && <>
       <section className="os-panel scheduling-intelligence-panel">
         <div className="scheduling-intelligence-heading">
           <div><p className="eyebrow gold">CAPACITY INTELLIGENCE</p><h2>Book work that is actually ready</h2><p>Empty time is not automatically usable time. Legacy checks exact approval, paid deposit, project phase, duration, preparation, travel, buffers, protected time, daily tattoo limits, energy, and conflicts before suggesting anything.</p></div>
@@ -2991,43 +3062,7 @@ function CalendarView({
           <button className="gold-button" disabled={saving}><Check size={14} /> Save limits</button>
         </form>
       </section>}
-      <section className="os-panel calendar-surface">
-        {data.appointments.length === 0 ? (
-          <EmptyState
-            icon={CalendarDays}
-            title="Nothing is scheduled"
-            body="Add consultations, tattoo sessions, design reviews, and healing checks."
-            action="Schedule appointment"
-            onAction={onCreate}
-          />
-        ) : (
-          <div className="calendar-list">
-            {data.appointments.map((appointment) => {
-              const client = data.clients.find(
-                (item) => item.id === appointment.clientId,
-              );
-              const project = data.projects.find(
-                (item) => item.id === appointment.projectId,
-              );
-              return (
-                <article id={`appointment-${appointment.id}`} className={cn(targetId === appointment.id && "focused-record")} key={appointment.id}>
-                  <div className="calendar-date">
-                    <strong>{new Date(appointment.startsAt).getDate()}</strong>
-                    <span>{new Date(appointment.startsAt).toLocaleString("en-US", { month: "short" })}</span>
-                  </div>
-                  <span className="calendar-line" />
-                  <div>
-                    <p>{appointment.appointmentType}</p>
-                    <strong>{fullName(client)}</strong>
-                    <small>{project?.title || "No linked project"} · {formatDate(appointment.startsAt, true)}</small>
-                  </div>
-                  <span className="status-badge">{appointment.status}</span>
-                </article>
-              );
-            })}
-          </div>
-        )}
-      </section>
+      </>}
     </section>
   );
 }
@@ -5402,6 +5437,7 @@ function ProjectForm({
   notify: (message: string, error?: boolean) => void;
 }) {
   const [submitting, setSubmitting] = useState(false);
+  const [originMode, setOriginMode] = useState<"new" | "imported">("new");
   const [requestKey] = useState(() => crypto.randomUUID());
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -5437,11 +5473,29 @@ function ProjectForm({
           <Field label="Client" name="clientId">
             <select name="clientId" required defaultValue={initialClientId || clients[0]?.id}>{clients.map((client) => <option value={client.id} key={client.id}>{fullName(client)}</option>)}</select>
           </Field>
+          <Field label="Project history" name="originMode">
+            <select name="originMode" value={originMode} onChange={(event) => setOriginMode(event.target.value as "new" | "imported")}>
+              <option value="new">New work starting in Legacy OS</option>
+              <option value="imported">Existing work started before Legacy OS</option>
+            </select>
+          </Field>
+          {originMode === "imported" && <div className="historical-project-fields">
+            <div className="field-row">
+              <Field label="Work originally began" name="historicalStartedAt" type="date" required />
+              <Field label="Current lifecycle phase" name="lifecyclePhase">
+                <select name="lifecyclePhase" defaultValue="consult"><option value="consult">Consult</option><option value="design">Design</option><option value="approval">Approval</option><option value="session">Session</option><option value="healing">Healing</option><option value="complete">Complete</option></select>
+              </Field>
+            </div>
+            <p className="form-guidance"><ShieldCheck size={14} /> Imported history is recorded at its real date and does not trigger new-project automations.</p>
+          </div>}
           <Field label="Project title" name="title" required placeholder="e.g. Full sleeve — guardian" />
           <div className="field-row">
             <Field label="Placement" name="placement" placeholder="Left upper arm" />
             <Field label="Target date" name="targetDate" type="date" />
           </div>
+          <Field label="Financial classification" name="financialClassification">
+            <select name="financialClassification" defaultValue="paid"><option value="paid">Paid client work</option><option value="complimentary">Complimentary</option><option value="trade">Trade</option><option value="promotional">Promotional</option><option value="gift">Gift</option><option value="internal_test">Internal / test</option></select>
+          </Field>
           <Field label="Style tags" name="style" placeholder="Black & grey, realism, ornamental" />
           <Field label="Internal creative brief" name="summary"><textarea name="summary" placeholder="Private studio context, constraints, and creative direction..." /></Field>
           <Field label="Client-facing project summary" name="clientSummary"><textarea name="clientSummary" placeholder="Only information you intend to share in the client portal..." /></Field>
@@ -6513,7 +6567,7 @@ export function LegacyApp({
           realtimeStatus={realtimeStatus}
         />
         <div className="owner-content">
-          {view === "dashboard" && <Dashboard data={data} firstName={actualFirstName} briefing={briefing} generating={generating} onGenerate={generateBriefing} onClient={() => setModal("client")} onProject={() => setModal("project")} onAppointment={() => setModal("appointment")} onView={(nextView) => navigate({ view: nextView })} />}
+          {view === "dashboard" && <Dashboard data={data} firstName={actualFirstName} briefing={briefing} generating={generating} onGenerate={generateBriefing} onClient={() => setModal("client")} onProject={() => setModal("project")} onAppointment={() => setModal("appointment")} onView={(nextView, id) => navigate({ view: nextView, id })} />}
           {view === "projects" && <ProjectsView key={navigationTarget.view === "projects" ? navigationTarget.id || "projects" : "projects"} data={data} onCreate={() => setModal("project")} refresh={load} notify={notify} onNavigate={navigate} targetId={navigationTarget.view === "projects" ? navigationTarget.id : undefined} />}
           {view === "clients" && <ClientsView key={navigationTarget.view === "clients" ? navigationTarget.id || "clients" : "clients"} data={data} onCreate={() => setModal("client")} onInvite={setInviteClient} refresh={load} notify={notify} onNavigate={navigate} targetId={navigationTarget.view === "clients" ? navigationTarget.id : undefined} />}
           {view === "calendar" && <CalendarView key={navigationTarget.view === "calendar" ? navigationTarget.id || "calendar" : "calendar"} data={data} onCreate={() => setModal("appointment")} refresh={load} notify={notify} targetId={navigationTarget.view === "calendar" ? navigationTarget.id : undefined} />}

@@ -1,5 +1,16 @@
 # Legacy OS release history
 
+## 0.7.0-alpha.33 — 2026-08-26
+
+- Added first-class historical project imports with original occurrence dates, lifecycle position, and financial classifications while preventing historical backfills from firing current-day automations.
+- Added honest historical evidence waivers so unavailable records are labeled instead of fabricated, with additive schema changes that preserve all alpha data.
+- Made dashboard metrics, active projects, client metrics, relationship summaries, and lifecycle milestones lead directly to their supporting records and workspaces.
+- Expanded the relationship timeline with client creation, private-note provenance, project creation/import history, and separate occurred-versus-recorded timestamps.
+- Replaced opaque archive failures with an actionable dependency dialog and separated owner next actions from lifecycle blockers.
+- Made Calendar the default scheduling experience with functional Day, Week, and Month ranges; advanced capacity intelligence remains available in a dedicated secondary view.
+- Added reliable outside-tap dismissal for notifications, normalized phone display, and safe Instagram/TikTok profile links without duplicated handles.
+- Confirmed the client portal retains its secure reply composer and shared owner-client conversation path.
+
 ## 0.7.0-alpha.30 — 2026-08-26
 
 - Began the second alpha-testing repair program with the highest-risk context and write-integrity findings.
