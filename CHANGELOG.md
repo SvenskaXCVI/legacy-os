@@ -1,5 +1,13 @@
 # Legacy OS release history
 
+## 0.7.0-alpha.36 — 2026-08-26
+
+- Added Supabase-backed workspace memberships as the authoritative owner-role registry, protected by Postgres Row Level Security.
+- Added safe initial-owner claiming and email-bound owner invitations without placing authorization in user-editable profile metadata.
+- Added an owner access registry under Settings → Team with pending, active, suspended, and revoked states plus an auditable membership event history.
+- Enforced verified email and authenticator-based AAL2 sessions for owner operations while preserving the existing owner code as a temporary recovery path.
+- Preserved all D1 workspace, client, project, media, payment, and AI records during the authorization migration.
+
 ## 0.7.0-alpha.35 — 2026-08-26
 
 - Added a production Connections settings area for Supabase Auth, Stripe Checkout, the operational D1 database, private R2 media, and the model runtime.

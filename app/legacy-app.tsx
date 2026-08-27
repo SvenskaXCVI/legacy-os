@@ -4914,6 +4914,27 @@ function SettingsView({
     secretPolicy: string;
   } | null>(null);
   const [integrationBusy, setIntegrationBusy] = useState<string | null>(null);
+  const [teamAccess, setTeamAccess] = useState<{
+    memberships: Array<{
+      id: string;
+      email: string;
+      role: "owner" | "staff" | "client";
+      status: "pending" | "active" | "suspended" | "revoked";
+      user_id: string | null;
+      mfa_required: boolean;
+      created_at: string;
+      updated_at: string;
+    }>;
+    events: Array<{
+      id: number;
+      action: string;
+      details: Record<string, unknown>;
+      created_at: string;
+    }>;
+    policy: { provider: string; ownerMfa: string; legacyFallback: boolean };
+  } | null>(null);
+  const [teamBusy, setTeamBusy] = useState(false);
+  const [ownerInviteUrl, setOwnerInviteUrl] = useState("");
   const [preferences, setPreferences] = useState({
     approvals: true,
     messages: true,
@@ -5019,6 +5040,56 @@ function SettingsView({
     }
   }
 
+  async function loadTeamAccess() {
+    try {
+      setTeamAccess(await api("/api/team"));
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to load team access", true);
+    }
+  }
+
+  async function inviteOwner(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setTeamBusy(true);
+    setOwnerInviteUrl("");
+    try {
+      const form = new FormData(event.currentTarget);
+      const result = await api<{ inviteUrl: string }>("/api/team", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email: form.get("ownerEmail") }),
+      });
+      setOwnerInviteUrl(result.inviteUrl);
+      notify("Owner access prepared. Share the secure sign-up link with this person.");
+      event.currentTarget.reset();
+      await loadTeamAccess();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to prepare owner access", true);
+    } finally {
+      setTeamBusy(false);
+    }
+  }
+
+  async function updateTeamMember(
+    membershipId: string,
+    status: "active" | "suspended" | "revoked",
+  ) {
+    setTeamBusy(true);
+    try {
+      await api("/api/team", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ membershipId, status }),
+      });
+      notify(`Owner access ${status === "active" ? "restored" : status}.`);
+      await loadTeamAccess();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to update owner access", true);
+    } finally {
+      setTeamBusy(false);
+    }
+  }
+
   async function verifyIntegration(action: "verify_supabase" | "verify_stripe" | "verify_model") {
     setIntegrationBusy(action);
     try {
@@ -5101,7 +5172,10 @@ function SettingsView({
         </button>
         <button
           className={activeTab === "team" ? "active" : ""}
-          onClick={() => setActiveTab("team")}
+          onClick={() => {
+            setActiveTab("team");
+            void loadTeamAccess();
+          }}
         >
           <UsersRound size={15} /> Team
         </button>
@@ -5337,7 +5411,7 @@ function SettingsView({
         </div>
       )}
       {activeTab === "team" && (
-        <div className="settings-grid">
+        <div className="settings-grid team-access-grid">
           <section className="os-panel setting-card settings-copy-card">
             <PanelTitle eyebrow="OWNER ACCOUNT" title={data.owner?.displayName || "Studio owner"} />
             <p>{data.owner?.email || "Private preview identity"}</p>
@@ -5356,14 +5430,49 @@ function SettingsView({
             </div>
           </section>
           <section className="os-panel setting-card settings-copy-card">
-            <PanelTitle eyebrow="CLIENT ISOLATION" title="Separate access boundary" />
-            <p>
-              Client accounts are bound to one client record and cannot open
-              another client’s project, messages, files, or approvals.
-            </p>
-            <button className="outline-button" onClick={() => onView("clients")}>
-              <UsersRound size={15} /> Manage client access
-            </button>
+            <PanelTitle eyebrow="SUPABASE ROLE CONTROL" title="Invite another owner" />
+            <p>Prepare access for a verified email. The new owner must confirm that email and complete authenticator-based two-step verification before any studio data opens.</p>
+            <form className="owner-invite-form" onSubmit={inviteOwner}>
+              <label>
+                <span>Owner email</span>
+                <input name="ownerEmail" type="email" placeholder="owner@example.com" required />
+              </label>
+              <button className="gold-button" disabled={teamBusy}>
+                <UsersRound size={15} /> {teamBusy ? "Preparing..." : "Prepare owner access"}
+              </button>
+            </form>
+            {ownerInviteUrl && (
+              <div className="owner-invite-result">
+                <div><strong>Secure sign-up link ready</strong><small>The link identifies the invited email; Supabase still verifies ownership of that inbox.</small></div>
+                <button type="button" className="outline-button" onClick={() => { void navigator.clipboard.writeText(ownerInviteUrl); notify("Owner sign-up link copied."); }}><Copy size={14} /> Copy link</button>
+              </div>
+            )}
+          </section>
+          <section className="os-panel setting-card team-registry-card">
+            <PanelTitle eyebrow="ACCESS REGISTRY" title="Owners and invitations" />
+            <div className="team-member-list">
+              {teamAccess?.memberships.length ? teamAccess.memberships.map((member) => (
+                <article className="team-member-row" key={member.id}>
+                  <div className="team-member-identity"><span>{member.email.slice(0, 2).toUpperCase()}</span><div><strong>{member.email}</strong><small>{member.user_id ? "Verified Supabase identity" : "Waiting for verified sign-up"}</small></div></div>
+                  <div className="team-member-state"><span className={cn("agent-task-status", member.status === "active" ? "succeeded" : member.status === "pending" ? "running" : "blocked")}>{member.status}</span><small>{member.mfa_required ? "Two-step required" : "Standard session"}</small></div>
+                  <div className="team-member-actions">
+                    {member.status === "active" ? <button type="button" className="text-button danger" disabled={teamBusy} onClick={() => void updateTeamMember(member.id, "suspended")}>Suspend</button> : member.user_id && member.status !== "revoked" ? <button type="button" className="text-button" disabled={teamBusy} onClick={() => void updateTeamMember(member.id, "active")}>Restore</button> : null}
+                    {member.status !== "revoked" && <button type="button" className="text-button danger" disabled={teamBusy} onClick={() => void updateTeamMember(member.id, "revoked")}>Revoke</button>}
+                  </div>
+                </article>
+              )) : <p className="settings-placeholder">No Supabase owner membership has been claimed yet. The current transition access remains available until the first owner is secured.</p>}
+            </div>
+          </section>
+          <section className="os-panel setting-card settings-copy-card team-policy-card">
+            <PanelTitle eyebrow="ENFORCEMENT" title="Identity and role are separate" />
+            <div className="security-list">
+              <p><ShieldCheck size={15} /> Supabase proves who signed in</p>
+              <p><ShieldCheck size={15} /> Postgres membership decides what they may open</p>
+              <p><ShieldCheck size={15} /> Owner operations require an AAL2 session</p>
+              <p><ShieldCheck size={15} /> Clients cannot create or modify owner roles</p>
+              <p><ShieldCheck size={15} /> Membership changes remain auditable</p>
+            </div>
+            <button className="outline-button" onClick={() => onView("clients")}><UserRound size={15} /> Manage client access separately</button>
           </section>
         </div>
       )}

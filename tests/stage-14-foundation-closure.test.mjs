@@ -14,7 +14,7 @@ test("owner access configuration rejects malformed hashes and partial Supabase s
   assert.match(auth, /ownerAccessCodeMisconfigured/);
   assert.match(auth, /supabasePartiallyConfigured/);
   assert.match(health, /configurationIssues/);
-  assert.match(health, /OWNER_EMAILS is required/);
+  assert.match(health, /Supabase account authentication and role registry configured/);
 });
 
 test("owner session and configuration responses cannot be shared from caches", async () => {

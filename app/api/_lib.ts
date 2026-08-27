@@ -13,6 +13,20 @@ export const WORKSPACE_ID = "legacy-lines";
 export const OWNER_SESSION_COOKIE = "legacy_owner_session";
 const OWNER_SESSION_TTL_SECONDS = 12 * 60 * 60;
 
+export type SupabaseWorkspaceMembership = {
+  id: string;
+  workspace_id: string;
+  user_id: string | null;
+  email: string;
+  role: "owner" | "staff" | "client";
+  status: "pending" | "active" | "suspended" | "revoked";
+  mfa_required: boolean;
+  client_id: string | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export function makeId(prefix: string) {
   return `${prefix}_${crypto.randomUUID()}`;
 }
@@ -58,12 +72,61 @@ export function authConfiguration() {
       Boolean(env.INSTAGRAM_REDIRECT_URI?.trim()) &&
       Boolean(env.SOCIAL_TOKEN_ENCRYPTION_KEY?.trim()),
     ownerAllowlistConfigured,
+    supabaseRoleManagement: supabase,
     ownerAccessCode,
     ownerAccessCodeMisconfigured,
     supabasePartiallyConfigured,
-    externalClientReady:
-      (supabase && ownerAllowlistConfigured) || ownerAccessCode,
+    externalClientReady: supabase || ownerAccessCode,
   };
+}
+
+export function supabaseRequestClient(request: Request) {
+  const authorization = request.headers.get("authorization");
+  if (authConfiguration().mode !== "supabase" || !authorization?.startsWith("Bearer ")) {
+    return null;
+  }
+  return createClient(String(env.SUPABASE_URL), supabasePublicKey(), {
+    global: { headers: { Authorization: authorization } },
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}
+
+async function activeSupabaseMembership(
+  request: Request,
+  userId: string,
+) {
+  const supabase = supabaseRequestClient(request);
+  if (!supabase) return null;
+  const result = await supabase
+    .from("workspace_memberships")
+    .select("id,workspace_id,user_id,email,role,status,mfa_required,client_id,created_by,created_at,updated_at")
+    .eq("workspace_id", WORKSPACE_ID)
+    .eq("user_id", userId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (result.error) {
+    throw new Error(`Unable to verify the Supabase workspace role: ${result.error.message}`);
+  }
+  return (result.data as SupabaseWorkspaceMembership | null) ?? null;
+}
+
+async function claimSupabaseMembership(request: Request) {
+  const supabase = supabaseRequestClient(request);
+  if (!supabase) return null;
+  const result = await supabase.rpc("claim_legacy_membership", {
+    target_workspace: WORKSPACE_ID,
+  });
+  if (result.error) {
+    throw new Response(JSON.stringify({ error: result.error.message }), {
+      status: 403,
+      headers: { "content-type": "application/json" },
+    });
+  }
+  return result.data as SupabaseWorkspaceMembership;
 }
 
 async function supabaseIdentity(request: Request) {
@@ -71,17 +134,8 @@ async function supabaseIdentity(request: Request) {
   const authorization = request.headers.get("authorization");
   if (!authorization?.startsWith("Bearer ")) return null;
   const token = authorization.replace(/^Bearer\s+/i, "");
-  const supabase = createClient(
-    String(env.SUPABASE_URL),
-    supabasePublicKey(),
-    {
-      auth: {
-        persistSession: false,
-        autoRefreshToken: false,
-        detectSessionInUrl: false,
-      },
-    },
-  );
+  const supabase = supabaseRequestClient(request);
+  if (!supabase) return null;
   const [claimsResult, userResult] = await Promise.all([
     supabase.auth.getClaims(token),
     supabase.auth.getUser(token),
@@ -132,14 +186,15 @@ export async function resolveUser(request: Request) {
         ),
       )
       .get();
-    const boundUser =
-      user?.authSubject === identity.id &&
-      (user.role !== "owner" || (email ? ownerAllowlist().has(email) : false))
-        ? user
-        : null;
+    const membership = await activeSupabaseMembership(request, identity.id);
+    const boundUser = user?.authSubject === identity.id &&
+      (user.role !== "owner" || membership?.role === "owner")
+      ? user
+      : null;
     return {
       identity,
       user: boundUser,
+      membership,
       emailVerified: Boolean(identity.email_confirmed_at),
       assuranceLevel: identity.assuranceLevel ?? null,
     };
@@ -288,11 +343,13 @@ export async function bootstrapAuthenticatedUser(
     )
     .get();
   if (existing) {
-    if (existing.role === "owner" && !ownerAllowlist().has(email)) {
+    const membership = existing.role === "owner"
+      ? (await activeSupabaseMembership(request, identity.id)) ??
+        (await claimSupabaseMembership(request))
+      : null;
+    if (existing.role === "owner" && membership?.role !== "owner") {
       throw new Response(
-        JSON.stringify({
-          error: "This verified email is not authorized as an owner",
-        }),
+        JSON.stringify({ error: "This verified account has no active owner membership" }),
         { status: 403, headers: { "content-type": "application/json" } },
       );
     }
@@ -355,7 +412,10 @@ export async function bootstrapAuthenticatedUser(
     };
   }
 
-  if (ownerAllowlist().has(email)) {
+  const membership = invitationToken
+    ? null
+    : await claimSupabaseMembership(request);
+  if (membership?.role === "owner" && membership.status === "active") {
     const id = makeId("usr");
     const owner = {
       id,

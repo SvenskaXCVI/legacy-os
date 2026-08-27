@@ -1,6 +1,6 @@
 {
   "name": "legacy-os",
-  "version": "0.7.0-alpha.35",
+  "version": "0.7.0-alpha.36",
   "private": true,
   "engines": {
     "node": ">=22.13.0"

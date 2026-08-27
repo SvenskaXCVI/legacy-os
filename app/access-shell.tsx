@@ -80,6 +80,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
   const [qrCode, setQrCode] = useState("");
   const [invitationToken, setInvitationToken] = useState("");
   const [ownerAccessCode, setOwnerAccessCode] = useState("");
+  const [emailPrefill, setEmailPrefill] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -96,6 +97,14 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
         const portalInvitation =
           new URLSearchParams(window.location.search).get("portal")?.trim() ||
           "";
+        const accessParams = new URLSearchParams(window.location.search);
+        const requestedRole = accessParams.get("role");
+        const requestedEmail = accessParams.get("email")?.trim().toLowerCase() || "";
+        if (requestedRole === "owner") setRoleIntent("owner");
+        if (requestedEmail) {
+          setEmailPrefill(requestedEmail);
+          setAuthMode("signup");
+        }
         if (portalInvitation) {
           setRoleIntent("client");
           setInvitationToken(portalInvitation);
@@ -725,6 +734,7 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
                   <input
                     type="email"
                     name="email"
+                    defaultValue={emailPrefill}
                     autoComplete="email"
                     required
                   />

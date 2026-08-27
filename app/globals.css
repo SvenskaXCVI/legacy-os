@@ -7438,6 +7438,157 @@ html[data-theme="light"] .notification-button {
   margin: 5px 0 0;
 }
 
+/* Stage 36 — Supabase-controlled team roles */
+.team-access-grid {
+  align-items: stretch;
+}
+
+.team-registry-card {
+  grid-column: 1 / -1;
+  min-height: 0;
+}
+
+.owner-invite-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  width: calc(100% - 30px);
+  margin: 0 15px 15px;
+}
+
+.owner-invite-form label {
+  min-width: 0;
+}
+
+.owner-invite-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: calc(100% - 30px);
+  margin: 0 15px 15px;
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, var(--border));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+  padding: 12px;
+}
+
+.owner-invite-result strong,
+.owner-invite-result small {
+  display: block;
+}
+
+.owner-invite-result small {
+  margin-top: 4px;
+  color: var(--text-muted);
+}
+
+.team-member-list {
+  display: grid;
+  gap: 0;
+  padding: 6px 20px 18px;
+}
+
+.team-member-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 18px;
+  min-height: 76px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  padding: 13px 15px;
+}
+
+.team-member-row:first-child {
+  border-radius: 12px 12px 0 0;
+}
+
+.team-member-row:last-child {
+  border-radius: 0 0 12px 12px;
+}
+
+.team-member-row:only-child {
+  border-radius: 12px;
+}
+
+.team-member-row + .team-member-row {
+  border-top: 0;
+}
+
+.team-member-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.team-member-identity > span {
+  display: grid;
+  place-items: center;
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  border: 1px solid color-mix(in srgb, var(--accent) 55%, var(--border));
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent) 8%, var(--panel));
+  color: var(--accent);
+  font: 650 .72rem/1 var(--display);
+}
+
+.team-member-identity strong,
+.team-member-identity small,
+.team-member-state small {
+  display: block;
+}
+
+.team-member-identity strong {
+  overflow-wrap: anywhere;
+}
+
+.team-member-identity small,
+.team-member-state small {
+  margin-top: 4px;
+  color: var(--text-muted);
+}
+
+.team-member-state {
+  text-align: right;
+}
+
+.team-member-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.text-button.danger {
+  color: var(--danger);
+}
+
+.team-policy-card {
+  min-height: 0;
+}
+
+@media (max-width: 760px) {
+  .owner-invite-form,
+  .team-member-row {
+    grid-template-columns: 1fr;
+  }
+  .owner-invite-result {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .team-member-state {
+    text-align: left;
+  }
+  .team-member-actions {
+    justify-content: flex-start;
+  }
+}
+
 @media (max-width: 760px) {
   .connection-card { min-height: 0; }
   .connection-facts p { align-items: flex-start; flex-direction: column; gap: 4px; }

@@ -30,9 +30,6 @@ export async function GET() {
       auth.supabasePartiallyConfigured
         ? "SUPABASE_URL and the Supabase public key must be configured together"
         : null,
-      auth.mode === "supabase" && !auth.ownerAllowlistConfigured
-        ? "OWNER_EMAILS is required before owner account access is ready"
-        : null,
     ].filter(Boolean);
     return Response.json({
       status: configurationIssues.length > 0 ? "limited" : "healthy",
@@ -51,7 +48,7 @@ export async function GET() {
           : "owner wake-up only",
         secure_identity:
           auth.mode === "supabase"
-            ? "account authentication configured"
+            ? "Supabase account authentication and role registry configured"
             : auth.mode === "access_code"
               ? "owner access code configured"
               : "private deployment only",
@@ -75,7 +72,7 @@ export async function GET() {
       readiness: {
         ownerPrivateAlpha:
           auth.mode === "access_code" ||
-          (auth.mode === "supabase" && auth.ownerAllowlistConfigured),
+          auth.mode === "supabase",
         externalClientAlpha: auth.externalClientReady,
         modelProviderConfigured: modelRuntime.configured,
         modelRuntime,

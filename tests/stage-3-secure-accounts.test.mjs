@@ -43,7 +43,7 @@ test("client invitations survive verified email and OAuth callbacks without assi
 
   assert.match(shell, /confirmationUrl\.searchParams\.set\("portal", invitationToken\.trim\(\)\)/);
   assert.match(shell, /callbackUrl\.searchParams\.set\("portal", invitationToken\.trim\(\)\)/);
-  assert.match(auth, /ownerAllowlist\(\)\.has\(email\)/);
+  assert.match(auth, /const membership = invitationToken\s*\? null\s*:\s*await claimSupabaseMembership\(request\)/);
   assert.match(auth, /Client registration requires an active invitation/);
   assert.match(auth, /invitation\.clientId !== existing\.clientId/);
   assert.doesNotMatch(shell, /role:\s*roleIntent/);
