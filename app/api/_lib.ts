@@ -146,9 +146,12 @@ export async function resolveUser(request: Request) {
   }
 
   const configuration = authConfiguration();
+  const codeSession =
+    configuration.ownerAccessCode && (await hasValidOwnerSession(request));
   if (
     configuration.mode === "private_preview" ||
-    configuration.mode === "access_code"
+    configuration.mode === "access_code" ||
+    codeSession
   ) {
     const url = new URL(request.url);
     const localPreview = ["localhost", "127.0.0.1", "::1"].includes(
@@ -158,9 +161,6 @@ export async function resolveUser(request: Request) {
       .get("oai-authenticated-user-email")
       ?.trim()
       .toLowerCase();
-    const codeSession =
-      configuration.mode === "access_code" &&
-      (await hasValidOwnerSession(request));
     if (!localPreview && !platformEmail && !codeSession) return null;
     const allowlist = ownerAllowlist();
     if (

@@ -32,6 +32,7 @@ import {
   tattooSessions,
   toolDefinitions,
   users,
+  usageEvents,
   workspaces,
 } from "../../../db/schema";
 import {
@@ -49,6 +50,7 @@ import { listPlaybookOperations } from "../../../lib/playbook-engine";
 import { ensureToolRegistry } from "../../../lib/tool-authority-engine";
 import { listCraftIntelligence } from "../../../lib/craft-intelligence";
 import { listSchedulingIntelligence } from "../../../lib/scheduling-intelligence";
+import { getModelRuntimeStatus } from "../../../lib/model-adapter";
 
 export async function GET(request: Request) {
   try {
@@ -126,6 +128,7 @@ export async function GET(request: Request) {
       chiefManagerRunRows,
       chiefManagerStepRows,
       specialistEvaluationRows,
+      usageEventRows,
     ] = await Promise.all([
       db
         .select()
@@ -282,6 +285,7 @@ export async function GET(request: Request) {
       db.select().from(chiefManagerRuns).where(eq(chiefManagerRuns.workspaceId, WORKSPACE_ID)).orderBy(desc(chiefManagerRuns.createdAt)).limit(30),
       db.select().from(chiefManagerSteps).where(eq(chiefManagerSteps.workspaceId, WORKSPACE_ID)).orderBy(desc(chiefManagerSteps.createdAt)).limit(150),
       db.select().from(specialistEvaluations).where(eq(specialistEvaluations.workspaceId, WORKSPACE_ID)).orderBy(desc(specialistEvaluations.createdAt)).limit(100),
+      db.select().from(usageEvents).where(eq(usageEvents.workspaceId, WORKSPACE_ID)).orderBy(desc(usageEvents.occurredAt)).limit(250),
     ]);
 
     const projectJourneys = projectRows.map((project) =>
@@ -335,6 +339,8 @@ export async function GET(request: Request) {
       chiefManagerRuns: chiefManagerRunRows,
       chiefManagerSteps: chiefManagerStepRows,
       specialistEvaluations: specialistEvaluationRows,
+      usageEvents: usageEventRows,
+      modelRuntime: getModelRuntimeStatus(),
       craftIntelligence,
       schedulingIntelligence,
       automationPlaybooks: playbookOperations.playbooks,

@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { authConfiguration, WORKSPACE_ID } from "../_lib";
 import { LEGACY_OS_RELEASE, LEGACY_OS_VERSION } from "../../../lib/version";
 import { stripeConfiguration } from "../../../lib/stripe";
+import { getModelRuntimeStatus } from "../../../lib/model-adapter";
 
 export async function GET() {
   const checkedAt = new Date().toISOString();
@@ -20,11 +21,7 @@ export async function GET() {
       .where(eq(workspaces.id, WORKSPACE_ID))
       .get();
     const auth = authConfiguration();
-    const modelConfigured = Boolean(
-      env.AI_BASE_URL?.trim() &&
-        env.AI_API_KEY?.trim() &&
-        env.AI_MODEL?.trim(),
-    );
+    const modelRuntime = getModelRuntimeStatus();
     const stripe = stripeConfiguration();
     const configurationIssues = [
       auth.ownerAccessCodeMisconfigured
@@ -61,8 +58,8 @@ export async function GET() {
         external_client_accounts: auth.externalClientReady
           ? "ready"
           : "configuration required",
-        model_provider: modelConfigured
-          ? "configured"
+        model_provider: modelRuntime.configured
+          ? `${modelRuntime.provider} · ${modelRuntime.model}`
           : "deterministic local intelligence",
         instagram_connection: auth.instagramConnection
           ? "configured"
@@ -80,7 +77,8 @@ export async function GET() {
           auth.mode === "access_code" ||
           (auth.mode === "supabase" && auth.ownerAllowlistConfigured),
         externalClientAlpha: auth.externalClientReady,
-        modelProviderConfigured: modelConfigured,
+        modelProviderConfigured: modelRuntime.configured,
+        modelRuntime,
         instagramConfigured: auth.instagramConnection,
         stripeConfigured: stripe.configured,
         stripeTestMode: stripe.testMode,

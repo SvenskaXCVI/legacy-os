@@ -4889,6 +4889,7 @@ function SettingsView({
 }) {
   const [activeTab, setActiveTab] = useState<
     | "workspace"
+    | "connections"
     | "ai"
     | "automations"
     | "team"
@@ -4904,6 +4905,15 @@ function SettingsView({
     services: Record<string, string>;
   } | null>(null);
   const [checkingHealth, setCheckingHealth] = useState(false);
+  const [integrations, setIntegrations] = useState<{
+    supabase: { configured: boolean; mode: string; projectHost: string | null; publishableKeyConfigured: boolean; emailVerification: boolean; totpMfa: boolean; ownerAllowlistConfigured: boolean; partialConfiguration: boolean };
+    stripe: { configured: boolean; keyType: string; mode: string; liveEnabled: boolean; liveLocked: boolean; webhookConfigured: boolean; apiVersion: string; checkoutPath: string; webhookPath: string };
+    operationalDatabase: { provider: string; configured: boolean; role: string; alphaDataPreserved: boolean };
+    mediaStorage: { provider: string; configured: boolean; role: string };
+    modelRuntime: { configured: boolean; provider: string; model: string; mode: string; privacyMode: string };
+    secretPolicy: string;
+  } | null>(null);
+  const [integrationBusy, setIntegrationBusy] = useState<string | null>(null);
   const [preferences, setPreferences] = useState({
     approvals: true,
     messages: true,
@@ -5001,6 +5011,32 @@ function SettingsView({
     }
   }
 
+  async function loadIntegrations() {
+    try {
+      setIntegrations(await api("/api/integrations"));
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Unable to load connections", true);
+    }
+  }
+
+  async function verifyIntegration(action: "verify_supabase" | "verify_stripe" | "verify_model") {
+    setIntegrationBusy(action);
+    try {
+      const endpoint = action === "verify_model" ? "/api/model-runtime" : "/api/integrations";
+      await api(endpoint, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      notify(`${action === "verify_supabase" ? "Supabase" : action === "verify_stripe" ? "Stripe" : "AI model"} connection verified.`);
+      await loadIntegrations();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "Connection verification failed", true);
+    } finally {
+      setIntegrationBusy(null);
+    }
+  }
+
   function togglePreference(key: keyof typeof preferences) {
     const next = { ...preferences, [key]: !preferences[key] };
     setPreferences(next);
@@ -5038,6 +5074,15 @@ function SettingsView({
           onClick={() => setActiveTab("workspace")}
         >
           <Settings size={15} /> Workspace
+        </button>
+        <button
+          className={activeTab === "connections" ? "active" : ""}
+          onClick={() => {
+            setActiveTab("connections");
+            void loadIntegrations();
+          }}
+        >
+          <Link2 size={15} /> Connections
         </button>
         <button
           className={activeTab === "ai" ? "active" : ""}
@@ -5115,6 +5160,63 @@ function SettingsView({
         </section>
         <button className="gold-button save-settings" type="submit"><Check size={16} /> Save changes</button>
         </form>
+      )}
+      {activeTab === "connections" && (
+        <div className="settings-grid connections-grid">
+          <section className="os-panel setting-card connection-card">
+            <PanelTitle eyebrow="IDENTITY & ACCESS" title="Supabase Auth" />
+            <p>Verified account identity for owners and clients. Legacy OS keeps roles and client isolation in its own authorization ledger.</p>
+            <div className="connection-facts">
+              <p><span>Connection</span><strong>{integrations?.supabase.configured ? "Connected" : "Action required"}</strong></p>
+              <p><span>Project</span><strong>{integrations?.supabase.projectHost || "Not linked"}</strong></p>
+              <p><span>Email verification</span><strong>{integrations?.supabase.emailVerification ? "Required" : "Inactive"}</strong></p>
+              <p><span>Two-step verification</span><strong>{integrations?.supabase.totpMfa ? "Supported" : "Inactive"}</strong></p>
+            </div>
+            <div className="connection-actions">
+              <button className="gold-button" disabled={!integrations?.supabase.configured || integrationBusy !== null} onClick={() => void verifyIntegration("verify_supabase")}><ShieldCheck size={15} /> {integrationBusy === "verify_supabase" ? "Checking..." : "Verify Supabase"}</button>
+              <a className="outline-button" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer">Open Supabase <ArrowRight size={14} /></a>
+            </div>
+          </section>
+          <section className="os-panel setting-card connection-card">
+            <PanelTitle eyebrow="PAYMENTS" title="Stripe Checkout" />
+            <p>Hosted Checkout collects deposits and balances without exposing payment credentials or card details to Legacy OS.</p>
+            <div className="connection-facts">
+              <p><span>Connection</span><strong>{integrations?.stripe.configured ? "Connected" : "Action required"}</strong></p>
+              <p><span>Mode</span><strong>{integrations?.stripe.mode || "Loading"}</strong></p>
+              <p><span>Webhook signing</span><strong>{integrations?.stripe.webhookConfigured ? "Active" : "Required"}</strong></p>
+              <p><span>Live charging</span><strong>{integrations?.stripe.liveLocked ? "Safety locked" : integrations?.stripe.liveEnabled ? "Enabled" : "Test only"}</strong></p>
+            </div>
+            <div className="connection-actions">
+              <button className="gold-button" disabled={!integrations?.stripe.configured || integrations?.stripe.liveLocked || integrationBusy !== null} onClick={() => void verifyIntegration("verify_stripe")}><CreditCard size={15} /> {integrationBusy === "verify_stripe" ? "Checking..." : "Verify Stripe"}</button>
+              <a className="outline-button" href="https://dashboard.stripe.com/" target="_blank" rel="noreferrer">Open Stripe <ArrowRight size={14} /></a>
+            </div>
+          </section>
+          <section className="os-panel setting-card connection-card">
+            <PanelTitle eyebrow="SYSTEM OF RECORD" title="Operational data" />
+            <p>Existing alpha clients, projects, messages, approvals, payments, and AI audit history remain in the authoritative database.</p>
+            <div className="connection-facts">
+              <p><span>Database</span><strong>{integrations?.operationalDatabase.provider || "Cloudflare D1"}</strong></p>
+              <p><span>Alpha records</span><strong>{integrations?.operationalDatabase.alphaDataPreserved ? "Preserved" : "Checking"}</strong></p>
+              <p><span>Media</span><strong>{integrations?.mediaStorage.provider || "Cloudflare R2"}</strong></p>
+              <p><span>Migration</span><strong>Not required</strong></p>
+            </div>
+          </section>
+          <section className="os-panel setting-card connection-card">
+            <PanelTitle eyebrow="PRODUCTION REASONING" title="AI model runtime" />
+            <p>Legacy OS owns memory, evidence, workflows, tools, approvals, and audit history. The connected model only performs bounded reasoning.</p>
+            <div className="connection-facts">
+              <p><span>Runtime</span><strong>{integrations?.modelRuntime.configured ? "Connected" : "Deterministic fallback"}</strong></p>
+              <p><span>Provider</span><strong>{integrations?.modelRuntime.provider || "Legacy OS"}</strong></p>
+              <p><span>Model</span><strong>{integrations?.modelRuntime.model || "Loading"}</strong></p>
+              <p><span>Privacy</span><strong>{integrations?.modelRuntime.privacyMode || "Stateless"}</strong></p>
+            </div>
+            <button className="gold-button" disabled={!integrations?.modelRuntime.configured || integrationBusy !== null} onClick={() => void verifyIntegration("verify_model")}><BrainCircuit size={15} /> {integrationBusy === "verify_model" ? "Checking..." : "Verify model"}</button>
+          </section>
+          <section className="os-panel connection-security-note">
+            <ShieldCheck size={20} />
+            <div><strong>Credentials stay in the server vault</strong><p>{integrations?.secretPolicy || "Secret keys are never stored in the browser or returned by this page."}</p></div>
+          </section>
+        </div>
       )}
       {activeTab === "ai" && (
         <div className="settings-grid">

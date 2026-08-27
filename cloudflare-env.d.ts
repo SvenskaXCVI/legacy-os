@@ -12,6 +12,12 @@ declare module "cloudflare:workers" {
     AI_API_KEY?: string;
     AI_MODEL?: string;
     AI_VISION_MODEL?: string;
+    OPENAI_API_KEY?: string;
+    OPENAI_BASE_URL?: string;
+    OPENAI_MODEL?: string;
+    OPENAI_VISION_MODEL?: string;
+    AI_REQUEST_TIMEOUT_MS?: string;
+    AI_MAX_OUTPUT_TOKENS?: string;
     INSTAGRAM_CLIENT_ID?: string;
     INSTAGRAM_CLIENT_SECRET?: string;
     INSTAGRAM_REDIRECT_URI?: string;

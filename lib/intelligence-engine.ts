@@ -569,6 +569,8 @@ export async function runLearningCycle(
 
     const model = await runModel({
       purpose: "Explain the completed evidence evaluation",
+      workspaceId,
+      promptVersion: "pattern-explanation-v1",
       system:
         "Summarize only supplied evidence. Do not invent clients, projects, outcomes, or causal claims.",
       context: {
@@ -657,6 +659,11 @@ export async function runLearningCycle(
         runId,
         provider: model.provider,
         model: model.model,
+        inputTokens: model.inputTokens,
+        outputTokens: model.outputTokens,
+        cachedInputTokens: model.cachedInputTokens,
+        reasoningTokens: model.reasoningTokens,
+        pricingVersion: model.usedExternalModel ? "provider-invoice-required" : "local-rules",
         occurredAt: completed.toISOString(),
       }),
       db.insert(auditEvents).values({

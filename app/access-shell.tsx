@@ -848,6 +848,34 @@ export function AccessShell({ ownerName }: { ownerName: string }) {
                 Instagram
               </button>
             </div>}
+            {authMode !== "forgot" && roleIntent === "owner" && config?.ownerAccessCode && (
+              <>
+                <div className="auth-divider"><span>OR USE STUDIO ACCESS</span></div>
+                <form className="access-form" onSubmit={submitOwnerAccessCode}>
+                  <label className="access-field">
+                    <span>Owner access code</span>
+                    <div>
+                      <LockKeyhole size={17} />
+                      <input
+                        type={passwordVisible ? "text" : "password"}
+                        value={ownerAccessCode}
+                        onChange={(event) => setOwnerAccessCode(event.target.value)}
+                        autoComplete="current-password"
+                        autoCapitalize="none"
+                        autoCorrect="off"
+                        spellCheck={false}
+                        minLength={10}
+                        required
+                      />
+                    </div>
+                  </label>
+                  <button className="outline-button wide" disabled={busy}>
+                    {busy ? "Verifying access..." : "Use owner access code"}
+                    <ArrowRight size={16} />
+                  </button>
+                </form>
+              </>
+            )}
           </>
         ) : config?.mode === "access_code" ? (
           <div className="private-preview">

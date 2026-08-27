@@ -19,6 +19,7 @@ import { syncSocialConnections } from "./social-sync";
 import { stripeConfiguration } from "./stripe";
 import { assertToolExecutionAuthorized } from "./tool-authority-engine";
 import { createGoogleCalendarEvent, googleOAuthConfigured, sendGmailMessage } from "./google-connectors";
+import { getModelRuntimeStatus } from "./model-adapter";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -38,7 +39,7 @@ function configured(...names: Array<keyof typeof env>) {
 function registryState(accounts: Map<string, { status: string; lastErrorSummary: string | null }>) {
   const stripe = stripeConfiguration();
   const instagram = configured("INSTAGRAM_CLIENT_ID", "INSTAGRAM_CLIENT_SECRET", "INSTAGRAM_REDIRECT_URI", "SOCIAL_TOKEN_ENCRYPTION_KEY");
-  const model = configured("AI_BASE_URL", "AI_API_KEY", "AI_MODEL");
+  const model = getModelRuntimeStatus();
   const googleReady = googleOAuthConfigured();
   const gmailAccount = accounts.get("gmail");
   const calendarAccount = accounts.get("google_calendar");
@@ -52,7 +53,7 @@ function registryState(accounts: Map<string, { status: string; lastErrorSummary:
     { key: "google_calendar", name: "Google Calendar", category: "scheduling", description: "Mirrors approved studio appointments to the connected Google Calendar with deterministic event IDs.", capabilities: ["mirror_appointment"], configured: googleCalendar, credential: googleCalendar ? "encrypted_oauth" : googleReady ? "oauth_ready" : "missing", health: googleHealth(calendarAccount, googleCalendar) },
     { key: "instagram", name: "Instagram", category: "social", description: "Reads consented professional-account evidence; publishing is not enabled.", capabilities: ["sync_social_evidence"], configured: instagram, credential: instagram ? "configured" : "missing", health: instagram ? "configured" : "not_configured" },
     { key: "stripe", name: "Stripe Checkout", category: "payments", description: "Creates client-initiated hosted Checkout sessions and trusts signed webhooks for settlement.", capabilities: ["client_checkout", "signed_webhook"], configured: stripe.configured, credential: stripe.configured ? stripe.keyType : "missing", health: stripe.configured ? (stripe.liveMode ? "live_locked_or_enabled" : "test_ready") : "not_configured" },
-    { key: "reasoning_model", name: "Reasoning Model", category: "intelligence", description: "Optional OpenAI-compatible reasoning adapter; Legacy OS retains memory, policy, evidence, and outcomes.", capabilities: ["bounded_reasoning"], configured: model, credential: model ? "configured" : "missing", health: model ? "configured" : "deterministic_fallback" },
+    { key: "reasoning_model", name: "Reasoning Model", category: "intelligence", description: "Stateless production reasoning adapter; Legacy OS retains memory, policy, evidence, tools, authority, and outcomes.", capabilities: ["bounded_reasoning", "structured_planning"], configured: model.configured, credential: model.configured ? "server_secret" : "missing", health: model.configured ? model.mode : "deterministic_fallback" },
   ] as const;
 }
 

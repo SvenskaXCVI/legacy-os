@@ -1,5 +1,19 @@
 # Legacy OS release history
 
+## 0.7.0-alpha.35 — 2026-08-26
+
+- Added a production Connections settings area for Supabase Auth, Stripe Checkout, the operational D1 database, private R2 media, and the model runtime.
+- Added protected, server-side connection checks without returning or storing provider secrets in the browser.
+- Activated Supabase’s publishable project connection while preserving D1 as the authoritative source for all existing alpha records.
+- Kept the studio owner access-code session available alongside Supabase identity so authorized alpha testers can still enter from another device.
+- Kept Stripe live charging safety-locked until restricted credentials, signed webhooks, and explicit live authorization are all present.
+
+## 0.7.0-alpha.34 — 2026-08-26
+
+- Replaced the generic reasoning adapter with a production-ready, stateless OpenAI Responses runtime supporting strict structured output, timeouts, prompt caching, safety identifiers, and image inputs.
+- Added protected runtime verification, model/provider status, response telemetry, cached-token and reasoning-token accounting, and deterministic fallback.
+- Kept Legacy OS authoritative over memory, evidence, policy, tools, approvals, workflows, and outcomes; the external model remains replaceable.
+
 ## 0.7.0-alpha.33 — 2026-08-26
 
 - Added first-class historical project imports with original occurrence dates, lifecycle position, and financial classifications while preventing historical backfills from firing current-day automations.

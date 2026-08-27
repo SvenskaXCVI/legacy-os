@@ -32,6 +32,7 @@ export type SpecialistEvaluationResult = {
   domain: string; capabilityKey: string; summary: string; facts: Record<string, number | string | boolean | null>;
   findings: Finding[]; recommendations: SuggestedAction[]; evidenceRefs: string[]; limitations: string[];
   confidenceBps: number; provider: string; model: string; inputTokens: number; outputTokens: number;
+  cachedInputTokens: number; reasoningTokens: number;
 };
 
 const profileFor = (agentKey: string) => SPECIALIST_PROFILES.find((profile) => profile.agentKey === agentKey);
@@ -177,10 +178,12 @@ export async function evaluateSpecialistTask(task: typeof agentTasks.$inferSelec
   }
 
   const defaultSummary = findings.length ? `${profile.label} found ${findings.length} evidence-backed item${findings.length === 1 ? "" : "s"} in the authorized scope.` : `${profile.label} found no current exception requiring action in the authorized scope.`;
-  let result: SpecialistEvaluationResult = { domain: profile.domain, capabilityKey: profile.capabilityKey, summary: defaultSummary, facts, findings: findings.slice(0, 8), recommendations: recommendations.filter((item) => item.evidenceRefs.length).slice(0, 5), evidenceRefs: [...evidence].slice(0, 40), limitations, confidenceBps: findings.length ? 8800 : 9500, provider: "Legacy OS", model: `${profile.domain}-deterministic-v1`, inputTokens: 0, outputTokens: 0 };
+  let result: SpecialistEvaluationResult = { domain: profile.domain, capabilityKey: profile.capabilityKey, summary: defaultSummary, facts, findings: findings.slice(0, 8), recommendations: recommendations.filter((item) => item.evidenceRefs.length).slice(0, 5), evidenceRefs: [...evidence].slice(0, 40), limitations, confidenceBps: findings.length ? 8800 : 9500, provider: "Legacy OS", model: `${profile.domain}-deterministic-v1`, inputTokens: 0, outputTokens: 0, cachedInputTokens: 0, reasoningTokens: 0 };
   try {
     const model = await runStructuredModel<{ summary: string; findings: Finding[]; recommendations: SuggestedAction[]; confidenceBps: number; limitations: string[] }>({
       purpose: `Interpret the verified ${profile.domain} facts without changing state.`,
+      workspaceId: task.workspaceId,
+      promptVersion: SPECIALIST_INTELLIGENCE_POLICY_VERSION,
       system: `You are Legacy OS ${profile.label}. Outcome: ${profile.success} Constraints: ${profile.stop} Use only supplied facts and evidence references. Never invent records, totals, causation, consent, approval, or completed actions. Recommend only the listed internal tools. Stop when the supported findings and next safe internal actions are clear.`,
       context: { task: { title: task.title, instruction: task.instructionSummary, projectId: task.projectId, clientId: task.clientId }, facts, deterministicFindings: findings, deterministicRecommendations: recommendations, allowedEvidenceRefs: [...evidence], successCriteria: profile.success, stopRule: profile.stop },
       schemaName: `legacy_${profile.domain}_intelligence`, schema: modelSchema(),
@@ -189,7 +192,7 @@ export async function evaluateSpecialistTask(task: typeof agentTasks.$inferSelec
     if (model.usedExternalModel && model.data && Array.isArray(model.data.findings) && Array.isArray(model.data.recommendations)) {
       const validFindings = model.data.findings.filter((item) => item.evidenceRefs.length > 0 && item.evidenceRefs.every((ref) => allowedEvidence.has(ref))).slice(0, 8);
       const validRecommendations = model.data.recommendations.filter((item) => item.evidenceRefs.length > 0 && item.evidenceRefs.every((ref) => allowedEvidence.has(ref))).slice(0, 5);
-      result = { ...result, summary: model.data.summary, findings: validFindings.length ? validFindings : result.findings, recommendations: validRecommendations.length ? validRecommendations : result.recommendations, limitations: [...new Set([...limitations, ...model.data.limitations])].slice(0, 8), confidenceBps: Math.min(result.confidenceBps, model.data.confidenceBps), provider: model.provider, model: model.model, inputTokens: model.inputTokens, outputTokens: model.outputTokens };
+      result = { ...result, summary: model.data.summary, findings: validFindings.length ? validFindings : result.findings, recommendations: validRecommendations.length ? validRecommendations : result.recommendations, limitations: [...new Set([...limitations, ...model.data.limitations])].slice(0, 8), confidenceBps: Math.min(result.confidenceBps, model.data.confidenceBps), provider: model.provider, model: model.model, inputTokens: model.inputTokens, outputTokens: model.outputTokens, cachedInputTokens: model.cachedInputTokens, reasoningTokens: model.reasoningTokens };
     }
   } catch {
     // The deterministic specialist remains fully operational when a provider is unavailable or invalid.
